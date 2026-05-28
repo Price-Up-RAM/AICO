@@ -1,0 +1,112 @@
+[
+  {
+    "speaker": "player",
+    "message": "뭐하고 있어?",
+    "message_trans": "뭐하고 있어?",
+    "role": "user",
+    "type": "conversation",
+    "messageKo": "뭐하고 있어?",
+    "messageJp": "뭐하고 있어?",
+    "messageEn": "뭐하고 있어?",
+    "timestamp": "2025-11-16 20:49:52"
+  },
+  {
+    "speaker": "character",
+    "message": "책을 읽고 있어. 아까까지는 창문을 열어두고 있었는데, 이제는 닫아뒀어. 다음엔 차를 타러 가야겠다.",
+    "message_trans": "책을 읽고 있어. 아까까지는 창문을 열어두고 있었는데, 이제는 닫아뒀어. 다음엔 차를 타러 가야겠다.",
+    "role": "assistant",
+    "type": "conversation",
+    "messageKo": "책을 읽고 있어. 아까까지는 창문을 열어두고 있었는데, 이제는 닫아뒀어. 다음엔 차를 타러 가야겠다.",
+    "messageJp": "本を読んでいる。 さっきまで窓を開けていたけど、今は閉めてある。 次は車に乗りに行かなきゃ。",
+    "messageEn": "I'm reading a book. I had the window open earlier, and now I've closed it. Next time, I'll go for a ride.",
+    "timestamp": "2025-11-16 20:49:52"
+  },
+  {
+    "speaker": "player",
+    "message": "반말하지말고 존댓말해라",
+    "message_trans": "반말하지말고 존댓말해라",
+    "role": "user",
+    "type": "conversation",
+    "messageKo": "반말하지말고 존댓말해라",
+    "messageJp": "반말하지말고 존댓말해라",
+    "messageEn": "반말하지말고 존댓말해라",
+    "timestamp": "2025-11-16 20:50:05"
+  },
+  {
+    "speaker": "character",
+    "message": "책을 읽고 있습니다. 창문은 지금 닫아두었고, 차를 타러 가는 것도 고려 중입니다.",
+    "message_trans": "책을 읽고 있습니다. 창문은 지금 닫아두었고, 차를 타러 가는 것도 고려 중입니다.",
+    "role": "assistant",
+    "type": "conversation",
+    "messageKo": "책을 읽고 있습니다. 창문은 지금 닫아두었고, 차를 타러 가는 것도 고려 중입니다.",
+    "messageJp": "本を読んでいます。 窓は閉めたので、車に乗って行くことも検討中です。",
+    "messageEn": "I'm reading a book, the windows are closed for now, and I'm considering going for a ride in my car.",
+    "timestamp": "2025-11-16 20:50:05"
+  },
+  {
+    "speaker": "character",
+    "message": "현재 모델은 이미지를 처리할 수 없어요.",
+    "message_trans": "현재 모델은 이미지를 처리할 수 없어요.",
+    "role": "assistant",
+    "type": "system",
+    "messageKo": "현재 모델은 이미지를 처리할 수 없어요.",
+    "messageJp": "현재 모델은 이미지를 처리할 수 없어요.",
+    "messageEn": "현재 모델은 이미지를 처리할 수 없어요.",
+    "timestamp": "2025-11-16 20:50:59"
+  },
+  {
+    "speaker": "player",
+    "message": "반말하지말고 존댓말해라",
+    "message_trans": "반말하지말고 존댓말해라",
+    "role": "user",
+    "type": "system",
+    "messageKo": "반말하지말고 존댓말해라",
+    "messageJp": "반말하지말고 존댓말해라",
+    "messageEn": "반말하지말고 존댓말해라",
+    "timestamp": "2025-11-16 20:50:59"
+  },
+  {
+    "speaker": "character",
+    "message": "책을 읽고 있습니다. 창문은 지금 닫아두었고, 차를 타러 가는 것도 고려 중입니다.",
+    "message_trans": "책을 읽고 있습니다. 창문은 지금 닫아두었고, 차를 타러 가는 것도 고려 중입니다.",
+    "role": "assistant",
+    "type": "system",
+    "messageKo": "책을 읽고 있습니다. 창문은 지금 닫아두었고, 차를 타러 가는 것도 고려 중입니다.",
+    "messageJp": "本を読んでいます。 窓は閉めたので、車に乗って行くことも検討中です。",
+    "messageEn": "I'm reading a book, the windows are closed for now, and I'm considering going for a ride in my car.",
+    "timestamp": "2025-11-16 20:50:59"
+  },
+  {
+    "speaker": "character",
+    "message": "멀티모달 모델로 변경할까요?",
+    "message_trans": "멀티모달 모델로 변경할까요?",
+    "role": "assistant",
+    "type": "system",
+    "messageKo": "멀티모달 모델로 변경할까요?",
+    "messageJp": "멀티모달 모델로 변경할까요?",
+    "messageEn": "멀티모달 모델로 변경할까요?",
+    "timestamp": "2025-11-16 20:51:03"
+  },
+  {
+    "speaker": "player",
+    "message": "이미지 없이 계속",
+    "message_trans": "이미지 없이 계속",
+    "role": "user",
+    "type": "system",
+    "messageKo": "이미지 없이 계속",
+    "messageJp": "이미지 없이 계속",
+    "messageEn": "이미지 없이 계속",
+    "timestamp": "2025-11-16 20:51:31"
+  },
+  {
+    "speaker": "character",
+    "message": "알겠어요. 이미지 없이 계속할게요.",
+    "message_trans": "알겠어요. 이미지 없이 계속할게요.",
+    "role": "assistant",
+    "type": "system",
+    "messageKo": "알겠어요. 이미지 없이 계속할게요.",
+    "messageJp": "알겠어요. 이미지 없이 계속할게요.",
+    "messageEn": "알겠어요. 이미지 없이 계속할게요.",
+    "timestamp": "2025-11-16 20:51:31"
+  }
+]

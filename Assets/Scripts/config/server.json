@@ -1,0 +1,15 @@
+{
+    "server_type": "Local",
+    "model_name_Local": "qwen-8b",
+    "model_name_Gemini": "gemma-3-27b-it",
+    "model_name_OpenRouter": "google/gemini-flash-1.5",
+    "api_key_gemini": "",
+    "api_key_openRouter": "",
+    "deepl_api_key": "",
+    "is_deepl_use": false,
+    "use_vram": "-1",
+    "max_vram": "-1",
+    "id": "",
+    "model_type": "Qwen3-8B-Q4_K_M.gguf",
+    "ngrok_api_key": "l."
+}

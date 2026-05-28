@@ -1,0 +1,219 @@
+using UnityEngine;
+using System.Collections;
+using System;
+
+/**
+싱글톤으로 현재 서브 캐릭터의 상태를 관리
+
+isDragging = 드래그중인지 여부
+isFalling = 낙하중인지 여부
+isPicking = 마우스로 현재 드래그 중인지 여부 (쓰다듬을 고려해서 분리)
+isWalking = 현재 걸어다니는지 여부
+isAsking = 현재 유저의 질문을 듣고 있는지 여부 (음성인식)
+isChatting = 현재 유저의 질문을 듣고 있는지 여부 (음성인식)
+isListening = 현재 유저의 질문을 듣고 있는지 여부 (음성인식)
+isAnswering = 현재 유저에게 답하고 있는지 여부
+isAnsweringSimple = 현재 유저에게 답하고 있는지 여부 (AnswerBalloonSimple update 병렬용)
+isThinking = 현재 유저의 질문에 대한 답을 연산하고 있는지 여부
+isConversationing = set은 없고, isAsking, isChatting, isListening, isThinking, isAnswering이 하나라도 True이면 True를 반환
+isOptioning = 우클릭, 메뉴등의 대기 상태
+isOnTop - 최상위 여부
+isMinimize - 최소화 여부
+isAiUsing = 서버를 키거나 그렇게 하도록 명령을 내린 대화 가능 상태
+*/
+public class SubStatusManager : MonoBehaviour
+{
+    // 상태 관리 변수
+    public bool isDragging;
+    public bool isFalling;
+    public bool isPicking;
+    public bool isWalking;
+    public bool isListening;  // 차후 음성인식 용 구별
+    // public bool isAsking;
+    public bool isChatting;
+    public bool isAnswering;
+    public bool isAnsweringSimple;  // AnswerBalloonSimple 용
+    // public bool isThinking;
+    public bool isOptioning;
+    // public bool isOnTop;
+    // public bool isMinimize;
+    // public bool isAiUsing;
+
+    // // Getter / Setter
+    // public bool IsDragging
+    // {
+    //     get { return isDragging; }
+    //     set { isDragging = value; }
+    // }
+
+    // public bool IsFalling
+    // {
+    //     get { return isFalling; }
+    //     set { isFalling = value; }
+    // }
+
+    // public bool IsPicking
+    // {
+    //     get { return isPicking; }
+    //     set
+    //     {
+    //         isPicking = value;
+    //         if (isPicking)
+    //         {
+    //             IsFalling = false; // 드래그 중일 때 낙하를 멈추게 함
+    //         }
+    //     }
+    // }
+
+    // public bool IsWalking
+    // {
+    //     get { return isWalking; }
+    //     set { isWalking = value; }
+    // }
+
+    public bool IsListening
+    {
+        get { return isListening; }
+        set { isListening = value; }
+    }
+
+    // public bool IsAsking
+    // {
+    //     get { return isAsking; }
+    //     set { isAsking = value; }
+    // }
+
+    public bool IsChatting
+    {
+        get { return isChatting; }
+        set { isChatting = value; }
+    }
+
+    public bool IsAnswering
+    {
+        get { return isAnswering; }
+        set { isAnswering = value; }
+    }
+    public bool IsAnsweringSimple
+    {
+        get { return isAnsweringSimple; }
+        set { isAnsweringSimple = value; }
+    }
+
+    // public bool IsThinking
+    // {
+    //     get { return isThinking; }
+    //     set { isThinking = value; }
+    // }
+
+    // public bool IsOptioning
+    // {
+    //     get { return isOptioning; }
+    //     set { isOptioning = value; }
+    // }
+    // public bool IsOnTop
+    // {
+    //     get { return isOnTop; }
+    //     set { isOnTop = value; }
+    // }
+    // public bool IsMinimize
+    // {
+    //     get { return isMinimize; }
+    //     set { isMinimize = value; }
+    // }
+    // public bool IsAiUsing
+    // {
+    //     get { return isAiUsing; }
+    //     set { isAiUsing = value; }
+    // }
+
+    public bool IsConversationing
+    {
+        get { return isChatting || isListening || isAnswering || isAnsweringSimple; }
+    }
+
+    void Update()
+    {
+        // 대화중이면 입 움직이기
+        bool isSpeaking = (isAnswering || isAnsweringSimple);
+        // 서브캐릭터 대답 중이고, SubVoiceManager에서 오디오가 하나라도 재생 중일 때
+        bool isSubAudioPlaying = SubVoiceManager.Instance.GetAudioClip() != null;
+        
+        if (isSpeaking && isSubAudioPlaying)
+        {   
+            updateMouthStatus();
+        } 
+        else 
+        {
+        #if !UNITY_EDITOR
+            initMouthStatus();
+        #endif
+        }
+    }
+
+    void updateMouthStatus() 
+    {
+        FaceTextureChanger faceTextureChanger = GetComponentInChildren<FaceTextureChanger>();
+        if (faceTextureChanger == null) return;     
+
+        faceTextureChanger.mouthIndex += 1;
+        if (faceTextureChanger.mouthIndex >= 50) 
+        {
+            faceTextureChanger.mouthIndex = 0;
+            if (faceTextureChanger.mouthStatus == 5)
+            {
+                faceTextureChanger.SetMouth(6);
+            }
+            else
+            {
+                faceTextureChanger.SetMouth(5);
+            }
+        }
+    }
+
+    void initMouthStatus() 
+    {
+        FaceTextureChanger faceTextureChanger = GetComponentInChildren<FaceTextureChanger>();
+        if (faceTextureChanger == null) return;        
+
+        if (faceTextureChanger.mouthStatus == 32 || faceTextureChanger.mouthStatus == 0) return;
+        faceTextureChanger.SetMouth(32);
+        faceTextureChanger.mouthIndex = 9999;
+    }
+
+    // X초간 status를 True로
+    // 예시 : SubStatusManager.Instance.SetStatusTrueForSecond(value => SubStatusManager.Instance.IsOptioning = value, 3f); // 3초간 isOptioning을 true로
+    private Coroutine statusCoroutine = null;
+    private float remainingTime = 0f;
+
+    public void SetStatusTrueForSecond(Action<bool> setStatus, float seconds)
+    {
+        if (statusCoroutine != null)
+        {
+            if (remainingTime < seconds)
+            {
+                StopCoroutine(statusCoroutine);
+                statusCoroutine = StartCoroutine(StatusTimer(setStatus, seconds));
+            }
+        }
+        else
+        {
+            statusCoroutine = StartCoroutine(StatusTimer(setStatus, seconds));
+        }
+    }
+
+    private IEnumerator StatusTimer(Action<bool> setStatus, float seconds)
+    {
+        setStatus(true);
+        remainingTime = seconds;
+
+        while (remainingTime > 0)
+        {
+            yield return new WaitForSeconds(1f);
+            remainingTime -= 1f;
+        }
+
+        setStatus(false);
+        statusCoroutine = null;
+    }
+}
