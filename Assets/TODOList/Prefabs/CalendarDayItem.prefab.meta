@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 7a92b0a088c802a4c802dce3fc72c979
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 184010
+  packageName: Universal Pop Up (Message Box, Loading, Calendar Picker, Date Picker
+    etc.)
+  packageVersion: 1.0
+  assetPath: Assets/Resources/UniversolPopUps/CalendarDayItem.prefab
+  uploadId: 405416

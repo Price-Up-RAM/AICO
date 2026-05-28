@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: a30880152226ace48a3f23dfa825d42f
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 184010
+  packageName: Universal Pop Up (Message Box, Loading, Calendar Picker, Date Picker
+    etc.)
+  packageVersion: 1.0
+  assetPath: Assets/Scripts/UI/MVCUI/Universal/UniversalCalendarPopUp.cs
+  uploadId: 405416
