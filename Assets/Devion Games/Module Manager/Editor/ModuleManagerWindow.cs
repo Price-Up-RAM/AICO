@@ -343,8 +343,7 @@ namespace DevionGames
                 }
                 catch (Exception ex)
                 {
-                    Debug.Log(ex);
-                    // Debug.LogException(ex);
+                    Debug.LogException(ex);
                     EditorApplication.update -= callback;
                 }
             };

@@ -10,7 +10,7 @@ namespace DevionGames.UIWidgets
 	public class MenuItem : Selectable, IPointerClickHandler
 	{
 
-		public UnityEvent m_Trigger = new UnityEvent ();
+		private UnityEvent m_Trigger = new UnityEvent ();
 
 		public UnityEvent onTrigger {
 			get {

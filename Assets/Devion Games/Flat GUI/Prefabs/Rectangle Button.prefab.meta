@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: daa42400c3c3b7448b299161cfacfbdd
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 55542
+  packageName: UI Widgets
+  packageVersion: 1.1.1
+  assetPath: Assets/Devion Games/Flat GUI/Prefabs/Rectangle Button.prefab
+  uploadId: 420872

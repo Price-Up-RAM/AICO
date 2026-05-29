@@ -17,11 +17,10 @@ namespace DevionGames.UIWidgets
 		[Header ("Reference")]
 		[SerializeField]
 		protected MenuItem m_Item = null;
+		public Vector2 characterTransformPos;
 
 		private List<MenuItem> itemCache = new List<MenuItem> ();
 		private GameObject m_Target;
-
-		public Vector2 characterTransformPos = Vector2.zero;
 
 		protected override void Update ()
 		{
@@ -77,18 +76,11 @@ namespace DevionGames.UIWidgets
 
         public override void Show ()
 		{
-			
-			if (characterTransformPos != Vector2.one) {
+			if (characterTransformPos != Vector2.zero) {
 				m_RectTransform.anchoredPosition = characterTransformPos;
 			} else {
-				Canvas _canvas = FindObjectOfType<Canvas>();
-				Vector2 charPosition = Input.mousePosition;
-				RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvas.transform as RectTransform, charPosition, _canvas.worldCamera, out Vector2 pos);
-				Vector3 newPos = new Vector3(pos.x, pos.y, -350);  // 유닛앞에 : z=-350
-				m_RectTransform.position = _canvas.transform.TransformPoint(newPos);
+				m_RectTransform.position = Input.mousePosition;
 			}
-
-			// m_RectTransform.position = Input.mousePosition;
 			base.Show ();
 		}
 

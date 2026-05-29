@@ -113,25 +113,11 @@ namespace DevionGames.UIWidgets
 
         private void CloseTooltip()
         {
-            if (instance != null)  // null 체크 추가
-            {
-                instance.Close();
-            }
+            instance.Close();
             if (this.m_DelayTooltipCoroutine != null)
             {
                 StopCoroutine(this.m_DelayTooltipCoroutine);
-                this.m_DelayTooltipCoroutine = null;
             }
-        }
-
-        private void OnDisable()
-        {
-            CloseTooltip();
-        }
-
-        private void OnDestroy()
-        {
-            CloseTooltip();
         }
 
         [System.Serializable]

@@ -136,10 +136,6 @@ namespace DevionGames.UIWidgets
 			} 
 		}
 
-	public bool IsM_IsShowing { 
-		get { return m_IsShowing; }
-	}
-
 		/// <summary>
 		/// The RectTransform of the widget.
 		/// </summary>
@@ -152,6 +148,9 @@ namespace DevionGames.UIWidgets
 		/// Checks if Show() is already called. This prevents from calling Show() multiple times when the widget is not finished animating. 
 		/// </summary>
 		protected bool m_IsShowing;
+		public bool IsM_IsShowing {
+			get { return this.m_IsShowing; }
+		}
 
 		private TweenRunner<FloatTween> m_AlphaTweenRunner;
 		private TweenRunner<Vector3Tween> m_ScaleTweenRunner;
@@ -239,7 +238,7 @@ namespace DevionGames.UIWidgets
 				Focus ();
 			}
 			TweenCanvasGroupAlpha (m_CanvasGroup.alpha, 1f);
-			TweenTransformScale (Vector3.ClampMagnitude (m_RectTransform.localScale, 1.9f), new Vector3(1.6f,1.6f,1.6f));
+			TweenTransformScale (Vector3.ClampMagnitude (m_RectTransform.localScale, 1.9f), Vector3.one);
 			
 			WidgetUtility.PlaySound (this.m_ShowSound, 1.0f);
 			m_CanvasGroup.interactable = true;
@@ -271,85 +270,32 @@ namespace DevionGames.UIWidgets
 
 			Execute("OnShow", new CallbackEventData());
 		}
-		
-
-		// 1.6배 확장 없는 버전
-		public virtual void ShowWithoutScaling()
-		{
-			if (this.m_IsShowing)
-			{
-				return;
-			}
-			this.m_IsShowing = true;
-			gameObject.SetActive(true);
-			if (this.m_Focus)
-			{
-				Focus();
-			}
-			TweenCanvasGroupAlpha(m_CanvasGroup.alpha, 1f);
-			TweenTransformScale(Vector3.ClampMagnitude(m_RectTransform.localScale, 1.9f), new Vector3(1f, 1f, 1f));
-
-			WidgetUtility.PlaySound(this.m_ShowSound, 1.0f);
-			m_CanvasGroup.interactable = true;
-			m_CanvasGroup.blocksRaycasts = true;
-			Canvas.ForceUpdateCanvases();
-			for (int i = 0; i < this.m_Scrollbars.Length; i++)
-			{
-				this.m_Scrollbars[i].value = 1f;
-			}
-			if (this.m_ShowAndHideCursor)
-			{
-				/*if (m_CurrentVisibleWidgets.Count == 0) {
-					m_PreviousCursorLockMode = Cursor.lockState;
-					m_PreviousCursorVisibility = Cursor.visible;
-					if (m_CameraController != null)
-						m_PreviousCameraControllerEnabled = m_CameraController.enabled;
-				}*/
-				m_CurrentVisibleWidgets.Add(this);
-				if (m_CameraController != null && m_CurrentVisibleWidgets.Count == 1)
-				{
-					//this.m_CameraController.enabled = false;
-					this.m_CameraTransform.SendMessage("Activate", this.m_CameraPreset, SendMessageOptions.DontRequireReceiver);
-
-					if (this.m_FocusPlayer && !this.m_IsLocked)
-						this.m_CameraController.SendMessage("Focus", true, SendMessageOptions.DontRequireReceiver);
-				}
-				//Cursor.lockState = CursorLockMode.None;
-				//Cursor.visible = true;
-			}
-
-			Execute("OnShow", new CallbackEventData());
-		}
 
 		/// <summary>
 		/// Close this widget.
 		/// </summary>
-		public virtual void Close()
+		public virtual void Close ()
 		{
-			if (!m_IsShowing)
-			{
-				return;
-			}
-			m_IsShowing = false;
-			TweenCanvasGroupAlpha(m_CanvasGroup.alpha, 0f);
-			TweenTransformScale(m_RectTransform.localScale, Vector3.zero);
-
-			WidgetUtility.PlaySound(this.m_CloseSound, 1.0f);
+            if (!m_IsShowing) {
+                return;
+            }
+            m_IsShowing = false;
+			TweenCanvasGroupAlpha (m_CanvasGroup.alpha, 0f);
+			TweenTransformScale (m_RectTransform.localScale, Vector3.zero);
+			
+			WidgetUtility.PlaySound (this.m_CloseSound, 1.0f);
 			m_CanvasGroup.interactable = false;
 			m_CanvasGroup.blocksRaycasts = false;
-			if (this.m_ShowAndHideCursor)
-			{
+			if (this.m_ShowAndHideCursor) {
 				m_CurrentVisibleWidgets.Remove(this);
-				if (m_CurrentVisibleWidgets.Count == 0)
-				{
+				if (m_CurrentVisibleWidgets.Count == 0) {
 					//Cursor.lockState = m_PreviousCursorLockMode;
 					//Cursor.visible = m_PreviousCursorVisibility;
 					if (this.m_CameraController != null)
 					{
 						this.m_CameraTransform.SendMessage("Deactivate", this.m_CameraPreset, SendMessageOptions.DontRequireReceiver);
 						//this.m_CameraController.enabled = m_PreviousCameraControllerEnabled;
-						if (this.m_CameraController.enabled && this.m_FocusPlayer)
-						{
+						if (this.m_CameraController.enabled && this.m_FocusPlayer) {
 							this.m_CameraController.SendMessage("Focus", false, SendMessageOptions.DontRequireReceiver);
 						}
 					}

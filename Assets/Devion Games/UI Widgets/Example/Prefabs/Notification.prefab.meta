@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 5eeced0be65b37041897f5941384c5a6
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 55542
+  packageName: UI Widgets
+  packageVersion: 1.1.1
+  assetPath: Assets/Devion Games/UI Widgets/Example/Prefabs/Notification.prefab
+  uploadId: 420872

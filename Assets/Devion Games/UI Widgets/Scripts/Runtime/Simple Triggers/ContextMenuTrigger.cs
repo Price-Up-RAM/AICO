@@ -27,7 +27,7 @@ public class ContextMenuTrigger : MonoBehaviour, IPointerDownHandler
                 string menuItem = menu[i];
                 m_ContextMenu.AddMenuItem(menuItem, delegate { Debug.Log("Used - " + menuItem); });
             }
-            this.m_ContextMenu.Show();
+            this.m_ContextMenu.ShowAtScreenPosition(Input.mousePosition);
         }
     }
 }

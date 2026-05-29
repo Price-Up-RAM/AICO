@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: a82076b1ea290da478ca692272ac61b3
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 55542
+  packageName: UI Widgets
+  packageVersion: 1.1.1
+  assetPath: Assets/Devion Games/Flat GUI/Prefabs/Stats Bar.prefab
+  uploadId: 420872
