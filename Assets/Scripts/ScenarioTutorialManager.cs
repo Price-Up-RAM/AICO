@@ -6,7 +6,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
-// using System.Management;
+using System.Management;
 
 
 public class ScenarioTutorialManager : MonoBehaviour

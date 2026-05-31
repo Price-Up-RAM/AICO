@@ -410,7 +410,7 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         });
 
         // 메뉴 보이기
-        this.m_ContextMenu.Show();
+        this.m_ContextMenu.ShowAtScreenPosition(Input.mousePosition);
 
         // StatusManager 관리 (1초 후)
         StatusManager.Instance.IsOptioning = true;
@@ -441,4 +441,3 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         m_RadialMenuAction.GetComponent<RectTransform>().anchoredPosition = new Vector2(characterTransformPos.x, characterTransformPos.y + 200 * SettingManager.Instance.settings.char_size / 100f + 100);
     }
 }
-

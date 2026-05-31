@@ -1,0 +1,732 @@
+{
+  "characters": [
+    {
+      "id": 1,
+      "name": "ARONA",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "arona_sprite",
+          "prefabAddress": "arona",
+          "isLocal": true
+        },
+        {
+          "name": "2D",
+          "text": "2D",
+          "spriteAddress": "arona_2d_sprite",
+          "prefabAddress": "arona_2d",
+          "isLocal": true
+        },
+        {
+          "name": "Ball",
+          "text": "Ball",
+          "spriteAddress": "arona_ball_sprite",
+          "prefabAddress": "arona_ball",
+          "isLocal": true
+        },
+        {
+          "name": "AI",
+          "text": "AI",
+          "spriteAddress": "arona_sprite",
+          "prefabAddress": "arona_tripo",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Plana",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "plana_sprite",
+          "prefabAddress": "plana",
+          "isLocal": true
+        },
+        {
+          "name": "Ball",
+          "text": "Ball",
+          "spriteAddress": "plana_ball_sprite",
+          "prefabAddress": "plana_ball",
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Mari",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "mari_sprite",
+          "prefabAddress": "mari",
+          "isLocal": true
+        },        
+        {
+          "name": "Sportswear",
+          "text": "Sportswear",
+          "spriteAddress": "mari_sportswear_sprite",
+          "prefabAddress": "mari_sportswear",
+          "isLocal": true
+        },
+        {
+          "name": "Idol",
+          "text": "Idol",
+          "spriteAddress": "mari_idol_sprite",
+          "prefabAddress": "mari_idol",
+          "isLocal": true
+        },
+        {
+          "name": "Pajama",
+          "text": "Pajama",
+          "spriteAddress": "mari_sprite",
+          "prefabAddress": "mari_pajama",
+          "isLocal": true
+        },
+        {
+          "name": "2D(Legacy)",
+          "text": "2D(Legacy)",
+          "spriteAddress": "mari_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "mari_2d_animation",
+          "charAttr_nickname": "mari",
+          "charAttr_charcode": "mari_2d",
+          "charAttr_voicePath": "Sound/mari/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 1,
+          "blendCount_talk": 2,
+          "blendCount_listen": 1,
+          "blendCount_pat": 1,
+          "blendCount_walk": 1,
+          "blendCount_pick": 1,
+          "blendCount_fall": 1,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 15,
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Nagisa",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "nagisa_sprite",
+          "prefabAddress": "nagisa",
+          "isLocal": true
+        },
+        {
+          "name": "Swimsuit",
+          "text": "Swimsuit",
+          "spriteAddress": "nagisa_swimsuit_sprite",
+          "prefabAddress": "nagisa_swimsuit",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Mika",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "mika_sprite",
+          "prefabAddress": "mika",
+          "isLocal": true
+        },
+        {
+          "name": "Swimsuit",
+          "text": "Swimsuit",
+          "spriteAddress": "mika_swimsuit_sprite",
+          "prefabAddress": "mika_swimsuit",
+          "isLocal": true
+        },
+        {
+          "name": "3D",
+          "text": "3D",
+          "spriteAddress": "mika_sprite",
+          "prefabAddress": "mika_3d",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Seia",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "seia_sprite",
+          "prefabAddress": "seia",
+          "isLocal": true
+        },
+        {
+          "name": "Swimsuit",
+          "text": "Swimsuit",
+          "spriteAddress": "seia_swimsuit_sprite",
+          "prefabAddress": "seia_swimsuit",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Aris",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "aris_sprite",
+          "prefabAddress": "aris",
+          "isLocal": true
+        },
+        {
+          "name": "Maid",
+          "text": "Maid",
+          "spriteAddress": "aris_maid_sprite",
+          "prefabAddress": "aris_maid",
+          "isLocal": true
+        },
+        {
+          "name": "Battle",
+          "text": "Battle",
+          "spriteAddress": "aris_battle_sprite",
+          "prefabAddress": "aris_battle",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Kei",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "kei_sprite",
+          "prefabAddress": "kei",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Yuzu",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "yuzu_sprite",
+          "prefabAddress": "yuzu",
+          "isLocal": true
+        },
+        {
+          "name": "Maid",
+          "text": "Maid",
+          "spriteAddress": "yuzu_maid_sprite",
+          "prefabAddress": "yuzu_maid",
+          "isLocal": true
+        },
+        {
+          "name": "Battle",
+          "text": "Battle",
+          "spriteAddress": "yuzu_battle_sprite",
+          "prefabAddress": "yuzu_battle",
+          "isLocal": true
+        },
+        {
+          "name": "Battle2",
+          "text": "Battle2",
+          "spriteAddress": "yuzu_battle_sprite",
+          "prefabAddress": "yuzu_battle2",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Momoi",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "momoi_sprite",
+          "prefabAddress": "momoi",
+          "isLocal": true
+        },
+        {
+          "name": "Maid",
+          "text": "Maid",
+          "spriteAddress": "momoi_maid_sprite",
+          "prefabAddress": "momoi_maid",
+          "isLocal": true
+        },
+        {
+          "name": "Battle",
+          "text": "Battle",
+          "spriteAddress": "momoi_battle_sprite",
+          "prefabAddress": "momoi_battle",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Midori",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "midori_sprite",
+          "prefabAddress": "midori",
+          "isLocal": true
+        },
+        {
+          "name": "Maid",
+          "text": "Maid",
+          "spriteAddress": "midori_maid_sprite",
+          "prefabAddress": "midori_maid",
+          "isLocal": true
+        },
+        {
+          "name": "Battle",
+          "text": "Battle",
+          "spriteAddress": "midori_battle_sprite",
+          "prefabAddress": "midori_battle",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Yuuka",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "yuuka_sprite",
+          "prefabAddress": "yuuka",
+          "isLocal": true
+        },
+        {
+          "name": "Sportswear",
+          "text": "Sportswear",
+          "spriteAddress": "yuuka_sportswear_sprite",
+          "prefabAddress": "yuuka_sportswear",
+          "isLocal": true
+        },
+        {
+          "name": "Pajama",
+          "text": "Pajama",
+          "spriteAddress": "yuuka_pajama_sprite",
+          "prefabAddress": "yuuka_pajama",
+          "isLocal": true
+        },
+        {
+          "name": "2D",
+          "text": "2D",
+          "spriteAddress": "yuuka_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "yuuka_2d_animation",
+          "charAttr_nickname": "yuuka",
+          "charAttr_charcode": "yuuka_2d",
+          "charAttr_voicePath": "Sound/yuuka/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 3,
+          "blendCount_talk": 3,
+          "blendCount_listen": 2,
+          "blendCount_pat": 2,
+          "blendCount_walk": 2,
+          "blendCount_pick": 3,
+          "blendCount_fall": 3,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 15,
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "Noa",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "noa_sprite",
+          "prefabAddress": "noa",
+          "isLocal": true
+        },
+        {
+          "name": "Pajama",
+          "text": "Pajama",
+          "spriteAddress": "noa_pajama_sprite",
+          "prefabAddress": "noa_pajama",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Koyuki",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "koyuki_sprite",
+          "prefabAddress": "koyuki",
+          "isLocal": true
+        },
+        {
+          "name": "2D",
+          "text": "2D",
+          "spriteAddress": "koyuki_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "koyuki_2d_animation",
+          "charAttr_nickname": "koyuki",
+          "charAttr_charcode": "koyuki_2d",
+          "charAttr_voicePath": "Sound/koyuki/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 5,
+          "blendCount_talk": 3,
+          "blendCount_listen": 3,
+          "blendCount_pat": 1,
+          "blendCount_walk": 1,
+          "blendCount_pick": 3,
+          "blendCount_fall": 2,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 15,
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "name": "Kisaki",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "kisaki_sprite",
+          "prefabAddress": "kisaki",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Kokona",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "kokona_sprite",
+          "prefabAddress": "kokona",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Shun Kid",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "shun_kid_sprite",
+          "prefabAddress": "shun_kid",
+          "isLocal": true
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Miyako",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "miyako_sprite",
+          "prefabAddress": "miyako",
+          "isLocal": true
+        },
+        {
+          "name": "Swimsuit",
+          "text": "Swimsuit",
+          "spriteAddress": "miyako_swimsuit_sprite",
+          "prefabAddress": "miyako_swimsuit",
+          "isLocal": true
+        },
+        {
+          "name": "2D(Swimsuit)",
+          "text": "2D(Swimsuit)",
+          "spriteAddress": "miyako_swimsuit_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "miyako_swimsuit_2d_animation",
+          "charAttr_nickname": "miyako_swimsuit",
+          "charAttr_charcode": "miyako_swimsuit_2d",
+          "charAttr_voicePath": "Sound/miyako/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 5,
+          "blendCount_talk": 4,
+          "blendCount_listen": 2,
+          "blendCount_pat": 2,
+          "blendCount_walk": 2,
+          "blendCount_pick": 6,
+          "blendCount_fall": 1,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 15,
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Ui",
+      "clothesList": [
+        {
+          "name": "Basic",
+          "text": "Basic",
+          "spriteAddress": "ui_sprite",
+          "prefabAddress": "ui",
+          "isLocal": true
+        },
+        {
+          "name": "Swimsuit",
+          "text": "Swimsuit",
+          "spriteAddress": "ui_swimsuit_sprite",
+          "prefabAddress": "ui_swimsuit",
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "name": "Hifumi",
+      "clothesList": [
+        {
+          "name": "2D",
+          "text": "2D",
+          "spriteAddress": "hifumi_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "hifumi_2d_animation",
+          "charAttr_nickname": "hifumi",
+          "charAttr_charcode": "hifumi_2d",
+          "charAttr_voicePath": "Sound/hifumi/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 7,
+          "blendCount_talk": 1,
+          "blendCount_listen": 1,
+          "blendCount_pat": 1,
+          "blendCount_walk": 1,
+          "blendCount_pick": 4,
+          "blendCount_fall": 2,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 15,
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "Hina",
+      "clothesList": [
+        {
+          "name": "2D(Dress)",
+          "text": "2D(Dress)",
+          "spriteAddress": "hina_dress_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "hina_dress_2d_animation",
+          "charAttr_nickname": "hina",
+          "charAttr_charcode": "hina_dress_2d",
+          "charAttr_voicePath": "Sound/hina/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 3,
+          "blendCount_talk": 3,
+          "blendCount_listen": 3,
+          "blendCount_pat": 2,
+          "blendCount_walk": 1,
+          "blendCount_pick": 1,
+          "blendCount_fall": 1,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 22,
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "Hoshino",
+      "clothesList": [
+        {
+          "name": "2D",
+          "text": "2D",
+          "spriteAddress": "hoshino_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "hoshino_2d_animation",
+          "charAttr_nickname": "hoshino",
+          "charAttr_charcode": "hoshino_2d",
+          "charAttr_voicePath": "Sound/hoshino/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 1,
+          "blendCount_talk": 1,
+          "blendCount_listen": 2,
+          "blendCount_pat": 2,
+          "blendCount_walk": 1,
+          "blendCount_pick": 3,
+          "blendCount_fall": 1,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 15,
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "name": "Iori",
+      "clothesList": [
+        {
+          "name": "2D",
+          "text": "2D",
+          "spriteAddress": "iori_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "iori_2d_animation",
+          "charAttr_nickname": "iori",
+          "charAttr_charcode": "iori_2d",
+          "charAttr_voicePath": "Sound/iori/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 1,
+          "blendCount_talk": 2,
+          "blendCount_listen": 1,
+          "blendCount_pat": 1,
+          "blendCount_walk": 1,
+          "blendCount_pick": 1,
+          "blendCount_fall": 1,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 15,
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "Iroha",
+      "clothesList": [
+        {
+          "name": "2D",
+          "text": "2D",
+          "spriteAddress": "iroha_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "iroha_2d_animation",
+          "charAttr_nickname": "iroha",
+          "charAttr_charcode": "iroha_2d",
+          "charAttr_voicePath": "Sound/iroha/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 1,
+          "blendCount_talk": 1,
+          "blendCount_listen": 2,
+          "blendCount_pat": 3,
+          "blendCount_walk": 2,
+          "blendCount_pick": 4,
+          "blendCount_fall": 2,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 15,
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "name": "Nonomi",
+      "clothesList": [
+        {
+          "name": "2D",
+          "text": "2D",
+          "spriteAddress": "nonomi_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "nonomi_2d_animation",
+          "charAttr_nickname": "nonomi",
+          "charAttr_charcode": "nonomi_2d",
+          "charAttr_voicePath": "Sound/nonomi/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 1,
+          "blendCount_talk": 4,
+          "blendCount_listen": 1,
+          "blendCount_pat": 1,
+          "blendCount_walk": 1,
+          "blendCount_pick": 3,
+          "blendCount_fall": 1,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 15,
+          "isLocal": false
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "name": "Shiroko",
+      "clothesList": [
+        {
+          "name": "2D",
+          "text": "2D",
+          "spriteAddress": "shiroko_2d_sprite",
+          "prefabAddress": "2d_general",
+          "animatorControllerAddress": "shiroko_2d_animation",
+          "charAttr_nickname": "shiroko",
+          "charAttr_charcode": "shiroko_2d",
+          "charAttr_voicePath": "Sound/shiroko/Voiceover.json",
+          "charAttr_type": "2D",
+          "charAttr_is2DWalkDirectionRight": false,
+          "charAttr_isMain": true,
+          "blendCount_idle": 2,
+          "blendCount_talk": 2,
+          "blendCount_listen": 2,
+          "blendCount_pat": 1,
+          "blendCount_walk": 1,
+          "blendCount_pick": 1,
+          "blendCount_fall": 1,
+          "toggleClothesAddress": "",
+          "changeClothesAddress": "",
+          "headPatThreshold": 15,
+          "isLocal": false
+        }
+      ]
+    }
+  ]
+}
