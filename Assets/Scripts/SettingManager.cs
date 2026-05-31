@@ -590,9 +590,24 @@ public class SettingManager : MonoBehaviour
     }
 
     private string configFilePath;
+    private bool isInitialized = false;
+    private bool isSettingsLoaded = false;
 
     void Awake()
-    {     
+    {
+    }
+
+    void Start()
+    {
+    }
+
+    public Task InitAsync()
+    {
+        if (isInitialized)
+        {
+            return Task.CompletedTask;
+        }
+
         // Devmode 초기화
         devModeToggle.isOn = false;
         devSoundToggle.isOn = false;
@@ -620,10 +635,7 @@ public class SettingManager : MonoBehaviour
 #if UNITY_ANDROID
         isAlwaysOnTopToggle.gameObject.SetActive(false);
 #endif
-    }
-
-    void Start()
-    {     
+    
         // 현재 플랫폼 세팅
         SetPlatformInfoDropdown();
         SetServerModelDropdownOptions();
@@ -645,6 +657,9 @@ public class SettingManager : MonoBehaviour
 
         // 최상위에 두는지 확인하고 세팅
         WindowManager.SetWindowAlwaysOnTop(settings.isAlwaysOnTop);
+
+        isInitialized = true;
+        return Task.CompletedTask;
     }
     
     private void SetPlatformInfoDropdown()
@@ -1264,6 +1279,11 @@ public class SettingManager : MonoBehaviour
     // 설정 데이터를 JSON 파일에서 불러오기
     public void LoadSettings()
     {
+        if (isSettingsLoaded)
+        {
+            return;
+        }
+
         string directoryPath = Path.Combine(Application.persistentDataPath, "config");
         configFilePath = Path.Combine(directoryPath, "settings.json");
 
@@ -1294,14 +1314,15 @@ public class SettingManager : MonoBehaviour
         settings.isLocalSound = false;
         settings.isDevOCR = false;
         settings.isLocalOCR = false;
+        isSettingsLoaded = true;
     }
 
     // UI 세팅 적용
     private void SetUIAfterLoading()
     {
         playerNameInputField.text = settings.player_name;
-        uiLangDropdown.value = settings.ui_language_idx;
-        operatorTypeDropdown.value = settings.operator_type_idx;
+        uiLangDropdown.SetValueWithoutNotify(settings.ui_language_idx);
+        operatorTypeDropdown.SetValueWithoutNotify(settings.operator_type_idx);
         // SetIsOnWithoutNotify: 초기 로딩 시 OnValueChanged 발동 방지 (타 Manager 미초기화 시 NullRef 방어)
         isAlwaysOnTopToggle.SetIsOnWithoutNotify(settings.isAlwaysOnTop);
         isShowChatBoxOnClickToggle.SetIsOnWithoutNotify(settings.isShowChatBoxOnClick);
@@ -1312,48 +1333,51 @@ public class SettingManager : MonoBehaviour
         enableEditionUpdateSuggestionToggle.SetIsOnWithoutNotify(settings.enableEditionUpdateSuggestion);
         hotKeyGlobalInputToggle.SetIsOnWithoutNotify(settings.hotKeyGlobalInputEnabled);
 
-        charSizeSlider.value = settings.char_size;
-        charSpeedSlider.value = settings.char_speed;
-        charMobilitySlider.value = settings.char_mobility;
+        charSizeSlider.SetValueWithoutNotify(settings.char_size);
+        charSpeedSlider.SetValueWithoutNotify(settings.char_speed);
+        charMobilitySlider.SetValueWithoutNotify(settings.char_mobility);
         isCharAutoSmallTalk.SetIsOnWithoutNotify(settings.isCharAutoSmallTalk);
-        charAutoSmallTalkSlider.value = settings.charAutoSmallTalkInterval;
+        charAutoSmallTalkSlider.SetValueWithoutNotify(settings.charAutoSmallTalkInterval);
         isGravityToggle.SetIsOnWithoutNotify(settings.isGravity);
         isWindowsCollisionToggle.SetIsOnWithoutNotify(settings.isWindowsCollision);
         isStartWithLastCharToggle.SetIsOnWithoutNotify(settings.isStartWithLastChar);
         isRememberCharOutfitsToggle.SetIsOnWithoutNotify(settings.isRememberCharOutfits);
         
-        soundLanguageDropdown.value = settings.sound_language_idx;
-        soundVolumeMasterSlider.value = settings.sound_volumeMaster;
-        soundSpeedMasterSlider.value = settings.sound_speedMaster;
+        soundLanguageDropdown.SetValueWithoutNotify(settings.sound_language_idx);
+        soundVolumeMasterSlider.SetValueWithoutNotify(settings.sound_volumeMaster);
+        soundSpeedMasterSlider.SetValueWithoutNotify(settings.sound_speedMaster);
 
         // server_type_idx를 드롭다운 인덱스로 변환하여 설정
         if (ServerTypeIdxToDropdownIndex.ContainsKey(settings.server_type_idx))
         {
-            serverTypeDropdown.value = ServerTypeIdxToDropdownIndex[settings.server_type_idx];
+            serverTypeDropdown.SetValueWithoutNotify(ServerTypeIdxToDropdownIndex[settings.server_type_idx]);
         }
         else
         {
-            serverTypeDropdown.value = 0; // 기본값
+            serverTypeDropdown.SetValueWithoutNotify(0);
         }
-        serverLocalModeTypeDropdown.value = settings.server_local_mode_idx;
+        serverLocalModeTypeDropdown.SetValueWithoutNotify(settings.server_local_mode_idx);
         serverIdInputField.text = settings.server_id;
         serverGeminiApiKeyInputField.text = settings.api_key_gemini;
         serverOpenRouterApiKeyInputField.text = settings.api_key_openRouter;
         serverOpenRouterModelNameInputField.text = settings.model_name_OpenRouter;
         serverCustomModelNameInputField.text = settings.model_name_Custom;
-        aiWebSearchDropdown.value = settings.ai_web_search_idx;
-        aiUseImageDropdown.value = settings.ai_use_image_idx;
-        aiAskIntentDropdown.value = settings.ai_ask_intent_idx;
+        aiWebSearchDropdown.SetValueWithoutNotify(settings.ai_web_search_idx);
+        aiUseImageDropdown.SetValueWithoutNotify(settings.ai_use_image_idx);
+        aiAskIntentDropdown.SetValueWithoutNotify(settings.ai_ask_intent_idx);
         isAskedTurnOnServerToggle.SetIsOnWithoutNotify(settings.isAskedTurnOnServer);
         isAPITestToggle.SetIsOnWithoutNotify(settings.isAPITest);
         confirmUserIntentToggle.SetIsOnWithoutNotify(settings.confirmUserIntent);
         includeCharInScreenshotToggle.SetIsOnWithoutNotify(settings.includeCharInScreenshot);
         includeUIInScreenshotToggle.SetIsOnWithoutNotify(settings.includeUIInScreenshot);
         isAskChangeToMultimodalToggle.SetIsOnWithoutNotify(settings.isAskChangeToMultimodal);
-        aiLangDropdown.value = settings.ai_language_idx;
-        aiEmotionDropdown.value = settings.ai_emotion_idx;
-        if (aiThinkModeDropdown != null) { aiThinkModeDropdown.value = settings.ai_think_mode_idx; }
-        aiVoiceFilterDropdown.value = settings.ai_voice_filter_idx;
+        aiLangDropdown.SetValueWithoutNotify(settings.ai_language_idx);
+        aiEmotionDropdown.SetValueWithoutNotify(settings.ai_emotion_idx);
+        if (aiThinkModeDropdown != null)
+        {
+            aiThinkModeDropdown.SetValueWithoutNotify(settings.ai_think_mode_idx);
+        }
+        aiVoiceFilterDropdown.SetValueWithoutNotify(settings.ai_voice_filter_idx);
 
         devHowlingToggle.SetIsOnWithoutNotify(settings.isDevHowling);
         devModeToggle.SetIsOnWithoutNotify(false); // DevMode는 저장과 무관하게 항상 false

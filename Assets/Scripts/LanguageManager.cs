@@ -19,6 +19,8 @@ public class LanguageManager : MonoBehaviour
         }
     }
 
+    private bool isInitialized = false;
+
     private void Awake()
     {
         // Test 코드
@@ -32,6 +34,16 @@ public class LanguageManager : MonoBehaviour
         // Debug.Log(LanguageData.Translate("Screenshot area 선택중...", "en"));
         // Debug.Log(LanguageData.Translate("No Data", "ja"));
         // Debug.Log(LanguageData.Translate("설정", "No Language"));
+    }
+
+    public void Init()
+    {
+        if (isInitialized)
+        {
+            return;
+        }
+
+        isInitialized = true;
     }
 
 

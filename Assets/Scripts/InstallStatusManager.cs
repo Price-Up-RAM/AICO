@@ -37,12 +37,22 @@ public class InstallStatusManager : MonoBehaviour
 
     private TaskCompletionSource<bool> loadCompleteTcs = new TaskCompletionSource<bool>();
     private bool isLoadComplete = false;
+    private bool isInitialized = false;
 
     void Awake()
     {
+    }
+
+    public void Init()
+    {
+        if (isInitialized)
+        {
+            return;
+        }
+
         LoadInstallStatus();
         isLoadComplete = true;
-        loadCompleteTcs.SetResult(true);
+        loadCompleteTcs.TrySetResult(true);
         
         ApplyInstallStatusToUI();
 
@@ -50,9 +60,11 @@ public class InstallStatusManager : MonoBehaviour
         if (!SettingManager.Instance.settings.isStartServerOnInit)
         {
             Debug.Log("서버 초기기동 옵션 꺼져있음.");
+            isInitialized = true;
             return;
         }
         InitializeCurrentServer();
+        isInitialized = true;
     }
 
     // 현재 상태에 맞는 서버를 초기화

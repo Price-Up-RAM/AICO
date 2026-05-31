@@ -41,20 +41,28 @@ public class CharManager : MonoBehaviour
 
     // 오류시 보낼 기본 값
     public Sprite sampleSprite;
+    private bool isInitialized = false;
 
-    private async void Awake()
+    private void Awake()
     {
+    }
+
+    public async Task InitAsync()
+    {
+        if (isInitialized)
+        {
+            return;
+        }
+
         // canvas 값 세팅
         canvasChar = CanvasManager.Instance.canvasChar;
-
-        // 선행작업 로딩
-        SettingManager.Instance.LoadSettings();
 
         // JSON에서 캐릭터 프리팹 리스트 로드 (다운로드된 에셋만)
         await LoadCharacterListFromJSON();
 
         // InitCharacter 호출해서 첫 번째 캐릭터를 생성
         InitCharacter();
+        isInitialized = true;
     }
 
 
@@ -145,8 +153,6 @@ public class CharManager : MonoBehaviour
 
     void Start()
     {
-        // SettingManager의 Load 끝나고 Size 변경
-        setCharSize();
     }
 
 
