@@ -1,0 +1,33 @@
+fileFormatVersion: 2
+guid: 9644de0e5ebfdba47a3eaf87435bc962
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 16
+  forceTextureCase: -2
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontName: Avenir
+  fontNames:
+  - Avenir
+  fallbackFontReferences:
+  - {fileID: 12800000, guid: 262b7bb115df1334c89720360e22f348, type: 3}
+  - {fileID: 12800000, guid: 5c3cba0d13b089b48bf909f29664e4e1, type: 3}
+  - {fileID: 12800000, guid: 2e22d73d96b65084c8817006f232e0b6, type: 3}
+  customCharacters: 
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  useLegacyBoundsCalculation: 0
+  shouldRoundAdvanceValue: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 184010
+  packageName: Universal Pop Up (Message Box, Loading, Calendar Picker, Date Picker
+    etc.)
+  packageVersion: 1.0
+  assetPath: Assets/ArtAssets/Fonts/Avenir/Avenir.ttc
+  uploadId: 405416
