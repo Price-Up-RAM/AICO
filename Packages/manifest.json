@@ -3,6 +3,8 @@
     "com.meta.xr.sdk.all": "201.0.0",
     "com.unity.2d.sprite": "1.0.0",
     "com.unity.addressables": "3.1.0",
+    "com.unity.ai.assistant": "2.11.0-pre.1",
+    "com.unity.ai.inference": "2.6.1",
     "com.unity.ai.navigation": "2.0.12",
     "com.unity.collab-proxy": "2.12.4",
     "com.unity.feature.development": "1.0.2",
