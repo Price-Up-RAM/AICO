@@ -50,9 +50,9 @@ public class UIManager : MonoBehaviour
         charChange.SetActive(false);
         charSummon.SetActive(false);
         version.SetActive(false);
-        settings.SetActive(false);
+        // settings.SetActive(false);
         chatHistory.SetActive(false);
-        // guideLine.SetActive(false);
+        guideLine.SetActive(false);
         // situation.SetActive(false);
         ocrAutoMapper.SetActive(false);
         choiceInputImage.SetActive(false);
