@@ -61,7 +61,7 @@ namespace DevionGames.UIWidgets
 			MenuItem item = itemCache.Find (x => !x.gameObject.activeSelf);
 
 			if (item == null) {
-				Debug.Log(text);
+				// Debug.Log(text);
 				item = Instantiate (m_MenuItemPrefab) as MenuItem;
 				itemCache.Add (item);
 			}

@@ -224,17 +224,12 @@ namespace DevionGames.UIWidgets
 			}
 		}
 
-		protected virtual void OnDisable()
-		{
-			m_IsShowing = false;
-		}
-
 		/// <summary>
 		/// Show this widget.
 		/// </summary>
 		public virtual void Show ()
 		{
-            if (this.m_IsShowing && gameObject.activeInHierarchy) {
+            if (this.m_IsShowing) {
                 return;
             }
             this.m_IsShowing = true;

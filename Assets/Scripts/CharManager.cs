@@ -35,38 +35,35 @@ public class CharManager : MonoBehaviour
 
     // LoadCharacterListFromJSON에서 파싱한 원본 데이터 (2d_general 탐색에 재사용)
     private CharacterDatabaseData _characterDatabaseData;
+    private ChangeCharClothesInfo pendingStartupDlcClothes;
+    private bool chatOutfitLoadFlag = false;
 
     // 캐릭터가 속할 Canvas
     private Canvas canvasChar; // Canvas를 에디터에서 설정하거나 Find로 찾기
 
     // 오류시 보낼 기본 값
     public Sprite sampleSprite;
-    private bool isInitialized = false;
 
-    private void Awake()
+    private async void Awake()
     {
-    }
-
-    public async Task InitAsync()
-    {
-        if (isInitialized)
-        {
-            return;
-        }
-
         // canvas 값 세팅
         canvasChar = CanvasManager.Instance.canvasChar;
 
-        // JSON에서 캐릭터 프리팹 리스트 로드 (다운로드된 에셋만)
+        // 선행작업 로딩
+        SettingManager.Instance.LoadSettings();
+
+        // JSON 데이터 로드 후, 이미 다운로드된 DLC만 즉시 charList에 붙입니다.
         await LoadCharacterListFromJSON();
+        await RegisterAlreadyDownloadedDlcPrefabsAsync();
 
         // InitCharacter 호출해서 첫 번째 캐릭터를 생성
         InitCharacter();
-        isInitialized = true;
+
+        StartCoroutine(StartNeededDlcDownloadDelayed(15f));
     }
 
 
-    private async Task LoadCharacterListFromJSON()
+    private Task LoadCharacterListFromJSON()
     {
         string databaseFilePath = System.IO.Path.Combine(Application.streamingAssetsPath, "config", "character_database.json");
         if (System.IO.File.Exists(databaseFilePath))
@@ -80,64 +77,7 @@ public class CharManager : MonoBehaviour
                 if (data != null && data.characters != null)
                 {
                     _characterDatabaseData = data;   // InitCharacterFromCharCode에서 재사용
-
-                    // 1. Remote 에셋 주소만 수집 → GetPendingSize 캐시 갱신 대상
-                    //    isLocal 에셋은 항상 번들에 내장되어 있으므로 size 조회 불필요 + Remote 의존성 체인 회피
-                    System.Collections.Generic.HashSet<string> remoteAddresses = new System.Collections.Generic.HashSet<string>();
-                    foreach (var charInfo in data.characters)
-                    {
-                        foreach (var clothes in charInfo.clothesList)
-                        {
-                            if (clothes.isLocal) continue;  // Local 에셋은 skip
-                            if (!string.IsNullOrEmpty(clothes.prefabAddress)) remoteAddresses.Add(clothes.prefabAddress);
-                            if (!string.IsNullOrEmpty(clothes.spriteAddress)) remoteAddresses.Add(clothes.spriteAddress);
-                            if (!string.IsNullOrEmpty(clothes.animatorControllerAddress)) remoteAddresses.Add(clothes.animatorControllerAddress);
-                        }
-                    }
-
-                    // 2. Remote 에셋만 사이즈 병렬 조회 (GetPendingSize 내부 캐시 갱신 목적)
-                    System.Collections.Generic.List<Task> cacheTasks = new System.Collections.Generic.List<Task>();
-                    foreach (var addr in remoteAddresses)
-                    {
-                        cacheTasks.Add(AddressableManager.Instance.GetPendingSize(addr));
-                    }
-                    await Task.WhenAll(cacheTasks);
-
-                    // 3. 프리팹 병렬 로드
-                    //    isLocal == true  → 리스트 초기화 없이 기존 에셋(Inspector 할당 등) 유지
-                    //    isLocal == false → LoadIfExist (size 체크 후 미다운로드면 skip)
-                    System.Collections.Generic.List<Task<GameObject>> prefabLoadTasks = new System.Collections.Generic.List<Task<GameObject>>();
-                    System.Collections.Generic.List<string> requestedPrefabs = new System.Collections.Generic.List<string>();
-
-                    foreach (var charInfo in data.characters)
-                    {
-                        foreach (var clothes in charInfo.clothesList)
-                        {
-                            if (string.IsNullOrEmpty(clothes.prefabAddress)) continue;
-                            if (requestedPrefabs.Contains(clothes.prefabAddress)) continue;
-
-                            requestedPrefabs.Add(clothes.prefabAddress);
-
-                            if (!clothes.isLocal)
-                            {
-                                prefabLoadTasks.Add(AddressableManager.Instance.LoadIfExist<GameObject>(clothes.prefabAddress));
-                            }
-                        }
-                    }
-
-                    // 모든 프리팹 병렬 대기
-                    GameObject[] loadedPrefabs = await Task.WhenAll(prefabLoadTasks);
-
-                    // 인벤토리 등록
-                    foreach (GameObject prefab in loadedPrefabs)
-                    {
-                        if (prefab != null && !charList.Contains(prefab))
-                        {
-                            charList.Add(prefab);
-                        }
-                    }
-
-                    Debug.Log($"Loaded {charList.Count} character prefabs from JSON via Addressables (Parallel).");
+                    Debug.Log($"Character database loaded. Local charList count: {charList.Count}");
                 }
             }
             catch (System.Exception e)
@@ -149,10 +89,57 @@ public class CharManager : MonoBehaviour
         {
             Debug.LogError("Character database JSON not found at " + databaseFilePath);
         }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task RegisterAlreadyDownloadedDlcPrefabsAsync()
+    {
+        if (_characterDatabaseData == null || _characterDatabaseData.characters == null)
+        {
+            return;
+        }
+
+        HashSet<string> requestedPrefabs = new HashSet<string>();
+        List<Task<GameObject>> prefabLoadTasks = new List<Task<GameObject>>();
+
+        foreach (var charInfo in _characterDatabaseData.characters)
+        {
+            foreach (var clothes in charInfo.clothesList)
+            {
+                if (clothes.isLocal) continue;
+                if (string.IsNullOrEmpty(clothes.prefabAddress)) continue;
+                if (clothes.prefabAddress == "2d_general") continue;
+                if (!requestedPrefabs.Add(clothes.prefabAddress)) continue;
+
+                prefabLoadTasks.Add(AddressableManager.Instance.LoadIfExist<GameObject>(clothes.prefabAddress));
+            }
+        }
+
+        if (prefabLoadTasks.Count == 0)
+        {
+            return;
+        }
+
+        GameObject[] loadedPrefabs = await Task.WhenAll(prefabLoadTasks);
+        int addedCount = 0;
+
+        foreach (GameObject prefab in loadedPrefabs)
+        {
+            if (prefab != null && !charList.Contains(prefab))
+            {
+                charList.Add(prefab);
+                addedCount++;
+            }
+        }
+
+        Debug.Log($"[DLC] Already downloaded prefabs registered: {addedCount}");
     }
 
     void Start()
     {
+        // SettingManager의 Load 끝나고 Size 변경
+        setCharSize();
     }
 
 
@@ -169,6 +156,7 @@ public class CharManager : MonoBehaviour
 
         // 캐릭터 설정 로드 보장
         SettingCharManager.Instance.LoadSettingChar();
+        chatOutfitLoadFlag = SettingManager.Instance.settings.isRememberCharOutfits;
 
         // 마지막 캐릭터로 시작 옵션 사용시 charcode 검색
         if (SettingManager.Instance.settings.isStartWithLastChar)
@@ -189,6 +177,7 @@ public class CharManager : MonoBehaviour
     private async void InitCharacterFromCharCode(string charCode)
     {
         Debug.Log("InitCharacterFromCharCode Start : " + charCode);
+        chatOutfitLoadFlag = false;
 
         // 2d_general 핸드링: _characterDatabaseData에서 charAttr_charcode 일치 항목 탐색
         if (_characterDatabaseData != null)
@@ -200,13 +189,11 @@ public class CharManager : MonoBehaviour
                     if (clothes.prefabAddress != "2d_general") continue;
                     if (clothes.charAttr_charcode != charCode) continue;
 
-                    // 2d_general 프리팩 로드 (이미 Addressables에 캐시됨)
-                    var prefabHandle = UnityEngine.AddressableAssets.Addressables.LoadAssetAsync<GameObject>("2d_general");
-                    GameObject gen2DPrefab = prefabHandle.WaitForCompletion();
+                    GameObject gen2DPrefab = Find2DGeneralPrefab();
 
                     if (gen2DPrefab == null)
                     {
-                        Debug.LogError("[2DGeneral] '2d_general' prefab 로드 실패. arona로 대체합니다.");
+                        Debug.LogError("[2DGeneral] '2d_general' prefab이 charList에 없습니다. arona로 대체합니다.");
                         break;
                     }
 
@@ -273,6 +260,7 @@ public class CharManager : MonoBehaviour
         // 그래도 못 찾는 경우 0번으로 fallback (이건 안전망)
         if (selectedChar == null)
         {
+            pendingStartupDlcClothes = FindDlcClothesByCharCode(charCode);
             selectedChar = charList[0];
             Debug.LogWarning($"charCode '{charCode}'에 해당하는 캐릭터를 찾을 수 없어 기본 캐릭터로 대체합니다.");
         }
@@ -351,6 +339,8 @@ public class CharManager : MonoBehaviour
     // clothesInfo2d 마녀 : 2d_general 프리팩일 때 주입할 ChangeCharClothesInfo (해당 없으면 null)
     public async Task ChangeCharacter(int index, ChangeCharClothesInfo clothesInfo2d = null)
     {
+        pendingStartupDlcClothes = null;
+
         // 인덱스 유효성 체크
         if (index < 0 || index >= charList.Count)
         {
@@ -371,8 +361,9 @@ public class CharManager : MonoBehaviour
 
         // 2d_general은 outfit recall 불필요 (clothesInfo 자체가 outfit)
         // 일반 캐릭터만 outfit recall 적용
-        if (clothesInfo2d == null && SettingManager.Instance.settings.isRememberCharOutfits)
+        if (clothesInfo2d == null && chatOutfitLoadFlag)
         {
+            chatOutfitLoadFlag = false;
             string nicknameCurrentCharacter = GetNickname(currentCharacter);
             string nicknameForOutfit = GetNickname(charList[index]);
             if (!string.IsNullOrEmpty(nicknameForOutfit) &&
@@ -543,6 +534,125 @@ public class CharManager : MonoBehaviour
         ChangeCharacter(index);
     }
 
+    private IEnumerator StartNeededDlcDownloadDelayed(float delaySeconds)
+    {
+        yield return new WaitForSeconds(delaySeconds);
+
+        if (pendingStartupDlcClothes == null)
+        {
+            yield break;
+        }
+
+        _ = DownloadPendingStartupDlcAsync(pendingStartupDlcClothes);
+        pendingStartupDlcClothes = null;
+    }
+
+    private async Task DownloadPendingStartupDlcAsync(ChangeCharClothesInfo clothes)
+    {
+        if (clothes == null || clothes.isLocal || string.IsNullOrEmpty(clothes.prefabAddress))
+        {
+            return;
+        }
+
+        if (clothes.prefabAddress == "2d_general")
+        {
+            if (!string.IsNullOrEmpty(clothes.animatorControllerAddress))
+            {
+                RuntimeAnimatorController ac = await AddressableManager.Instance.LoadWithDownloadableAsync<RuntimeAnimatorController>(clothes.animatorControllerAddress);
+                if (ac == null)
+                {
+                    Debug.LogWarning($"[DLC] 시작 복원용 2d_general 다운로드 실패/취소: {clothes.animatorControllerAddress}");
+                    return;
+                }
+            }
+
+            await ChangeCharacter2DGeneral(clothes);
+            return;
+        }
+
+        GameObject prefab = await AddressableManager.Instance.LoadWithDownloadableAsync<GameObject>(clothes.prefabAddress);
+        if (prefab == null)
+        {
+            Debug.LogWarning($"[DLC] 시작 복원용 프리팹 다운로드 실패/취소: {clothes.prefabAddress}");
+            return;
+        }
+
+        ChangeCharacterFromDLC(prefab);
+    }
+
+    private ChangeCharClothesInfo FindDlcClothesByCharCode(string charCode)
+    {
+        if (string.IsNullOrEmpty(charCode) || _characterDatabaseData == null || _characterDatabaseData.characters == null)
+        {
+            return null;
+        }
+
+        foreach (var charInfo in _characterDatabaseData.characters)
+        {
+            foreach (var clothes in charInfo.clothesList)
+            {
+                if (clothes.isLocal) continue;
+
+                if (!string.IsNullOrEmpty(clothes.charAttr_charcode) && clothes.charAttr_charcode == charCode)
+                {
+                    return clothes;
+                }
+
+                if (!string.IsNullOrEmpty(clothes.prefabAddress) && clothes.prefabAddress == charCode)
+                {
+                    return clothes;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public bool ChangeLocalCharacter(ChangeCharClothesInfo clothes)
+    {
+        if (clothes == null)
+        {
+            return false;
+        }
+
+        GameObject prefab = ChangeCharManager.Instance.GetLocalPrefab(clothes.prefabAddress);
+        if (prefab == null)
+        {
+            Debug.LogWarning($"[LocalChar] PrefabDataLocal에서 Local 프리팹을 찾지 못했습니다: {clothes.prefabAddress}");
+            return false;
+        }
+
+        ChangeCharacterFromGameObject(prefab);
+        return true;
+    }
+
+    public Sprite GetLocalCharacterSprite(ChangeCharClothesInfo clothes)
+    {
+        if (clothes == null)
+        {
+            return sampleSprite;
+        }
+
+        Sprite sprite = ChangeCharManager.Instance.GetLocalSprite(clothes.spriteAddress);
+        if (sprite != null)
+        {
+            return sprite;
+        }
+
+        return sampleSprite;
+    }
+
+    private GameObject Find2DGeneralPrefab()
+    {
+        GameObject prefab = ChangeCharManager.Instance.GetLocalPrefab("2d_general");
+        if (prefab == null)
+        {
+            Debug.LogError("[2DGeneral] PrefabDataLocal에 '2d_general' 프리팹이 없습니다.");
+        }
+
+        return prefab;
+    }
+
     // 2d_general 전용 컴포넌트 주입 공통 헬퍼 (async)
     // 반환값: true = 주입 성공, false = AnimatorController 미다운로드 → 호출자가 arona fallback 처리
     private async Task<bool> Inject2DGeneralComponentsAsync(ChangeCharClothesInfo clothes, GameObject instance)
@@ -558,27 +668,40 @@ public class CharManager : MonoBehaviour
             attrs.is2DWalkDirectionRight = clothes.charAttr_is2DWalkDirectionRight;
             attrs.isMain                 = clothes.charAttr_isMain;
 
-            // charSprite — LoadIfExist: 없으면 sampleSprite(fallback), 다운로드 시도 없음
-            if (!string.IsNullOrEmpty(clothes.spriteAddress))
+            // Local 2D는 Inspector/Prefab에 들어 있는 값을 유지하고 Addressables를 타지 않습니다.
+            if (!clothes.isLocal && !string.IsNullOrEmpty(clothes.spriteAddress))
             {
                 Sprite sp = await AddressableManager.Instance.LoadIfExist<Sprite>(clothes.spriteAddress);
                 attrs.charSprite = sp != null ? sp : sampleSprite;
             }
 
-            if (!string.IsNullOrEmpty(clothes.toggleClothesAddress))
+            if (!clothes.isLocal && !string.IsNullOrEmpty(clothes.toggleClothesAddress))
             {
                 GameObject p = await AddressableManager.Instance.LoadWithDownloadableAsync<GameObject>(clothes.toggleClothesAddress);
                 if (p != null) attrs.toggleClothes = Instantiate(p, instance.transform);
             }
-            if (!string.IsNullOrEmpty(clothes.changeClothesAddress))
+            if (!clothes.isLocal && !string.IsNullOrEmpty(clothes.changeClothesAddress))
             {
                 GameObject p = await AddressableManager.Instance.LoadWithDownloadableAsync<GameObject>(clothes.changeClothesAddress);
                 if (p != null) attrs.changeClothes = Instantiate(p, instance.transform);
             }
         }
 
+        if (clothes.isLocal && !string.IsNullOrEmpty(clothes.animatorControllerAddress))
+        {
+            RuntimeAnimatorController ac = ChangeCharManager.Instance.GetLocalAnimatorController(clothes.animatorControllerAddress);
+            if (ac == null)
+            {
+                Debug.LogWarning($"[2DGeneral] Local AnimatorController missing: {clothes.animatorControllerAddress}");
+                return false;
+            }
+
+            Animator anim = instance.GetComponent<Animator>();
+            if (anim != null) anim.runtimeAnimatorController = ac;
+        }
+
         // AnimatorController — LoadIfExist: 없으면 false 반환 → 호출자가 arona fallback
-        if (!string.IsNullOrEmpty(clothes.animatorControllerAddress))
+        if (!clothes.isLocal && !string.IsNullOrEmpty(clothes.animatorControllerAddress))
         {
             RuntimeAnimatorController ac = await AddressableManager.Instance.LoadIfExist<RuntimeAnimatorController>(clothes.animatorControllerAddress);
             if (ac == null)
@@ -616,12 +739,10 @@ public class CharManager : MonoBehaviour
     // ChangeChar 경로용 (async) — ChangeCharCardController에서 await로 호출
     public async Task ChangeCharacter2DGeneral(ChangeCharClothesInfo clothesInfo)
     {
-        var prefabHandle = UnityEngine.AddressableAssets.Addressables.LoadAssetAsync<GameObject>("2d_general");
-        await prefabHandle.Task;
-
-        if (prefabHandle.Status != UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded)
+        GameObject generalPrefab = Find2DGeneralPrefab();
+        if (generalPrefab == null)
         {
-            Debug.LogError("[2DGeneral] '2d_general' prefab 로드 실패.");
+            Debug.LogError("[2DGeneral] '2d_general' prefab이 charList에 없습니다.");
             return;
         }
 
@@ -629,7 +750,7 @@ public class CharManager : MonoBehaviour
         // ChangeCharacter 내부에서 Instantiate 직후 주입 되뮼로 Save/Dialogue도 올바른 값 사용
         for (int i = 0; i < charList.Count; i++)
         {
-            if (System.Object.ReferenceEquals(charList[i], prefabHandle.Result))
+            if (System.Object.ReferenceEquals(charList[i], generalPrefab))
             {
                 await ChangeCharacter(i, clothesInfo);
                 return;

@@ -25,10 +25,11 @@ public class ChangeCharClothesInfo
 {
     public string name;           // 내부 관리용 의상 이름
     public string text;           // UI에 표시될 의상 텍스트 (예: "< 교복 >")
-    public string spriteAddress;  // 해당 의상을 입었을 때의 캐릭터 아이콘의 Address
-    public string prefabAddress;  // 인게임에서 교체될 실제 3D 모델(프리팹)의 Address
+    public string spriteAddress;  // isLocal=true: PrefabDataLocal icon key, false: Addressables sprite address
+    public string prefabAddress;  // isLocal=true: PrefabDataLocal prefab key, false: Addressables prefab address
                                   // "2d_general" 이면 공용 2D 프리팹 특수 로직 사용
-    public bool   isLocal = false; // true = Local default Group (직접 로드), false = Remote DLC (size 체크 후 로드)
+    public bool   isLocal = false; // true = PrefabDataLocal key 참조, false = Remote DLC Addressables
+    public bool   isSelectable = true; // true = 선택 가능, false = 선택 불가
 
     // 2d_general 전용 - Addressable AnimatorController 주소
     public string animatorControllerAddress;
@@ -143,33 +144,39 @@ public class ChangeCharManager : MonoBehaviour
         // UI 생성 전에 미리 즐겨찾기 데이터를 디스크에서 로드하여 DB에 덮어씌움
         LoadFavorites();
         
-        // 중앙 관리용 Fallback Sprite 동기 로딩
-        // LoadFallbackSprite();  // 내부 리소스 연동으로 변경
-
         // Remote 카탈로그 업데이트 체크 (백그라운드)
         StartCoroutine(CheckCatalogUpdates());
-        
-        // 원격 카탈로그 초기화 후 DLC 로딩 진단 정보 출력 (개발/테스트용)
-        TestDLC();
     }
 
-    // private void LoadFallbackSprite()
-    // {
-    //     try
-    //     {
-    //         var handle = UnityEngine.AddressableAssets.Addressables.LoadAssetAsync<Sprite>("sensei_sprite");
-    //         fallbackSprite = handle.WaitForCompletion();
-            
-    //         if (fallbackSprite == null)
-    //         {
-    //             Debug.LogWarning("Fallback sprite 'sensei_sprite' could not be loaded. Please check Addressables.");
-    //         }
-    //     }
-    //     catch (Exception e)
-    //     {
-    //         Debug.LogError("Exception loading fallback sprite: " + e.Message);
-    //     }
-    // }
+    public Sprite GetLocalSprite(string key)
+    {
+        return PrefabDataLocal.Instance.GetSprite(key);
+    }
+
+    public GameObject GetLocalPrefab(string key)
+    {
+        return PrefabDataLocal.Instance.GetPrefab(key);
+    }
+
+    public RuntimeAnimatorController GetLocalAnimatorController(string key)
+    {
+        return PrefabDataLocal.Instance.GetAnimatorController(key);
+    }
+
+    public bool HasLocalSprite(string key)
+    {
+        return PrefabDataLocal.Instance.ContainsSprite(key);
+    }
+
+    public bool HasLocalPrefab(string key)
+    {
+        return PrefabDataLocal.Instance.ContainsPrefab(key);
+    }
+
+    public bool HasLocalAnimatorController(string key)
+    {
+        return PrefabDataLocal.Instance.ContainsAnimatorController(key);
+    }
 
     // Remote 카탈로그 업데이트 체크 (GitHub Releases에서 최신 카탈로그 동기화)
     private IEnumerator CheckCatalogUpdates()
@@ -260,6 +267,12 @@ public class ChangeCharManager : MonoBehaviour
     {
         foreach (ChangeCharInfo charInfo in characterDatabase)
         {
+            // 의상 목록이 없으면 생성하지 않음
+            if (charInfo.clothesList.Count == 0)
+            {
+                continue;
+            }
+
             // 리스트 뷰 슬롯 생성 및 데이터 주입
             GameObject listObj = Instantiate(listSlotSample, listContentParent);
             listObj.SetActive(true);
@@ -417,7 +430,30 @@ public class ChangeCharManager : MonoBehaviour
                 
                 if (data != null && data.characters != null)
                 {
-                    characterDatabase = data.characters;
+                    List<ChangeCharInfo> loadedCharacters = new List<ChangeCharInfo>();
+                    
+                    foreach (ChangeCharInfo charInfo in data.characters)
+                    {
+                        List<ChangeCharClothesInfo> selectableClothes = new List<ChangeCharClothesInfo>();
+                        
+                        foreach (ChangeCharClothesInfo clothes in charInfo.clothesList)
+                        {
+                            if (clothes.isSelectable)
+                            {
+                                selectableClothes.Add(clothes);
+                            }
+                        }
+                        
+                        charInfo.clothesList = selectableClothes;
+
+                        // 선택 가능한 의상이 하나라도 있을 때만 캐릭터 데이터 추가
+                        if (charInfo.clothesList.Count > 0)
+                        {
+                            loadedCharacters.Add(charInfo);
+                        }
+                    }
+
+                    characterDatabase = loadedCharacters;
                     Debug.Log("Character database loaded successfully from StreamingAssets.");
                 }
             }

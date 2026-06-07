@@ -118,6 +118,41 @@ public class ChangeCharCardController : MonoBehaviour
         clothesText.text = currentClothes.text;
         UpdatePaginationDotsUI();
 
+        // 선택 가능 여부에 따라 아이콘 노출 및 상호작용 제어
+        if (characterIcon != null)
+        {
+            characterIcon.gameObject.SetActive(true);
+        }
+
+        Button slotButton = GetComponent<Button>();
+        if (slotButton != null)
+        {
+            if (currentClothes.isSelectable)
+            {
+                // 선택 가능 시 버튼 활성화
+                slotButton.interactable = true;
+            }
+            else
+            {
+                // 선택 불가능 시 버튼 비활성화
+                slotButton.interactable = false;
+            }
+        }
+
+        if (currentClothes.isLocal)
+        {
+            Sprite localSprite = ChangeCharManager.Instance.GetLocalSprite(currentClothes.spriteAddress);
+            if (localSprite != null)
+            {
+                characterIcon.sprite = localSprite;
+            }
+            else
+            {
+                ApplyFallbackSprite();
+            }
+            return;
+        }
+
         if (string.IsNullOrEmpty(currentClothes.spriteAddress))
         {
             ApplyFallbackSprite();
@@ -190,13 +225,20 @@ public class ChangeCharCardController : MonoBehaviour
     {
         ChangeCharClothesInfo currentClothes = charData.clothesList[currentClothesIndex];
 
+        // 선택 가능 여부 체크
+        if (!currentClothes.isSelectable)
+        {
+            // 선택할 수 없는 의상이면 변경하지 않음
+            return;
+        }
+
         if (string.IsNullOrEmpty(currentClothes.prefabAddress)) return;
 
         // 공용 2d_general
         if (currentClothes.prefabAddress == "2d_general")
         {
             // 2d_general DLC 에셋(애니메이터)이 미다운로드 상태면 먼저 다운로드
-            if (!string.IsNullOrEmpty(currentClothes.animatorControllerAddress))
+            if (!currentClothes.isLocal && !string.IsNullOrEmpty(currentClothes.animatorControllerAddress))
             {
                 // 다운로드 포함 로드 → 캐시 확보 후 Inject에서 재사용됨
                 var ac = await AddressableManager.Instance.LoadWithDownloadableAsync<RuntimeAnimatorController>(currentClothes.animatorControllerAddress);
@@ -208,6 +250,20 @@ public class ChangeCharCardController : MonoBehaviour
             }
 
             await CharManager.Instance.ChangeCharacter2DGeneral(currentClothes);
+            UpdateClothesUI();
+            return;
+        }
+
+        if (currentClothes.isLocal)
+        {
+            GameObject localPrefab = ChangeCharManager.Instance.GetLocalPrefab(currentClothes.prefabAddress);
+            if (localPrefab == null)
+            {
+                Debug.LogWarning($"[LocalChar] 변경 실패: {currentClothes.prefabAddress}");
+                return;
+            }
+
+            CharManager.Instance.ChangeCharacterFromGameObject(localPrefab);
             UpdateClothesUI();
             return;
         }

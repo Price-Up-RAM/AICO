@@ -176,7 +176,7 @@ public class SubMenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         m_ContextMenu.AddMenuItem("Bye", delegate { Destroy(this.gameObject); });
 
         // 메뉴 보이기
-        this.m_ContextMenu.Show();
+        this.m_ContextMenu.ShowAtScreenPosition(Input.mousePosition);
 
         // StatusManager 관리 (1초 후)
         subStatusManager.isOptioning = true;

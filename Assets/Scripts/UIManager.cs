@@ -21,7 +21,6 @@ public class UIManager : MonoBehaviour
 
     // 싱글톤 인스턴스
     private static UIManager instance;
-    private bool isInitialized = false;
     public static UIManager Instance
     {
         get
@@ -36,12 +35,14 @@ public class UIManager : MonoBehaviour
     
     private void Awake()
     {
-    }
-
-    public void Init()
-    {
-        if (isInitialized)
+        // 싱글톤 패턴 구현
+        if (instance == null)
         {
+            instance = this;
+        }
+        else
+        {
+            // Destroy(gameObject);
             return;
         }
 
@@ -72,7 +73,6 @@ public class UIManager : MonoBehaviour
         //         charChange.SetActive(true);
         //         settings.SetActive(true);
         // #endif
-        isInitialized = true;
     }
 
 
