@@ -397,6 +397,9 @@ public class CharManager : MonoBehaviour
             AnimationPlayerManager.Instance.UnregisterPlayer(currentCharacter);
         }
 
+        // 캐릭터 애니메이션중이면 중지
+        // PhysicsManager.Instance.StopAllAnimations();
+
         // 기존 캐릭터 제거 전 RectTransform 위치 저장
         Vector3 previousPosition = new Vector3(0, 0, -70); // 기본 위치는 (0, 0, -70)
         Quaternion previousRotation = Quaternion.identity; // 기본 회전은 identity
@@ -409,7 +412,8 @@ public class CharManager : MonoBehaviour
             {
                 //TODO : Change Effect Here
                 previousPosition = prevRectTransform.anchoredPosition3D;
-                previousRotation = currentCharacter.transform.rotation; // 기존 회전 값 저장(프리팹초기값 사용도 고려)
+                // previousRotation = currentCharacter.transform.rotation; // 기존 회전 값 저장(프리팹초기값 사용도 고려)
+                previousRotation = charList[index].transform.rotation;  // 프리팹 회전값
             }
             Destroy(currentCharacter);
         }

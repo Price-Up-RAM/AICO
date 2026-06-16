@@ -1,0 +1,1257 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class ApiVlRouterManager : MonoBehaviour
+{
+    private static ApiVlRouterManager instance;  // 싱글톤 인스턴스
+    public static ApiVlRouterManager Instance
+    {
+        get
+        {
+            if (instance == null)
+            {
+                instance = FindObjectOfType<ApiVlRouterManager>();
+            }
+            return instance;
+        }
+    }
+
+    [Header("Click Effect")]
+    [SerializeField] private ParticleSystem fx_click;  // 클릭 이펙트
+
+    private JArray pendingThinkLog = null;  // 재요청용 think_log
+    private float pendingCaptureDelaySec = 1.0f;  // 캡처 지연 시간
+    private bool shouldRequestNewObservation = false;  // 재요청 플래그
+    private int currentOffsetX = 0;  // 현재 캡처 offset X
+    private int currentOffsetY = 0;  // 현재 캡처 offset Y
+    private int pendingRetryCount = 0;  // 재요청 횟수
+    private int pendingMaxRetry = 5;  // 최대 재요청 횟수
+    private bool isCanceled = false;  // 취소 요청
+    private bool isVerbose = true;  // 디버그/상세 로그
+    private string currentQuery = "";  // 현재 Router 요청 원문
+    private string currentChatIdx = "-1";  // 현재 대화 번호
+    private Action<JObject> currentOnEvent = null;  // 이벤트 콜백
+    private Action<bool, string> currentOnComplete = null;  // 완료 콜백
+    private AIChatSession routerConversationSession = null;  // Router conversation 세션
+    private bool hasRouterConversation = false;  // 현재 run에서 conversation 처리 여부
+
+    #region Router 메시지 처리
+
+    // Router 메시지 처리
+    private void ProcessRouterMessage(string message)
+    {
+        AnswerBalloonSimpleManager.Instance.ModifyAnswerBalloonSimpleText(message);
+        DebugBalloonManager2.Instance.AddVlAgentLog(message);
+    }
+
+    #endregion
+
+    #region Router Run
+
+    // VL Router Run 스트리밍 실행 (/router/job/run)
+    public void ExecuteVlRouterRun(
+        string query,
+        Action<JObject> onEvent = null,
+        Action<bool, string> onComplete = null,
+        int maxRetry = 5
+    )
+    {
+        currentOnEvent = onEvent;
+        currentOnComplete = onComplete;
+        isCanceled = false;
+
+        pendingThinkLog = null;
+        pendingCaptureDelaySec = 1.0f;
+        shouldRequestNewObservation = false;
+        pendingRetryCount = 0;
+        pendingMaxRetry = maxRetry;
+        routerConversationSession = null;
+        hasRouterConversation = false;
+
+        currentQuery = query;
+        currentChatIdx = GameManager.Instance.chatIdx.ToString();
+
+        GameObject targetCharacter = CharManager.Instance.GetActiveCharacter();
+        string targetNickname = CharManager.Instance.GetNickname(targetCharacter);
+        var memoryList = MemoryManager.Instance.GetAllConversationMemory(targetNickname);
+        string memoryJson = JsonConvert.SerializeObject(memoryList);
+
+        SetRouterStatusBalloon("Question");
+        StartCoroutine(ExecuteRouterRunCoroutine(query, memoryJson, null, 0, maxRetry, "VL Router 시작...", onEvent, onComplete));
+    }
+
+    // Router 작업 취소 요청
+    public void CancelVlRouterRun()
+    {
+        isCanceled = true;
+        shouldRequestNewObservation = false;
+        pendingThinkLog = null;
+        pendingCaptureDelaySec = 1.0f;
+        Debug.Log("[VlRouterRun] 취소 요청됨");
+    }
+
+    // think_log 포함 재요청
+    private void ExecuteRouterRunWithResumeState(JArray thinkLog, float captureDelaySec, int retryCount, int maxRetry)
+    {
+        pendingCaptureDelaySec = captureDelaySec;
+        StartCoroutine(ExecuteRouterRunCoroutine("", "", thinkLog, retryCount, maxRetry, "VL Router 재시작...", currentOnEvent, currentOnComplete));
+    }
+
+    // Router Run 코루틴: 캡처 후 스트리밍 API 호출
+    private IEnumerator ExecuteRouterRunCoroutine(
+        string query,
+        string memoryJson,
+        JArray thinkLog,
+        int retryCount,
+        int maxRetry,
+        string startText,
+        Action<JObject> onEvent,
+        Action<bool, string> onComplete
+    )
+    {
+        byte[] imageBytes = null;
+        int captureOffsetX = 0;
+        int captureOffsetY = 0;
+
+        // 화면 캡처 및 offset 확보
+        yield return CaptureScreenToMemoryWithOffset(
+            (bytes, x, y) =>
+            {
+                imageBytes = bytes;
+                captureOffsetX = x;
+                captureOffsetY = y;
+            },
+            (failMsg) =>
+            {
+                Debug.LogError($"[VlRouterRun] {failMsg}");
+                onComplete?.Invoke(false, "화면 캡처 실패");
+            },
+            "[VlRouterRun]"
+        );
+
+        if (imageBytes == null || imageBytes.Length == 0)
+        {
+            Debug.LogError("[VlRouterRun] 화면 캡처 실패");
+            onComplete?.Invoke(false, "화면 캡처 실패");
+            yield break;
+        }
+
+        currentOffsetX = captureOffsetX;
+        currentOffsetY = captureOffsetY;
+
+        bool isResume = thinkLog != null && thinkLog.Count > 0;
+        string requestTypeText = "첫 요청";
+        if (isResume)
+        {
+            requestTypeText = "재요청";
+        }
+        Debug.Log($"[VlRouterRun] 캡처 완료: {imageBytes.Length} bytes, {requestTypeText}");
+
+        yield return CallRouterRunStreamingApi(query, memoryJson, thinkLog, retryCount, maxRetry, imageBytes, captureOffsetX, captureOffsetY, startText, onEvent, onComplete);
+    }
+
+    // Router Run 스트리밍 API 호출
+    private IEnumerator CallRouterRunStreamingApi(
+        string query,
+        string memoryJson,
+        JArray thinkLog,
+        int retryCount,
+        int maxRetry,
+        byte[] imageBytes,
+        int offsetX,
+        int offsetY,
+        string startText,
+        Action<JObject> onEvent,
+        Action<bool, string> onComplete
+    )
+    {
+        ShowAnswerBalloonStartText(thinkLog, startText);
+
+        string baseUrl = null;
+        yield return GetBaseUrlCoroutine((url) =>
+        {
+            baseUrl = url;
+        });
+
+        string apiUrl = baseUrl + "/router/job/run";
+        Debug.Log($"[VlRouterRun] API 호출: {apiUrl}");
+
+        string thinkLogJson = "";
+        if (thinkLog != null)
+        {
+            thinkLogJson = thinkLog.ToString(Formatting.None);
+        }
+
+        string unityFunctionsList = ApiAgentFunctionManager.Instance.GetFunctionsList();
+        string unityFunctionsDetailList = ApiAgentFunctionManager.Instance.GetFunctionsDetailList();
+        Dictionary<string, string> routerContextFields = BuildRouterContextFields();
+
+        var eventQueue = new System.Collections.Concurrent.ConcurrentQueue<JObject>();
+        Func<bool> isCanceledProvider = () => isCanceled;
+
+        var task = Task.Run(() => SendRouterRunRequest(
+            apiUrl,
+            query,
+            memoryJson,
+            thinkLogJson,
+            retryCount,
+            maxRetry,
+            isCanceledProvider,
+            imageBytes,
+            isVerbose,
+            unityFunctionsList,
+            unityFunctionsDetailList,
+            routerContextFields,
+            (eventData) =>
+            {
+                eventQueue.Enqueue(eventData);
+            }
+        ));
+
+        while (!task.IsCompleted)
+        {
+            while (eventQueue.TryDequeue(out JObject eventData))
+            {
+                ProcessRouterEvent(eventData, offsetX, offsetY, onEvent);
+            }
+            yield return null;
+        }
+
+        while (eventQueue.TryDequeue(out JObject eventData))
+        {
+            ProcessRouterEvent(eventData, offsetX, offsetY, onEvent);
+        }
+
+        if (task.Exception != null)
+        {
+            string errorMsg = task.Exception.InnerException?.Message ?? task.Exception.Message;
+            Debug.LogError($"[VlRouterRun] API 오류: {errorMsg}");
+            ClearRouterStatusBalloon();
+            ProcessRouterMessage($"VL Router 오류: {errorMsg}");
+            onComplete?.Invoke(false, errorMsg);
+            yield break;
+        }
+
+        var result = task.Result;
+
+        if (shouldRequestNewObservation && pendingThinkLog != null)
+        {
+            shouldRequestNewObservation = false;
+            Debug.Log("[VlRouterRun] 관찰 재요청 대기");
+            SetRouterStatusBalloon("Verify");
+
+            float waitSec = pendingCaptureDelaySec;
+            if (waitSec <= 0.0f)
+            {
+                waitSec = 1.0f;
+            }
+
+            yield return new WaitForSeconds(waitSec);
+            Debug.Log($"[VlRouterRun] 재요청 시작 (delay={waitSec})");
+            ExecuteRouterRunWithResumeState(pendingThinkLog, pendingCaptureDelaySec, pendingRetryCount, pendingMaxRetry);
+            yield break;
+        }
+
+        bool completedConversation = hasRouterConversation;
+        CompleteRouterConversationIfNeeded();
+
+        ClearRouterStatusBalloon();
+
+        if (!completedConversation)
+        {
+            string resultSprite = "No";
+            if (result.success)
+            {
+                resultSprite = "Yes";
+            }
+            EmotionBalloonManager.Instance.ShowEmotionBalloonForSec(CharManager.Instance.GetCurrentCharacter(), resultSprite, 3f, 0f);
+
+            string statusText = "실패";
+            if (result.success)
+            {
+                statusText = "완료";
+            }
+            ProcessRouterMessage($"VL Router {statusText}됨");
+        }
+
+        onComplete?.Invoke(result.success, result.errorMsg);
+    }
+
+    // Router 이벤트 처리
+    private void ProcessRouterEvent(JObject eventData, int offsetX, int offsetY, Action<JObject> onEvent)
+    {
+        string kind = eventData["kind"]?.Value<string>() ?? "";
+        string type = eventData["type"]?.Value<string>() ?? "";
+        string message = eventData["message"]?.Value<string>() ?? "";
+        string routerMatchType = GetRouterMatchType(eventData);
+
+        Debug.Log($"[VlRouterRun] 이벤트 전체 JSON: {eventData.ToString()}");
+        Debug.Log($"[VlRouterRun] 현재 offset: ({offsetX}, {offsetY}), kind={kind}, type={type}, routerMatchType={routerMatchType}");
+
+        if (IsConversationEvent(eventData))
+        {
+            ProcessRouterConversationEvent(eventData);
+            onEvent?.Invoke(eventData);
+            return;
+        }
+
+        ProcessRouterMessage($"[{kind}] {message}");
+        UpdateRouterStatusBalloonByKind(kind);
+
+        if (kind == "observe" || kind == "wait" || kind == "request_observation")
+        {
+            HandleObservationRequestEvent(eventData);
+        }
+        else if (kind == "done")
+        {
+            HandleRouterDoneEvent(eventData, offsetX, offsetY);
+        }
+        else if (kind == "fail")
+        {
+            HandleRouterFailEvent(eventData);
+        }
+        else if (kind == "act")
+        {
+            HandleRouterActEvent(eventData, offsetX, offsetY);
+        }
+        else if (kind == "max_retry_reached")
+        {
+            HandleMaxRetryReached();
+        }
+
+        onEvent?.Invoke(eventData);
+    }
+
+    // Conversation 이벤트 여부 확인
+    private bool IsConversationEvent(JObject eventData)
+    {
+        string kind = eventData["kind"]?.Value<string>() ?? "";
+        string routerMatchType = GetRouterMatchType(eventData);
+        if (routerMatchType == "primitive_tool" || routerMatchType == "skill" || routerMatchType == "planner")
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(kind))
+        {
+            return false;
+        }
+
+        string type = eventData["type"]?.Value<string>() ?? "";
+        if (type == "thinking" || type == "webSearch" || type == "asking_intent" || type == "trigger" || type == "final" || type == "reply")
+        {
+            return true;
+        }
+
+        if (eventData["reply_list"] != null)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    // Router match type 조회
+    private string GetRouterMatchType(JObject eventData)
+    {
+        return eventData["router"]?["match"]?["type"]?.Value<string>() ?? "";
+    }
+
+    // Router conversation 이벤트 전달
+    private void ProcessRouterConversationEvent(JObject eventData)
+    {
+        BeginRouterConversationIfNeeded();
+        Debug.Log("[VlRouterRun] conversation 응답 처리 - /conversation_stream 재호출 없음");
+        APIManager.Instance.ProcessConversationStreamEventFromRouter(eventData, routerConversationSession);
+    }
+
+    // Router conversation 세션 시작
+    private void BeginRouterConversationIfNeeded()
+    {
+        if (routerConversationSession != null)
+        {
+            return;
+        }
+
+        GameObject targetCharacter = CharManager.Instance.GetActiveCharacter();
+        routerConversationSession = APIManager.Instance.BeginConversationStreamFromRouter(currentQuery, currentChatIdx, targetCharacter);
+        hasRouterConversation = true;
+    }
+
+    // Router conversation 완료
+    private void CompleteRouterConversationIfNeeded()
+    {
+        if (routerConversationSession == null)
+        {
+            return;
+        }
+
+        APIManager.Instance.CompleteConversationStreamFromRouter(routerConversationSession);
+        routerConversationSession = null;
+    }
+
+    // observe/wait/request_observation: 재요청용 상태 저장
+    private void HandleObservationRequestEvent(JObject eventData)
+    {
+        string triggerKind = eventData["kind"]?.Value<string>() ?? "";
+        var data = eventData["data"] as JObject;
+        var thinkLog = eventData["think_log"] as JArray;
+        var router = eventData["router"] as JObject;
+
+        Debug.Log($"[VlRouterRun] observation trigger={triggerKind}, think_log={thinkLog?.Count ?? 0}");
+        if (router != null)
+        {
+            Debug.Log($"[VlRouterRun] router: {router.ToString()}");
+        }
+        if (data != null)
+        {
+            Debug.Log($"[VlRouterRun] observation data: {data.ToString()}");
+        }
+
+        SetRouterStatusBalloon("Execute");
+
+        if (data != null)
+        {
+            pendingRetryCount = data["retry_count"]?.Value<int>() ?? 0;
+            pendingMaxRetry = data["max_retry"]?.Value<int>() ?? 5;
+
+            float delaySec = 1.0f;
+            if (data["capture_delay_sec"] != null)
+            {
+                try
+                {
+                    delaySec = data["capture_delay_sec"].Value<float>();
+                }
+                catch (Exception)
+                {
+                    delaySec = 1.0f;
+                }
+            }
+            pendingCaptureDelaySec = delaySec;
+        }
+
+        pendingThinkLog = thinkLog;
+        shouldRequestNewObservation = true;
+    }
+
+    // done 이벤트 처리
+    private void HandleRouterDoneEvent(JObject eventData, int offsetX, int offsetY)
+    {
+        shouldRequestNewObservation = false;
+        pendingThinkLog = null;
+        pendingCaptureDelaySec = 1.0f;
+
+        var data = eventData["data"] as JObject;
+        if (data == null)
+        {
+            Debug.LogWarning("[VlRouterRun] done 이벤트의 data 필드가 null입니다.");
+            return;
+        }
+
+        Debug.Log($"[VlRouterRun] done data: {data.ToString()}");
+
+        if (ApiVlRouterResponseManager.Instance.TryHandleRouterToolCall(eventData, data, offsetX, offsetY, TryProcessReplyListFromRouterData, ExecuteRouterFunction))
+        {
+            return;
+        }
+
+        if (TryHandleUnityEnvelope(data, offsetX, offsetY))
+        {
+            return;
+        }
+
+        TryHandlePlannerAction(data, offsetX, offsetY);
+    }
+
+    // fail 이벤트 처리
+    private void HandleRouterFailEvent(JObject eventData)
+    {
+        Debug.LogWarning($"[VlRouterRun] fail 이벤트: {eventData.ToString()}");
+
+        shouldRequestNewObservation = false;
+        pendingThinkLog = null;
+        pendingCaptureDelaySec = 1.0f;
+
+        if (TryProcessReplyListFromData(eventData))
+        {
+            Debug.Log("[VlRouterRun] fail data.reply_list를 대화 말풍선으로 표시했습니다.");
+        }
+    }
+
+    // max retry 처리
+    private void HandleMaxRetryReached()
+    {
+        Debug.LogWarning("[VlRouterRun] 최대 재시도 횟수 도달");
+
+        shouldRequestNewObservation = false;
+        pendingThinkLog = null;
+        pendingCaptureDelaySec = 1.0f;
+    }
+
+    // act 이벤트 처리
+    private void HandleRouterActEvent(JObject eventData, int offsetX, int offsetY)
+    {
+        var data = eventData["data"] as JObject;
+        if (data == null)
+        {
+            Debug.LogWarning("[VlRouterRun] act 이벤트의 data 필드가 null입니다.");
+            return;
+        }
+
+        Debug.Log($"[VlRouterRun] act data: {data.ToString()}");
+        if (ApiVlRouterResponseManager.Instance.TryHandleRouterToolCall(eventData, data, offsetX, offsetY, TryProcessReplyListFromRouterData, ExecuteRouterFunction))
+        {
+            return;
+        }
+
+        TryHandlePlannerAction(data, offsetX, offsetY);
+    }
+
+    // Unity envelope 처리
+    private bool TryHandleUnityEnvelope(JObject data, int offsetX, int offsetY)
+    {
+        if (!TryExtractEnvelope(data, out string functionName, out JObject parameters))
+        {
+            return false;
+        }
+
+        string parameterLog = "";
+        if (parameters != null)
+        {
+            parameterLog = parameters.ToString();
+        }
+        Debug.Log($"[VlRouterRun] unity envelope function={functionName}, parameters={parameterLog}");
+        ExecuteRouterFunction(functionName, parameters, offsetX, offsetY);
+        return true;
+    }
+
+    // Unity envelope 추출
+    private bool TryExtractEnvelope(JObject data, out string functionName, out JObject parameters)
+    {
+        functionName = "";
+        parameters = null;
+
+        JObject envelope = null;
+
+        var routerAction = data["router_action"] as JObject;
+        if (routerAction != null)
+        {
+            var payload = routerAction["payload"] as JObject;
+            if (payload != null)
+            {
+                envelope = payload["envelope"] as JObject;
+                if (envelope == null && payload["function_name"] != null)
+                {
+                    envelope = payload;
+                }
+            }
+
+            if (envelope == null && routerAction["envelope"] != null)
+            {
+                envelope = routerAction["envelope"] as JObject;
+            }
+
+            if (envelope == null && routerAction["function_name"] != null)
+            {
+                envelope = routerAction;
+            }
+        }
+
+        if (envelope == null && data["envelope"] != null)
+        {
+            envelope = data["envelope"] as JObject;
+        }
+
+        if (envelope == null && data["function_name"] != null)
+        {
+            envelope = data;
+        }
+
+        if (envelope == null)
+        {
+            return false;
+        }
+
+        functionName = envelope["function_name"]?.Value<string>() ?? "";
+        parameters = envelope["parameters"] as JObject;
+        if (parameters == null)
+        {
+            parameters = new JObject();
+        }
+
+        if (string.IsNullOrEmpty(functionName))
+        {
+            Debug.LogWarning($"[VlRouterRun] envelope에 function_name이 없습니다. envelope={envelope.ToString()}");
+            return false;
+        }
+
+        return true;
+    }
+
+    // Planner action 처리
+    private bool TryHandlePlannerAction(JObject data, int offsetX, int offsetY)
+    {
+        string action = data["action"]?.Value<string>() ?? "";
+        string functionName = data["function_name"]?.Value<string>() ?? "";
+
+        if (!string.IsNullOrEmpty(action))
+        {
+            ExecuteRouterFunction(action, data, offsetX, offsetY);
+            return true;
+        }
+
+        if (functionName == "REQUEST_CLICK")
+        {
+            ExecuteRouterFunction(functionName, data, offsetX, offsetY);
+            return true;
+        }
+
+        if (functionName == "VL_TARGET_FIND")
+        {
+            var result = data["result"] as JObject;
+            if (result == null)
+            {
+                Debug.LogWarning("[VlRouterRun] VL_TARGET_FIND result가 null입니다.");
+                return true;
+            }
+
+            bool exists = result["exists"]?.Value<bool>() ?? false;
+            if (!exists)
+            {
+                Debug.LogWarning("[VlRouterRun] VL_TARGET_FIND 대상을 찾지 못했습니다.");
+                return true;
+            }
+
+            int? x = result["x"]?.Value<int>();
+            int? y = result["y"]?.Value<int>();
+            if (x.HasValue && y.HasValue)
+            {
+                (int absoluteX, int absoluteY) = ConvertRelativeToAbsolute(x.Value, y.Value, offsetX, offsetY);
+                Debug.Log($"[VlRouterRun] Grounding 결과: ({x.Value}, {y.Value}) = ({absoluteX}, {absoluteY})");
+                ShowClickPosition(absoluteX, absoluteY, 1f);
+            }
+            else
+            {
+                Debug.LogWarning("[VlRouterRun] VL_TARGET_FIND 좌표가 없습니다.");
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    // Router function 실행
+    private void ExecuteRouterFunction(string functionName, JObject parameters, int offsetX, int offsetY)
+    {
+        switch (functionName)
+        {
+            case "character_dance":
+            case "function_request_dance":
+            case "dance":
+                Debug.Log("[VlRouterRun] 춤 요청");
+                AnimationManager.Instance.Dance();
+                break;
+            case "play_sfx_alert":
+            case "function_play_sfx_alert":
+                Debug.Log("[VlRouterRun] 알림 효과음 재생 요청");
+                StartCoroutine(ScenarioCommonManager.Instance.Run_C99_Alert_from_planner());
+                break;
+            case "capture_screenshot":
+            case "function_request_screenshot":
+            case "screenshot":
+                Debug.Log("[VlRouterRun] 스크린샷 요청");
+                ScreenshotManager.Instance.CaptureFullScreen();
+                string screenshotPath = Path.Combine(Application.persistentDataPath, "Screenshots", "panel_capture.png");
+                ClipboardManager.Instance.SetImageToClipboard(screenshotPath);
+                break;
+            case "click":
+            case "function_request_click":
+            case "REQUEST_CLICK":
+                ExecuteClickFunction(parameters, offsetX, offsetY);
+                break;
+            default:
+                ExecuteApiAgentFunction(functionName, parameters);
+                break;
+        }
+    }
+
+    // ApiAgentFunctionManager로 primitive tool 위임
+    private void ExecuteApiAgentFunction(string functionName, JObject parameters)
+    {
+        Dictionary<string, object> parameterDict = ConvertJObjectToDictionary(parameters);
+        string parameterLog = "";
+        if (parameters != null)
+        {
+            parameterLog = parameters.ToString();
+        }
+
+        Debug.Log($"[VlRouterRun] ApiAgentFunctionManager 위임: {functionName}, parameters={parameterLog}");
+        ApiAgentFunctionManager.Instance.ExecuteAction(functionName, parameterDict, (success, message) =>
+        {
+            if (success)
+            {
+                Debug.Log($"[VlRouterRun] primitive 실행 완료: {functionName}, message={message}");
+            }
+            else
+            {
+                Debug.LogWarning($"[VlRouterRun] primitive 실행 실패/미매핑: {functionName}, message={message}, parameters={parameterLog}");
+            }
+        });
+    }
+
+    // JObject를 Dictionary로 변환
+    private Dictionary<string, object> ConvertJObjectToDictionary(JObject parameters)
+    {
+        Dictionary<string, object> dict = new Dictionary<string, object>();
+        if (parameters == null)
+        {
+            return dict;
+        }
+
+        foreach (var property in parameters.Properties())
+        {
+            dict[property.Name] = ConvertJTokenToObject(property.Value);
+        }
+
+        return dict;
+    }
+
+    // JToken을 일반 object로 변환
+    private object ConvertJTokenToObject(JToken token)
+    {
+        if (token == null)
+        {
+            return null;
+        }
+
+        if (token.Type == JTokenType.Integer)
+        {
+            return token.Value<int>();
+        }
+        if (token.Type == JTokenType.Float)
+        {
+            return token.Value<float>();
+        }
+        if (token.Type == JTokenType.Boolean)
+        {
+            return token.Value<bool>();
+        }
+        if (token.Type == JTokenType.String)
+        {
+            return token.Value<string>();
+        }
+
+        return token.ToString(Formatting.None);
+    }
+
+    // data.reply_list를 conversation facade로 표시
+    private bool TryProcessReplyListFromData(JObject eventData)
+    {
+        var data = eventData["data"] as JObject;
+        if (data == null)
+        {
+            return false;
+        }
+
+        return TryProcessReplyListFromRouterData(data);
+    }
+
+    // data.reply_list를 conversation facade로 표시
+    private bool TryProcessReplyListFromRouterData(JObject data)
+    {
+        JToken replyList = data["reply_list"];
+        if (replyList == null || replyList.Type != JTokenType.Array)
+        {
+            return false;
+        }
+
+        JObject conversationEvent = new JObject();
+        conversationEvent["type"] = "reply";
+        conversationEvent["reply_list"] = replyList.DeepClone();
+        conversationEvent["chat_idx"] = currentChatIdx;
+        conversationEvent["ai_language_out"] = SettingManager.Instance.settings.ai_language_out ?? "";
+        conversationEvent["query"] = new JObject
+        {
+            ["origin"] = currentQuery,
+            ["text"] = currentQuery
+        };
+
+        BeginRouterConversationIfNeeded();
+        Debug.Log("[VlRouterRun] data.reply_list 표시 - /conversation_stream 재호출 없음");
+        APIManager.Instance.ProcessConversationStreamEventFromRouter(conversationEvent, routerConversationSession);
+        return true;
+    }
+
+    // 클릭 function 실행
+    private void ExecuteClickFunction(JObject parameters, int offsetX, int offsetY)
+    {
+        if (parameters == null)
+        {
+            Debug.LogWarning("[VlRouterRun] click parameters가 null입니다.");
+            return;
+        }
+
+        int? x = parameters["x"]?.Value<int>();
+        int? y = parameters["y"]?.Value<int>();
+        if (x.HasValue && y.HasValue)
+        {
+            Debug.Log($"[VlRouterRun] click - x={x}, y={y}, offset=({offsetX}, {offsetY})");
+            ExecuteClickFromRelative(x.Value, y.Value, offsetX, offsetY, true, "[VlRouterRun] 클릭 실행");
+        }
+        else
+        {
+            Debug.LogWarning($"[VlRouterRun] click 좌표가 없습니다. parameters={parameters.ToString()}");
+        }
+    }
+
+    // 스트리밍 요청 전송
+    // Builds the extra /conversation_stream-compatible context that Router needs for model selection and prompt state.
+    private Dictionary<string, string> BuildRouterContextFields()
+    {
+        GameObject targetCharacter = CharManager.Instance.GetActiveCharacter();
+        string nickname = CharManager.Instance.GetNickname(targetCharacter);
+
+        string modelId = SettingManager.Instance.settings.model_name_Local ?? "";
+        string modelFileName = ModelDataLocal.GetFileNameById(modelId);
+
+        string intentWeb = SettingManager.Instance.settings.ai_web_search ?? "off";
+        if (GameManager.Instance.isWebSearchForced)
+        {
+            intentWeb = "force";
+        }
+
+        string intentConfirm = "false";
+        if (SettingManager.Instance.settings.confirmUserIntent)
+        {
+            intentConfirm = "true";
+        }
+
+        var contextFields = new Dictionary<string, string>
+        {
+            { "player", SettingManager.Instance.settings.player_name ?? "" },
+            { "char", nickname ?? "" },
+            { "ai_emotion", SettingManager.Instance.settings.ai_emotion ?? "off" },
+            { "ai_think_mode", SettingManager.Instance.settings.ai_think_mode ?? "off" },
+            { "api_key_Gemini", "" },
+            { "api_key_OpenRouter", "" },
+            { "api_key_ChatGPT", "" },
+            { "guideline_list", UIUserCardManager.Instance.GetGuidelineListJson() },
+            { "situation", UIChatSituationManager.Instance.GetCurUIChatSituationInfoJson() },
+            { "chatIdx", currentChatIdx },
+            { "intent_web", intentWeb },
+            { "intent_image", "force" },
+            { "intent_confirm", intentConfirm },
+            { "intent_confirm_type", "" },
+            { "intent_confirm_answer", "" },
+            { "regenerate_count", GameManager.Instance.chatIdxRegenerateCount.ToString() },
+            { "server_type", SettingManager.Instance.settings.server_type ?? "Auto" },
+            { "model_name_Local", modelFileName },
+            { "model_name_Gemini", SettingManager.Instance.settings.model_name_Gemini ?? "" },
+            { "model_name_OpenRouter", SettingManager.Instance.settings.model_name_OpenRouter ?? "" },
+            { "model_name_ChatGPT", SettingManager.Instance.settings.model_name_ChatGPT ?? "" },
+            { "model_name_Custom", SettingManager.Instance.GetCurrentCustomModelName() },
+            { "server_local_mode", SettingManager.Instance.settings.server_local_mode ?? "GPU" },
+            { "intent_smalltalk_answer", "off" },
+            { "query_smalltalk", "" },
+            { "current_date", DateTime.Now.ToString("yyyy-MM-dd") },
+            { "current_datetime", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") },
+            { "timezone", TimeZoneInfo.Local.Id }
+        };
+
+        Debug.Log($"[VlRouterRun] Router context fields: {JsonConvert.SerializeObject(contextFields)}");
+        return contextFields;
+    }
+
+    private (bool success, string errorMsg) SendRouterRunRequest(
+        string apiUrl,
+        string query,
+        string memoryJson,
+        string thinkLogJson,
+        int retryCount,
+        int maxRetry,
+        Func<bool> isCanceledProvider,
+        byte[] imageBytes,
+        bool verbose,
+        string unityFunctionsList,
+        string unityFunctionsDetailList,
+        Dictionary<string, string> routerContextFields,
+        Action<JObject> onEvent
+    )
+    {
+        string boundary = "----WebKitFormBoundary" + DateTime.Now.Ticks.ToString("x");
+
+        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(apiUrl);
+        request.Method = "POST";
+        request.ContentType = "multipart/form-data; boundary=" + boundary;
+        request.Timeout = 120000;
+
+        using (MemoryStream memStream = new MemoryStream())
+        using (StreamWriter writer = new StreamWriter(memStream, Encoding.UTF8, 1024, true))
+        {
+            if (!string.IsNullOrEmpty(query))
+            {
+                WriteFormField(writer, boundary, "query", query);
+            }
+
+            if (!string.IsNullOrEmpty(memoryJson))
+            {
+                WriteFormField(writer, boundary, "memory", memoryJson);
+            }
+
+            if (!string.IsNullOrEmpty(thinkLogJson))
+            {
+                WriteFormField(writer, boundary, "think_log", thinkLogJson);
+            }
+
+            string verboseText = "false";
+            if (verbose)
+            {
+                verboseText = "true";
+            }
+            WriteFormField(writer, boundary, "verbose", verboseText);
+            WriteFormField(writer, boundary, "retry_count", retryCount.ToString());
+            WriteFormField(writer, boundary, "max_retry", maxRetry.ToString());
+            string isCanceledText = "false";
+            if (isCanceledProvider != null && isCanceledProvider())
+            {
+                isCanceledText = "true";
+            }
+            WriteFormField(writer, boundary, "is_canceled", isCanceledText);
+            WriteFormField(writer, boundary, "ai_language", SettingManager.Instance.settings.ai_language ?? "");
+            WriteFormField(writer, boundary, "ai_language_in", SettingManager.Instance.settings.ai_language_in ?? "");
+            WriteFormField(writer, boundary, "ai_language_out", SettingManager.Instance.settings.ai_language_out ?? "");
+            WriteFormField(writer, boundary, "unity_functions_list", unityFunctionsList ?? "");
+            WriteFormField(writer, boundary, "unity_functions_detail_list", unityFunctionsDetailList ?? "");
+
+            foreach (KeyValuePair<string, string> field in routerContextFields)
+            {
+                WriteFormField(writer, boundary, field.Key, field.Value ?? "");
+            }
+
+            if (imageBytes != null && imageBytes.Length > 0)
+            {
+                writer.WriteLine($"--{boundary}");
+                writer.WriteLine("Content-Disposition: form-data; name=\"image\"; filename=\"capture.png\"");
+                writer.WriteLine("Content-Type: image/png");
+                writer.WriteLine();
+                writer.Flush();
+                memStream.Write(imageBytes, 0, imageBytes.Length);
+                writer.WriteLine();
+            }
+
+            writer.WriteLine($"--{boundary}--");
+            writer.Flush();
+
+            request.ContentLength = memStream.Length;
+            using (Stream requestStream = request.GetRequestStream())
+            {
+                memStream.Seek(0, SeekOrigin.Begin);
+                memStream.CopyTo(requestStream);
+            }
+        }
+
+        try
+        {
+            using (WebResponse response = request.GetResponse())
+            using (Stream responseStream = response.GetResponseStream())
+            using (StreamReader reader = new StreamReader(responseStream, Encoding.UTF8))
+            {
+                string lastKind = "";
+                string lastErrorMsg = "";
+                bool hasEvent = false;
+                bool hasConversation = false;
+
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (isCanceledProvider != null && isCanceledProvider())
+                    {
+                        Debug.Log("[VlRouterRun] 취소 감지 - 스트리밍 수신 중단");
+                        return (false, "canceled");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(line))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        JObject eventData = JObject.Parse(line);
+                        hasEvent = true;
+                        lastKind = eventData["kind"]?.Value<string>() ?? "";
+
+                        if (eventData["type"] != null || eventData["reply_list"] != null)
+                        {
+                            hasConversation = true;
+                        }
+
+                        if (lastKind == "fail")
+                        {
+                            lastErrorMsg = eventData["message"]?.Value<string>() ?? "Unknown error";
+                        }
+
+                        onEvent?.Invoke(eventData);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"[VlRouterRun] 이벤트 파싱 오류: {ex.Message}, line={line}");
+                    }
+                }
+
+                bool success = false;
+                if (hasConversation)
+                {
+                    success = true;
+                }
+                else if (lastKind == "done" || lastKind == "observe" || lastKind == "wait" || lastKind == "request_observation" || lastKind == "max_retry_reached")
+                {
+                    success = true;
+                }
+                else if (hasEvent && string.IsNullOrEmpty(lastKind))
+                {
+                    success = true;
+                }
+
+                string errorMsg = lastErrorMsg;
+                if (success)
+                {
+                    errorMsg = "";
+                }
+                return (success, errorMsg);
+            }
+        }
+        catch (WebException ex)
+        {
+            if (ex.Response != null)
+            {
+                using (Stream errorStream = ex.Response.GetResponseStream())
+                using (StreamReader errorReader = new StreamReader(errorStream))
+                {
+                    string errorResponse = errorReader.ReadToEnd();
+                    Debug.LogError($"[VlRouterRun] 서버 오류: {errorResponse}");
+                    return (false, errorResponse);
+                }
+            }
+            throw;
+        }
+    }
+
+    // form-data 필드 작성
+    private void WriteFormField(StreamWriter writer, string boundary, string key, string value)
+    {
+        writer.WriteLine($"--{boundary}");
+        writer.WriteLine($"Content-Disposition: form-data; name=\"{key}\"");
+        writer.WriteLine();
+        writer.WriteLine(value ?? string.Empty);
+    }
+
+    #endregion
+
+    #region 유틸리티 함수
+
+    // Screenshot 영역 또는 전체화면 캡처
+    private IEnumerator CaptureScreenToMemoryWithOffset(
+        Action<byte[], int, int> onCaptured,
+        Action<string> onFail,
+        string logPrefix
+    )
+    {
+        byte[] imageBytes = null;
+        int captureOffsetX = 0;
+        int captureOffsetY = 0;
+
+        if (ScreenshotManager.Instance.IsScreenshotAreaSet())
+        {
+            Debug.Log($"{logPrefix} Screenshot 영역 캡처");
+
+            bool captureComplete = false;
+            yield return ScreenshotManager.Instance.CaptureScreenshotToMemoryWithInfo((bytes, x, y, w, h) =>
+            {
+                imageBytes = bytes;
+                captureOffsetX = x;
+                captureOffsetY = y;
+                captureComplete = true;
+                Debug.Log($"{logPrefix} 캡처 offset: ({x}, {y}), size: {w}x{h}");
+            });
+            while (!captureComplete)
+            {
+                yield return null;
+            }
+        }
+        else
+        {
+            Debug.Log($"{logPrefix} 전체화면 캡처");
+
+            bool captureComplete = false;
+            yield return ScreenshotManager.Instance.CaptureFullScreenToMemory((bytes) =>
+            {
+                imageBytes = bytes;
+                captureOffsetX = 0;
+                captureOffsetY = 0;
+                captureComplete = true;
+            });
+            while (!captureComplete)
+            {
+                yield return null;
+            }
+        }
+
+        if (imageBytes == null || imageBytes.Length == 0)
+        {
+            onFail?.Invoke("화면 캡처 실패");
+            yield break;
+        }
+
+        onCaptured?.Invoke(imageBytes, captureOffsetX, captureOffsetY);
+    }
+
+    // ServerManager에서 BaseUrl 비동기 획득
+    private IEnumerator GetBaseUrlCoroutine(Action<string> onReady)
+    {
+        string baseUrl = null;
+        bool urlComplete = false;
+
+        ServerManager.Instance.GetBaseUrl((url) =>
+        {
+            baseUrl = url;
+            urlComplete = true;
+        });
+
+        while (!urlComplete)
+        {
+            yield return null;
+        }
+
+        onReady?.Invoke(baseUrl);
+    }
+
+    // kind에 따라 상태 말풍선 갱신
+    private void UpdateRouterStatusBalloonByKind(string kind)
+    {
+        if (kind == "goal" || kind == "plan" || kind == "observe")
+        {
+            SetRouterStatusBalloon("Think");
+        }
+        else if (kind == "check")
+        {
+            SetRouterStatusBalloon("Verify");
+        }
+    }
+
+    // 상태 말풍선 표시
+    private void SetRouterStatusBalloon(string spriteKey)
+    {
+        NoticeManager.Instance.ShowNoticeEmotionBalloon(spriteKey);
+    }
+
+    // 상태 말풍선 제거
+    private void ClearRouterStatusBalloon()
+    {
+        NoticeManager.Instance.DeleteNoticeBalloonInstance();
+    }
+
+    // AnswerBalloonSimple에 시작 텍스트 표시
+    private void ShowAnswerBalloonStartText(JArray thinkLog, string startText)
+    {
+        AnswerBalloonSimpleManager.Instance.ShowAnswerBalloonSimpleInf();
+        bool isResume = thinkLog != null && thinkLog.Count > 0;
+        if (isResume)
+        {
+            AnswerBalloonSimpleManager.Instance.ModifyAnswerBalloonSimpleText("VL Router 재시작...");
+        }
+        else
+        {
+            AnswerBalloonSimpleManager.Instance.ModifyAnswerBalloonSimpleText(startText);
+        }
+    }
+
+    // 상대 좌표를 절대 좌표로 변환
+    private (int absoluteX, int absoluteY) ConvertRelativeToAbsolute(int relativeX, int relativeY, int offsetX, int offsetY)
+    {
+        int absoluteX = relativeX + offsetX;
+        int absoluteY = relativeY + offsetY;
+        return (absoluteX, absoluteY);
+    }
+
+    // 상대 좌표 클릭 실행
+    private void ExecuteClickFromRelative(int relativeX, int relativeY, int offsetX, int offsetY, bool isMouseMove, string logPrefix)
+    {
+        (int absoluteX, int absoluteY) = ConvertRelativeToAbsolute(relativeX, relativeY, offsetX, offsetY);
+
+        Debug.Log($"{logPrefix}: ({relativeX}, {relativeY}) + offset: ({offsetX}, {offsetY}) = ({absoluteX}, {absoluteY})");
+
+        ShowClickPosition(absoluteX, absoluteY);
+        ExecutorMouseAction.Instance.ClickAtPosition(absoluteX, absoluteY, isMouseMove);
+    }
+
+    // 클릭 위치 마커 표시
+    public void ShowClickPosition(int winX, int winY, float duration = 2f)
+    {
+        Debug.Log($"[VlRouterRun] ShowClickPosition: ({winX}, {winY})");
+        StartCoroutine(ShowClickPositionCoroutine(winX, winY, duration));
+    }
+
+    // 클릭 마커 표시 코루틴
+    private IEnumerator ShowClickPositionCoroutine(int winX, int winY, float duration)
+    {
+        GameObject marker = new GameObject("VL_Router_ClickMarker");
+
+        Canvas canvas = FindObjectOfType<Canvas>();
+        if (canvas == null)
+        {
+            Debug.LogWarning("[VlRouterRun] Canvas를 찾을 수 없음 - 마커 생성 실패");
+            Destroy(marker);
+            yield break;
+        }
+
+        marker.transform.SetParent(canvas.transform, false);
+
+        var image = marker.AddComponent<UnityEngine.UI.Image>();
+        image.color = new Color(1f, 0f, 0f, 0.7f);
+        image.raycastTarget = false;
+
+        RectTransform rt = marker.GetComponent<RectTransform>();
+        rt.sizeDelta = new Vector2(30, 30);
+
+        float unityScreenX = winX;
+        float unityScreenY = Screen.height - winY;
+
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            canvas.transform as RectTransform,
+            new Vector2(unityScreenX, unityScreenY),
+            canvas.worldCamera,
+            out Vector2 localPoint
+        );
+
+        rt.anchoredPosition = localPoint;
+
+        Debug.Log($"[VlRouterRun] 마커 표시: Windows({winX}, {winY}) → Unity({unityScreenX}, {unityScreenY}) → Local({localPoint.x}, {localPoint.y})");
+
+        if (fx_click != null)
+        {
+            Vector3 worldPos = canvas.transform.TransformPoint(new Vector3(localPoint.x, localPoint.y, 0));
+            fx_click.transform.position = worldPos;
+            fx_click.Play();
+            Debug.Log($"[VlRouterRun] 이펙트 재생: World({worldPos.x}, {worldPos.y}, {worldPos.z})");
+        }
+
+        yield return new WaitForSeconds(duration);
+
+        if (marker != null)
+        {
+            Destroy(marker);
+        }
+    }
+
+    #endregion
+}

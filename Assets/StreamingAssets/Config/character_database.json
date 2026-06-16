@@ -5,7 +5,7 @@
       "name": "Naost",
       "clothesList": [
         {
-          "name": "Naost",
+          "name": "AICO",
           "text": "Vroid",
           "spriteAddress": "naost_sprite",
           "prefabAddress": "naost",
@@ -866,10 +866,18 @@
       "name": "Diana",
       "clothesList": [
         {
-          "name": "diana",
+          "name": "diana_legacy",
           "text": "diana",
           "spriteAddress": "diana_sprite",
           "prefabAddress": "diana",
+          "isLocal": true,
+          "isSelectable": false
+        },
+        {
+          "name": "diana",
+          "text": "diana",
+          "spriteAddress": "diana_rigging_sprite",
+          "prefabAddress": "diana_rigging",
           "isLocal": true,
           "isSelectable": true
         }

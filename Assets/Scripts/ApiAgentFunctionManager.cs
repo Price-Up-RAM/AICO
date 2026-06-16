@@ -188,6 +188,27 @@ public class ApiAgentFunctionManager : MonoBehaviour
             F("character_walk_right", "character", "캐릭터가 오른쪽 방향으로 걷기 이동을 시작합니다.", false),
             F("character_stop", "character", "모든 캐릭터 액션을 중지하고 Idle 상태로 복귀합니다.", false),
 
+            // TODO
+            F("todo_get_items", "todo", "지정 날짜의 TODO 목록을 조회합니다.", false, new JArray {
+                P("date", "string", true, "날짜. yyyy-MM-dd 형식")
+            }),
+            F("todo_add_item", "todo", "지정 날짜에 TODO 항목을 추가합니다.", false, new JArray {
+                P("date", "string", true, "날짜. yyyy-MM-dd 형식"),
+                P("content", "string", true, "TODO 내용"),
+                P("time", "string", false, "선택 시간. HH:mm 형식")
+            }),
+            F("todo_complete_item", "todo", "지정 날짜의 TODO 항목을 keyword로 찾아 완료 처리합니다.", true, new JArray {
+                P("date", "string", true, "날짜. yyyy-MM-dd 형식"),
+                P("keyword", "string", true, "찾을 TODO keyword")
+            }),
+            F("todo_delete_item", "todo", "지정 날짜의 TODO 항목을 keyword로 찾아 삭제합니다.", true, new JArray {
+                P("date", "string", true, "날짜. yyyy-MM-dd 형식"),
+                P("keyword", "string", true, "찾을 TODO keyword")
+            }),
+            F("todo_list_show", "todo", "지정 날짜의 TODOList UI를 엽니다.", false, new JArray {
+                P("date", "string", false, "날짜. yyyy-MM-dd 형식. 비우면 오늘")
+            }),
+
             // Debug
             F("test", "debug", "연결 테스트용. 항상 성공을 반환합니다.", false)
         };
@@ -448,6 +469,40 @@ public class ApiAgentFunctionManager : MonoBehaviour
         {
             ApiAgentFunctionAction.Instance.StopAction();
             onComplete?.Invoke(true, "캐릭터 동작 멈춤 실행");
+        }
+        else if (functionName == "todo_get_items")
+        {
+            string date = GetParam<string>(parameters, "date", "");
+            bool success = ApiAgentFunctionTodoAction.Instance.GetItems(date, out string message);
+            onComplete?.Invoke(success, message);
+        }
+        else if (functionName == "todo_add_item")
+        {
+            string date = GetParam<string>(parameters, "date", "");
+            string content = GetParam<string>(parameters, "content", "");
+            string time = GetParam<string>(parameters, "time", "");
+            bool success = ApiAgentFunctionTodoAction.Instance.AddItem(date, content, time, out string message);
+            onComplete?.Invoke(success, message);
+        }
+        else if (functionName == "todo_complete_item")
+        {
+            string date = GetParam<string>(parameters, "date", "");
+            string keyword = GetParam<string>(parameters, "keyword", "");
+            bool success = ApiAgentFunctionTodoAction.Instance.CompleteItem(date, keyword, out string message);
+            onComplete?.Invoke(success, message);
+        }
+        else if (functionName == "todo_delete_item")
+        {
+            string date = GetParam<string>(parameters, "date", "");
+            string keyword = GetParam<string>(parameters, "keyword", "");
+            bool success = ApiAgentFunctionTodoAction.Instance.DeleteItem(date, keyword, out string message);
+            onComplete?.Invoke(success, message);
+        }
+        else if (functionName == "todo_list_show")
+        {
+            string date = GetParam<string>(parameters, "date", "");
+            bool success = ApiAgentFunctionTodoAction.Instance.ShowTodoList(date, out string message);
+            onComplete?.Invoke(success, message);
         }
         else if (functionName == "get_functions_list")
         {

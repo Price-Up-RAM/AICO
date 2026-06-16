@@ -219,6 +219,14 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
                 MemoryManager.Instance.ResetConversationMemoryAndGuide();
             }),
             (LanguageData.Translate("Chat History", targetLang), delegate { UIManager.Instance.ShowChatHistory(); }),
+            (LanguageData.Translate("Idle Talk", targetLang), async delegate { 
+                if (!await InstallStatusManager.Instance.CheckAndOperateFullAsync())
+                {
+                    return;
+                }
+                string purpose = "잡담"; // 기본 목적
+                APIManager.Instance.CallSmallTalkStream(purpose);
+            }), // 잡담
         });
 
         // Control - 제어
@@ -257,20 +265,14 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             }),
         });
 
-        // Talk
-        m_ContextMenu.AddSubMenuItem(LanguageData.Translate("Talk", targetLang), new List<(string, UnityAction)>
+        // 기능 - Function
+        m_ContextMenu.AddSubMenuItem(LanguageData.Translate("Function", targetLang), new List<(string, UnityAction)>
         {
-            (LanguageData.Translate("Edition 튜토리얼", targetLang), delegate { ScenarioInstallerManager.Instance.StartInstaller(); }),
-            // (LanguageData.Translate("Setting 튜토리얼", targetLang), delegate { ScenarioTutorialManager.Instance.StartTutorial(); }),
-            (LanguageData.Translate("Idle Talk", targetLang), async delegate { 
-                // Full 버전 이상인지 확인
-                if (!await InstallStatusManager.Instance.CheckAndOperateFullAsync())
-                {
-                    return;
-                }
-                string purpose = "잡담"; // 기본 목적
-                APIManager.Instance.CallSmallTalkStream(purpose);
-            }), // 잡담
+            (LanguageData.Translate("Pomodoro", targetLang), delegate { UIManager.Instance.ShowPomodoro(); }),
+            (LanguageData.Translate("Alarm", targetLang), delegate { UIManager.Instance.ShowAlarm(); }),
+            (LanguageData.Translate("AlarmMini", targetLang), delegate { UIManager.Instance.ShowAlarmMini(); }),
+            (LanguageData.Translate("Calendar", targetLang), delegate { UIManager.Instance.ShowCalendar(); }),
+            (LanguageData.Translate("TODOList", targetLang), delegate { UIManager.Instance.ShowTODOList(); }),
         });
 
 
@@ -370,6 +372,7 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             m_ContextMenu.AddMenuItem(LanguageData.Translate("Debug", targetLang), delegate
             {
                 StartCoroutine(ScenarioTutorialManager.Instance.Scenario_A04_2_APIKeyInput2());
+                
             });
             m_ContextMenu.AddSubMenuItem(LanguageData.Translate("Dev", targetLang), new List<(string, UnityAction)>
             {
@@ -395,7 +398,9 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
                     };
                     
                     ScreenshotOCRManager.Instance.ExecuteFullScreenOCR(options);
-                })
+                }),
+                (LanguageData.Translate("Edition 튜토리얼", targetLang), delegate { ScenarioInstallerManager.Instance.StartInstaller(); }),
+                // (LanguageData.Translate("Setting 튜토리얼", targetLang), delegate { ScenarioTutorialManager.Instance.StartTutorial(); }),
             });
 #endif
 
