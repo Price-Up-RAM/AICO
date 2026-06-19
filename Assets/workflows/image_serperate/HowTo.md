@@ -1,156 +1,131 @@
-# HowTo — 캐릭터 요소 분해 워크플로우
+# HowTo — 캐릭터 요소 분해 (Qwen-Image-Edit 2509)
 
-캐릭터 1장(이미 **T 포즈**)을 입력하면 머리·몸체·상의·하의·벨트·신발 등 **개별 요소로 분해**한다.
-실행은 **GPU PC**에서 한다(현재 개발 머신은 GPU 없음 → 설계/생성만 수행).
+캐릭터 1장(이미 **T 포즈**)을 입력하면 머리·재킷·장갑·고글 등 **요소별로 "흰 배경에 그것만"** 추출한다.
+civitai "Outfit Extractor - Qwen Edit" 와 같은 **생성형 편집(방식 A)** 방식이며,
+ComfyUI 내장 공식 템플릿 `image_qwen_image_edit_2509.json` 의 파이프라인을 요소 수만큼 복제한 것이다.
 
----
-
-## 0. 워크플로우 3종 — 한눈에
-
-| 워크플로우 | 한 줄 설명 | 엔진 | 요소 겹침 | 출력 | VRAM |
-|---|---|---|---|---|---|
-| **`decompose_all.json`** | 고정 10요소 분리 | SCHP 파싱 | ❌ 없음 | 투명 PNG | 4GB / CPU |
-| **`decompose_list.json`** | 요소를 리스트로 가변 지정 | SCHP 파싱 | ❌ 없음 | 투명 PNG | 4GB / CPU |
-| **`decompose_regen.json`** | 요소별로 다른 버전 재생성 | Qwen 편집 | ⚠️ 가능 | 흰 배경 | 12~24GB |
-
-> **all = 고정 무겹침 · list = 가변 무겹침 · regen = 가변 생성형 재생성**
-
-**두 엔진의 차이**
-- **SCHP(ATR) 의미 분할** — 픽셀마다 라벨을 정확히 하나 배정. 그래서 **요소 간 겹침이 구조적으로 불가능**(벨트가 상의·하의에 중복되지 않음). 결정적(다시 돌려도 동일), 가벼움.
-- **Qwen-Image-Edit** — 생성형 편집. 매번 다른 **변형(재생성)** 가능, 흰 배경 product-shot. 무거움.
+> **이전 SCHP(human-parser) 방식은 폐기했다.** SCHP/ATR 는 실사 인물 사진으로 학습된 분할 모델이라
+> 일러스트/스타일 캐릭터에서 마스크가 깨져 "검은 뭉개짐" 이 나왔다. 이 한계가 없는 Qwen 편집으로 전면 교체.
 
 ---
 
-## 1. 환경 / 요구 사양
+## 0. 구성
 
-### SCHP 계열 (`decompose_all`, `decompose_list`)
+- 워크플로우 1개: **`decompose.json`** (커스텀 노드 **0개**, 전부 ComfyUI 코어 노드).
+- 요소 목록은 **`elements.txt`** 로 가변 지정 → `python build_workflow.py` 로 `decompose.json` 재생성.
+- 엔진: **Qwen-Image-Edit-2509** + Qwen2.5-VL 인코더 + qwen_image_vae + Lightning 4-step LoRA.
+- 출력: 요소별 **흰 배경 PNG** (`output/decompose/<요소>_*.png`). 알파 PNG가 필요하면 §6 참고.
+
+파이프라인(요소 레인 1개):
+```
+LoadImage ─ FluxKontextImageScale ┬─ TextEncodeQwenImageEditPlus(+프롬프트) ┐
+                                  ├─ TextEncodeQwenImageEditPlus(neg, 빈)  ├─ KSampler ─ VAEDecode ─ SaveImage
+                                  └─ VAEEncode ───────────────────(latent)─┘
+공유: UNETLoader → Lightning LoRA → ModelSamplingAuraFlow(shift 3) → CFGNorm(1) / CLIPLoader / VAELoader
+KSampler: euler · simple · steps 4 · cfg 1 · denoise 1   (Lightning 4-step 카논 값)
+```
+
+---
+
+## 1. 요구 사양 / 환경
+
 | 항목 | 값 |
 |---|---|
-| 모델 | SCHP ATR 체크포인트 `exp-schp-201908301523-atr.pth` **약 267MB** (유일) |
-| 디스크 | 신규 0.5GB 미만 (여유 포함 2GB) |
-| VRAM | **4GB+** 권장 (실사용 ~2GB). **GPU 없으면 CPU도 동작**(느림) |
-| 커스텀 노드 | `cozymantis/human-parser-comfyui-node`, `jnxmx/ComfyUI_HuggingFace_Downloader` |
-
-### Qwen 계열 (`decompose_regen`) — 위에 더해서
-| 항목 | 값 |
-|---|---|
-| 모델 | Qwen-Image-Edit-2509 + Qwen2.5-VL 인코더 + VAE + Lightning LoRA **약 15~20GB** |
-| VRAM | **12GB (GGUF Q4) ~ 24GB (fp8)** |
-| 커스텀 노드 | 위 2종 + `rgthree-comfy` (요소별 토글용) |
+| 실행 위치 | **GPU PC** (현재 개발 머신은 GPU 없음 → 설계/생성만, 런타임 미검증) |
+| 모델 디스크 | 약 **20GB** (fp8 diffusion ~14GB + 인코더 ~8GB + VAE + LoRA) |
+| VRAM | **fp8: 16GB+ 권장**(오프로딩 시 그 이하도 가능) / **GGUF Q4: ~12GB** |
+| 커스텀 노드 | **없음.** `TextEncodeQwenImageEditPlus` 등은 최신 ComfyUI 코어 노드 |
+| ComfyUI | 최신으로 업데이트 (2509 템플릿/노드 포함 버전) |
 
 ---
 
 ## 2. 설치 (GPU PC, 최초 1회)
 
-1. **ComfyUI** 최신 업데이트, **ComfyUI-Manager** 권장.
-2. **커스텀 노드** 설치 (Manager의 *Install via Git URL*, 또는 clone 후 각 `requirements.txt` 설치):
-   ```bash
-   cd ComfyUI/custom_nodes
-   git clone https://github.com/cozymantis/human-parser-comfyui-node   # SCHP 분할 (all/list/regue 공통 입력)
-   git clone https://github.com/jnxmx/ComfyUI_HuggingFace_Downloader    # 모델 다운로드 노드
-   git clone https://github.com/rgthree/rgthree-comfy                   # 요소별 토글 (regen 전용)
-   ```
-   설치 후 ComfyUI 재시작.
-3. **모델 다운로드** — `download_models.ps1` 의 `$env:COMFY` 를 자기 ComfyUI 경로로 고친 뒤:
+1. **ComfyUI 최신 업데이트** (코어에 Qwen-Image-Edit 2509 노드가 있어야 함).
+2. **모델 다운로드** — `download_models.ps1` 실행 (스크립트 안 `$COMFY` 가 설치 경로와 맞는지 확인):
    ```powershell
-   powershell -ExecutionPolicy Bypass -File download_models.ps1                      # [A] SCHP (필수)
-   $env:WITH_QWEN=1; powershell -ExecutionPolicy Bypass -File download_models.ps1    # [B] + Qwen (regen용)
+   powershell -ExecutionPolicy Bypass -File download_models.ps1
    ```
-   - SCHP 결과 경로(정확히 일치해야 함): `ComfyUI/models/schp/exp-schp-201908301523-atr.pth`
-   - SCHP는 `decompose_all`/`list` 안의 `⬇ SCHP 모델 다운로드` 노드를 큐에 1회 넣어도 받아진다.
+   받는 파일과 위치:
+   | 폴더 | 파일 |
+   |---|---|
+   | `models/diffusion_models/` | `qwen_image_edit_2509_fp8_e4m3fn.safetensors` |
+   | `models/text_encoders/` | `qwen_2.5_vl_7b_fp8_scaled.safetensors` |
+   | `models/vae/` | `qwen_image_vae.safetensors` |
+   | `models/loras/` | `Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors` |
+3. ComfyUI 재시작.
+
+> **저VRAM(≤12GB)**: fp8 대신 `QuantStack/Qwen-Image-Edit-2509-GGUF`(예: Q4_K_M)를 받아
+> `models/diffusion_models/` 에 두고, `ComfyUI-GGUF` 커스텀 노드 설치 후
+> `decompose.json` 의 **UNETLoader → "Unet Loader (GGUF)"** 로 교체.
 
 ---
 
-## 3. 워크플로우별 설명 & 사용법
+## 3. 사용법
 
-### 3-A. `decompose_all.json` — 고정 10요소, 무겹침
-머리·몸체·상의·하의·벨트·신발·모자·가방·선글라스·스카프 **10개**를 한 번에 투명 PNG로 분리.
+1. `decompose.json` 을 ComfyUI 캔버스에 **드래그**. (4개 로더가 위 파일을 가리키는지 확인 — 빨간 노드면 파일명 불일치)
+2. 좌측 `Load Input (T-pose)` 에 캐릭터 이미지 업로드.
+3. **Queue Prompt** → 요소마다 흰 배경 추출본이 `output/decompose/` 에 저장.
 
-- **구조**: `LoadImage → [요소마다] Cozy Human Parser ATR(해당 클래스만 ON) → JoinImageWithAlpha → SaveImage`
-  (+ SCHP 다운로드 노드, 레인별 주석·그룹)
-- **무겹침 원리**: 같은 결정적 파싱이라 레인끼리 마스크가 상호배타. 벨트는 독립 클래스(8).
-- **사용**:
-  1. drag-drop → (최초 1회) `⬇ SCHP 모델 다운로드` 노드만 큐.
-  2. `Load Input Image` 에 T 포즈 캐릭터 업로드 → **Queue Prompt**.
-  3. `output/elements/` 에 `hair_*.png … scarf_*.png` 생성.
+### 특정 부위만 재생성
+- 다시 만들 **요소 그룹만 남기고** 나머지 그룹을 우클릭 → **Mute Group** (또는 노드 선택 후 `Ctrl+M`).
+- **Queue** → 켜진 레인의 KSampler seed 가 randomize 되어 **그 부위만 새 변형**. (꺼진 레인은 실행 안 됨)
 
-### 3-B. `decompose_list.json` — 가변 요소, 무겹침
-3-A와 같은 SCHP 엔진이지만, 요소가 고정이 아니라 **`elements.txt` 리스트로 가변**.
-
-- **사용**:
-  1. `elements.txt` 편집 — 분리할 요소를 쉼표/줄바꿈으로 나열 (예: `hair, body, top, pants, belt, shoes`).
-  2. `python build_decompose_list.py` 실행 → `decompose_list.json` 재생성(요소마다 레인 자동 생성).
-  3. drag-drop → 이미지 업로드 → Queue. (출력은 3-A와 동일, 투명 PNG)
-- 친화적 이름이 ATR 클래스로 자동 매핑되고, 두 요소가 **같은 클래스를 공유하면 겹침 경고**가 뜬다(4장 참고).
-
-### 3-C. `decompose_regen.json` — 요소별 재생성 (생성형)
-요소마다 Qwen으로 "흰 배경에 그 요소만" 추출/변형하고, **부위별로 따로 재생성**한다(원본 Accept/Regenerate 등가).
-
-- **구조**: 공유 모델 로더(MODEL/CLIP/VAE) + `[요소마다] FluxKontextImageScale → 인코더(pos/neg) → VAEEncode → KSampler(레인별 seed) → VAEDecode → SaveImage` + `🔇 Fast Groups Muter`.
-- **요소 목록**: `decompose_list` 와 같은 `elements.txt` 를 읽음 → `python build_decompose_regen.py` 로 재생성.
-- **해당 부위만 재생성**:
-  1. 우측 `🔇 Fast Groups Muter` 패널에서 **재생성할 요소만 ON**, 나머지 OFF.
-  2. **Queue** → 켜진 레인의 KSampler seed가 randomize → **그 요소만 새 변형**.
-  3. 꺼진 레인은 실행 안 됨(전체 재생성 아님). 입력이 안 바뀐 레인은 ComfyUI 캐시로 재계산 생략.
-  4. `output/regen/` 에 요소별 변형(흰 배경) PNG. 마음에 드는 것만 남기면 = Accept.
-- **주의**: 생성형이라 **요소 간 겹침이 가능**(무겹침이 필요하면 `decompose_all`/`list` 사용).
+### 같은 부위 N장 (가변 다중 생성)
+- 상단 Queue 버튼 옆 **batch count** 를 N 으로 설정 후 Queue → seed 가 매번 바뀌어 N장 생성.
 
 ---
 
-## 4. 요소 이름 ↔ ATR 클래스 (`list`/`regen` 공용)
+## 4. 요소 바꾸기 (`elements.txt`)
 
-`elements.txt` 에 쓸 수 있는 친화적 이름:
+Qwen 편집이라 **ATR 18클래스 같은 제약이 없다.** 자유 텍스트로 적으면 된다.
 
-| 이름 | 매핑 |
-|---|---|
-| hair | hair |
-| head | hair + face (※ body와 함께 쓰면 face 겹침) |
-| face | face |
-| body, skin | face + 양팔 + 양다리 (피부) |
-| arms / legs | 양팔 / 양다리 |
-| top, upper, shirt, jacket | upper-clothes |
-| bottom, lower | skirt + pants + dress |
-| pants / skirt / dress | 각각 |
-| **belt** | belt (독립 — 상/하의와 안 겹침) |
-| shoes, footwear | 양쪽 신발 |
-| hat / bag / sunglasses(glasses) / scarf | 각각 |
+```
+hair
+pants
+jacket | the jacket / upper-body outerwear     # 'name | 프롬프트 문구' 로 파일명과 문구 분리 지정
+goggles | the goggles / eyewear
+```
+- 한 줄 = 한 요소. `#` 뒤 주석, 빈 줄 무시.
+- `|` 없으면 줄 전체가 이름이자 문구(`hair` → `extract only the hair …`).
+- 편집 후 **`python build_workflow.py`** → `decompose.json` 재생성(요소 수만큼 레인 자동 생성).
 
-전체 ATR 라벨: `0 bg, 1 hat, 2 hair, 3 sunglasses, 4 upper-clothes, 5 skirt, 6 pants,
-7 dress, 8 belt, 9 left-shoe, 10 right-shoe, 11 face, 12 left-leg, 13 right-leg,
-14 left-arm, 15 right-arm, 16 bag, 17 scarf`
+프롬프트 템플릿(고정):
+```
+Extract only {PHRASE} from this character.
+Place it centered on a plain pure-white background.
+Remove the character and all other items.
+Preserve the original art style, colors, and lighting.
+Single object, product-shot style, no text, no shadow.
+```
 
 ---
 
 ## 5. 자주 묻는 동작
 
-- **스카프/모자 없는 캐릭터?** 에러 없음. SCHP는 해당 픽셀 0개 → **빈 투명 PNG** 생성(거슬리면 그 SaveImage를 Mute/삭제). regen은 없는 요소를 요청하면 결과가 부정확할 수 있음.
-- **요소 추가는 번거로운가?** `elements.txt` 에 단어 추가 → 생성기 재실행. **18클래스 안이면 끝.** 18클래스 밖(고글·망토 등)은 SCHP로 불가 → 6장 참고.
-- **분할 경계가 거칠다** → 마스크에 GrowMask/Blur, 또는 BiRefNet 후처리.
-- **regen인데 매번 같은 그림** → 해당 KSampler seed가 fixed면 동일. randomize로 두거나 seed를 바꿔야 변형됨.
+- **없는 요소를 요청하면?** (예: 고글 없는 캐릭터) 생성형이라 에러는 안 나지만 결과가 부정확/엉뚱할 수 있음 → 그 요소 줄을 빼라.
+- **요소 간 겹침이 생길 수 있다.** Qwen 추출은 "그 요소만" 을 *재생성*하는 것이라 픽셀 단위 무겹침을 보장하지 않는다(원본 civitai 도 동일).
+- **매번 같은 그림** → 해당 KSampler seed 가 `fixed` 면 동일. `randomize` 로 두거나 seed 를 바꿔야 변형됨.
+- **품질이 약하면** steps 를 6~8 로(LoRA 빼고 cfg 2~3), 또는 프롬프트의 PHRASE 를 더 구체적으로.
 
 ---
 
-## 6. 한계 & 다음 단계
+## 6. 흰 배경 → 투명 알파 PNG (선택)
 
-- **요소 개수가 ATR 18클래스에 고정.** 임의 이름을 프롬프트로 가변 분리하려면
-  **오픈보캐(GroundingDINO/Florence-2 + SAM2)** 경로 필요 — 텍스트에 라벨 나열 → 라벨 수만큼 출력.
-  단 마스크 **겹침 가능**(우선순위/차집합 정리 + 검출0 가드 필요).
-- **무겹침 + 변형 둘 다**: SCHP 컷아웃 → 흰 배경 합성 → Qwen 변형 하이브리드(추가 합성 노드 필요).
+흰 배경 결과를 투명 PNG로 바꾸려면 SaveImage 앞에 **BiRefNet(MIT)** 류 배경제거 노드를 끼우거나,
+별도 후처리(흰색 → 알파)를 둔다. 현재 워크플로우는 원본 civitai 와 동일하게 **흰 배경 product-shot** 까지만 한다.
 
 ---
 
-## 7. 파일 목록 (최종)
+## 7. 파일 목록
 
 | 파일 | 용도 |
 |---|---|
-| `decompose_all.json` | 고정 10요소 무겹침 분리 (투명 PNG) |
-| `decompose_list.json` | 가변 요소 무겹침 분리 — `elements.txt` 구동 |
-| `decompose_regen.json` | 요소별 생성형 재생성 (Qwen + rgthree 토글) |
-| `elements.txt` | `list`/`regen` 이 읽는 **요소 리스트** (여기 편집) |
-| `build_decompose.py` | `decompose_all` 생성기 |
-| `build_decompose_list.py` | `decompose_list` 생성기 (별칭 매핑 + 겹침 경고) |
-| `build_decompose_regen.py` | `decompose_regen` 생성기 |
-| `download_models.ps1` | SCHP(필수) + `WITH_QWEN=1` 시 Qwen 모델 다운로드 |
+| `decompose.json` | **메인 워크플로우** (요소별 흰 배경 추출, 코어 노드만) |
+| `elements.txt` | 분해할 요소 리스트 (여기 편집) |
+| `build_workflow.py` | `elements.txt` → `decompose.json` 생성기 |
+| `download_models.ps1` | Qwen 모델 4종 다운로드 |
+| `HowTo.md` | 이 문서 |
 
-> 모든 워크플로우는 **노드/링크 구조를 검증**했으나, 이 머신에 GPU가 없어 **런타임 실행 테스트는 미완**.
-> GPU PC 첫 로드 시 커스텀 노드 설치와 모델 경로(`models/schp/...atr.pth` 등)만 확인하면 된다.
+> 노드/링크 구조는 공식 2509 템플릿 값과 대조해 검증했으나, **이 머신엔 GPU·모델이 없어 런타임 실행은 미검증.**
+> GPU PC 에서 첫 로드 시 4개 로더가 빨갛지 않은지(파일명 일치)만 확인하면 된다.

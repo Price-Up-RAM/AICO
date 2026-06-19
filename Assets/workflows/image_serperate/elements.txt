@@ -1,21 +1,15 @@
-# 분리할 요소를 가변적으로 적는다. 쉼표 또는 줄바꿈으로 구분. '#' 줄은 주석.
-# 여기 이름을 추가/삭제하고  python build_decompose_list.py  를 돌리면
-# 요소마다 노드 레인(파서 -> 알파합성 -> PNG 저장)이 자동 생성된다.
-#
-# 사용 가능한 이름(친화적 별칭 -> ATR 클래스):
-#   hair        = hair
-#   head        = hair + face            (※ body/face 와 함께 쓰면 face 겹침)
-#   face        = face
-#   body, skin  = face + arms + legs
-#   arms        = left_arm + right_arm
-#   legs        = left_leg + right_leg
-#   top,upper,shirt,jacket = upper_clothes
-#   bottom,lower = skirt + pants + dress
-#   pants       = pants
-#   skirt       = skirt
-#   dress       = dress
-#   belt        = belt          (독립 클래스 - 상/하의와 안 겹침)
-#   shoes,footwear = left_shoe + right_shoe
-#   hat / bag / sunglasses(glasses) / scarf
+# 분해할 요소 — 한 줄에 하나. Qwen 편집 모델이라 ATR 18클래스 제약 없이 '자유 텍스트'로 적으면 됨.
+# '#' 뒤는 주석. 빈 줄 무시. 파일명은 자동 슬러그.
+# 줄을  "이름 | 프롬프트 문구"  형태로 쓰면 파일명(이름)과 프롬프트(문구)를 따로 지정 가능.
+# 예) goggles | the goggles worn on the head
 
-hair, body, top, pants, belt, shoes
+hair
+face
+jacket | the jacket / upper-body outerwear
+shirt | the inner shirt / top
+pants
+gloves
+boots
+goggles | the goggles / eyewear
+belt
+backpack

@@ -1,6 +1,6 @@
 {
-  "last_node_id": 58,
-  "last_link_id": 99,
+  "last_node_id": 89,
+  "last_link_id": 163,
   "nodes": [
     {
       "id": 1,
@@ -10,8 +10,8 @@
         20
       ],
       "size": [
-        560,
-        280
+        620,
+        300
       ],
       "flags": {},
       "order": 1,
@@ -22,7 +22,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## 요소별 재생성 (Regenerate per part)\n`elements.txt` 기준 요소 6개. 각 요소 = Qwen 추출 레인 1개.\n\n**해당 부위만 재생성**:\n1) 오른쪽 `Fast Groups Muter` 에서 재생성할 요소만 ON, 나머지 OFF.\n2) Queue → 켜진 레인 KSampler seed 가 randomize 되어 그 요소만 새 변형.\n3) 꺼진 레인은 실행 안 됨(전체 재생성 아님).\n\n_무겹침 투명 분리가 필요하면 decompose_all.json 사용. 이건 생성형 변형용._"
+        "## 캐릭터 요소 분해 (Qwen-Image-Edit 2509)\n`elements.txt` 요소 10개. 각 요소 = '흰 배경에 그것만' 추출 레인 1개.\n\n**전체 분해**: 입력 이미지 올리고 → Queue.\n**특정 부위만 재생성**: 그 요소 그룹만 남기고 나머지 그룹을 우클릭 → *Mute Group* (또는 노드 선택 후 Ctrl+M) → Queue. 켜진 레인 KSampler seed 가 randomize 되어 새 변형.\n**같은 부위 N장**: 상단 Queue 옆 batch count 를 N 으로 두고 Queue (seed 가 매번 달라짐).\n\n_커스텀 노드 불필요(전부 코어). 모델은 download_models.ps1 로 받는다._"
       ],
       "title": "📝 주석",
       "color": "#432"
@@ -32,11 +32,11 @@
       "type": "MarkdownNote",
       "pos": [
         20,
-        320
+        340
       ],
       "size": [
-        360,
-        150
+        400,
+        160
       ],
       "flags": {},
       "order": 9,
@@ -47,7 +47,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "**Qwen 모델 (공유 로더)**: 모든 레인이 이 MODEL/CLIP/VAE 를 공유.\n다운로드: `\\$env:WITH_QWEN=1; ./download_models.ps1`\nVRAM 12GB(GGUF)~24GB(fp8). 저VRAM이면 UNETLoader→Unet Loader(GGUF) 교체."
+        "**Qwen 모델 (공유 로더)** — 모든 레인이 이 MODEL/CLIP/VAE 공유.\n`./download_models.ps1` 로 4개 파일 받기 (약 20GB).\nVRAM: fp8 ~ 다소 빠듯(16GB+ 권장, 오프로딩 가능). 저VRAM이면\nUNETLoader 를 'Unet Loader (GGUF)' 로 교체 + GGUF 파일 사용."
       ],
       "title": "📝 주석",
       "color": "#432"
@@ -57,10 +57,10 @@
       "type": "UNETLoader",
       "pos": [
         20,
-        500
+        520
       ],
       "size": [
-        330,
+        340,
         100
       ],
       "flags": {},
@@ -91,10 +91,10 @@
       "type": "LoraLoaderModelOnly",
       "pos": [
         20,
-        630
+        650
       ],
       "size": [
-        330,
+        340,
         100
       ],
       "flags": {},
@@ -131,10 +131,10 @@
       "type": "ModelSamplingAuraFlow",
       "pos": [
         20,
-        760
+        780
       ],
       "size": [
-        330,
+        340,
         80
       ],
       "flags": {},
@@ -169,10 +169,10 @@
       "type": "CFGNorm",
       "pos": [
         20,
-        870
+        890
       ],
       "size": [
-        330,
+        340,
         80
       ],
       "flags": {},
@@ -195,7 +195,11 @@
             46,
             62,
             78,
-            94
+            94,
+            110,
+            126,
+            142,
+            158
           ],
           "slot_index": 0
         }
@@ -212,10 +216,10 @@
       "type": "CLIPLoader",
       "pos": [
         20,
-        980
+        1000
       ],
       "size": [
-        330,
+        340,
         100
       ],
       "flags": {},
@@ -238,7 +242,15 @@
             72,
             73,
             88,
-            89
+            89,
+            104,
+            105,
+            120,
+            121,
+            136,
+            137,
+            152,
+            153
           ],
           "slot_index": 0
         }
@@ -258,10 +270,10 @@
       "type": "VAELoader",
       "pos": [
         20,
-        1110
+        1130
       ],
       "size": [
-        330,
+        340,
         80
       ],
       "flags": {},
@@ -296,7 +308,23 @@
             90,
             91,
             92,
-            93
+            93,
+            106,
+            107,
+            108,
+            109,
+            122,
+            123,
+            124,
+            125,
+            138,
+            139,
+            140,
+            141,
+            154,
+            155,
+            156,
+            157
           ],
           "slot_index": 0
         }
@@ -314,11 +342,11 @@
       "type": "LoadImage",
       "pos": [
         20,
-        1210
+        1230
       ],
       "size": [
-        330,
-        320
+        340,
+        330
       ],
       "flags": {},
       "order": 8,
@@ -334,7 +362,11 @@
             36,
             52,
             68,
-            84
+            84,
+            100,
+            116,
+            132,
+            148
           ],
           "slot_index": 0
         },
@@ -355,52 +387,18 @@
       "title": "Load Input (T-pose)"
     },
     {
-      "id": 10,
-      "type": "Fast Groups Muter (rgthree)",
-      "pos": [
-        600,
-        320
-      ],
-      "size": [
-        300,
-        380
-      ],
-      "flags": {},
-      "order": 10,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "OPT_CONNECTION",
-          "type": "*",
-          "links": [],
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "matchColors": "",
-        "matchTitle": "",
-        "showNav": true,
-        "sort": "position",
-        "toggleRestriction": "default"
-      },
-      "widgets_values": [],
-      "title": "🔇 요소별 토글 (재생성 선택)",
-      "color": "#333"
-    },
-    {
-      "id": 18,
+      "id": 17,
       "type": "MarkdownNote",
       "pos": [
-        980,
+        700,
         20
       ],
       "size": [
-        360,
-        150
+        380,
+        130
       ],
       "flags": {},
-      "order": 18,
+      "order": 17,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -408,24 +406,24 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "### hair\n프롬프트: extract only **hair (the full hairstyle)** on white bg.\nKSampler seed 가 이 요소의 변형 seed. 이 그룹만 켜고 Queue=이 부위만 재생성."
+        "### hair\n`extract only the hair on white bg`\n이 그룹만 켜고 Queue = 이 부위만 (재)생성."
       ],
       "title": "📝 주석",
       "color": "#432"
     },
     {
-      "id": 13,
+      "id": 12,
       "type": "FluxKontextImageScale",
       "pos": [
-        980,
-        190
+        700,
+        170
       ],
       "size": [
         260,
         80
       ],
       "flags": {},
-      "order": 13,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
@@ -453,18 +451,18 @@
       "title": "Scale: hair"
     },
     {
-      "id": 11,
+      "id": 10,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        80
+        990,
+        60
       ],
       "size": [
-        420,
-        180
+        430,
+        200
       ],
       "flags": {},
-      "order": 11,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -507,23 +505,23 @@
         "Node name for S&R": "TextEncodeQwenImageEditPlus"
       },
       "widgets_values": [
-        "Extract only the hair (the full hairstyle) from this character. Place it centered on a plain pure-white background. Remove the character and everything else. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
+        "Extract only the hair from this character. Place it centered on a plain pure-white background. Remove the character and all other items. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
       ],
       "title": "Positive: hair"
     },
     {
-      "id": 12,
+      "id": 11,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        290
+        990,
+        280
       ],
       "size": [
-        420,
+        430,
         140
       ],
       "flags": {},
-      "order": 12,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -571,18 +569,18 @@
       "title": "Negative (empty)"
     },
     {
-      "id": 14,
+      "id": 13,
       "type": "VAEEncode",
       "pos": [
-        1270,
-        450
+        990,
+        440
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 14,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
@@ -612,18 +610,18 @@
       "widgets_values": []
     },
     {
-      "id": 15,
+      "id": 14,
       "type": "KSampler",
       "pos": [
-        1710,
-        80
+        1440,
+        60
       ],
       "size": [
         300,
         260
       ],
       "flags": {},
-      "order": 15,
+      "order": 14,
       "mode": 0,
       "inputs": [
         {
@@ -672,18 +670,18 @@
       "title": "KSampler (seed: hair)"
     },
     {
-      "id": 16,
+      "id": 15,
       "type": "VAEDecode",
       "pos": [
-        1710,
-        360
+        1440,
+        350
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 16,
+      "order": 15,
       "mode": 0,
       "inputs": [
         {
@@ -713,18 +711,18 @@
       "widgets_values": []
     },
     {
-      "id": 17,
+      "id": 16,
       "type": "SaveImage",
       "pos": [
-        2020,
-        80
+        1760,
+        60
       ],
       "size": [
-        340,
-        300
+        360,
+        320
       ],
       "flags": {},
-      "order": 17,
+      "order": 16,
       "mode": 0,
       "inputs": [
         {
@@ -738,23 +736,23 @@
         "Node name for S&R": "SaveImage"
       },
       "widgets_values": [
-        "regen/hair"
+        "decompose/hair"
       ],
       "title": "Save: hair"
     },
     {
-      "id": 26,
+      "id": 25,
       "type": "MarkdownNote",
       "pos": [
-        980,
+        700,
         600
       ],
       "size": [
-        360,
-        150
+        380,
+        130
       ],
       "flags": {},
-      "order": 26,
+      "order": 25,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -762,24 +760,24 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "### body\n프롬프트: extract only **bare body / skin (torso, arms, legs)** on white bg.\nKSampler seed 가 이 요소의 변형 seed. 이 그룹만 켜고 Queue=이 부위만 재생성."
+        "### face\n`extract only the face on white bg`\n이 그룹만 켜고 Queue = 이 부위만 (재)생성."
       ],
       "title": "📝 주석",
       "color": "#432"
     },
     {
-      "id": 21,
+      "id": 20,
       "type": "FluxKontextImageScale",
       "pos": [
-        980,
-        770
+        700,
+        750
       ],
       "size": [
         260,
         80
       ],
       "flags": {},
-      "order": 21,
+      "order": 20,
       "mode": 0,
       "inputs": [
         {
@@ -804,21 +802,21 @@
         "Node name for S&R": "FluxKontextImageScale"
       },
       "widgets_values": [],
-      "title": "Scale: body"
+      "title": "Scale: face"
     },
     {
-      "id": 19,
+      "id": 18,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        660
+        990,
+        640
       ],
       "size": [
-        420,
-        180
+        430,
+        200
       ],
       "flags": {},
-      "order": 19,
+      "order": 18,
       "mode": 0,
       "inputs": [
         {
@@ -861,23 +859,23 @@
         "Node name for S&R": "TextEncodeQwenImageEditPlus"
       },
       "widgets_values": [
-        "Extract only the bare body / skin (torso, arms, legs) from this character. Place it centered on a plain pure-white background. Remove the character and everything else. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
+        "Extract only the face from this character. Place it centered on a plain pure-white background. Remove the character and all other items. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
       ],
-      "title": "Positive: body"
+      "title": "Positive: face"
     },
     {
-      "id": 20,
+      "id": 19,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        870
+        990,
+        860
       ],
       "size": [
-        420,
+        430,
         140
       ],
       "flags": {},
-      "order": 20,
+      "order": 19,
       "mode": 0,
       "inputs": [
         {
@@ -925,18 +923,18 @@
       "title": "Negative (empty)"
     },
     {
-      "id": 22,
+      "id": 21,
       "type": "VAEEncode",
       "pos": [
-        1270,
-        1030
+        990,
+        1020
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 22,
+      "order": 21,
       "mode": 0,
       "inputs": [
         {
@@ -966,18 +964,18 @@
       "widgets_values": []
     },
     {
-      "id": 23,
+      "id": 22,
       "type": "KSampler",
       "pos": [
-        1710,
-        660
+        1440,
+        640
       ],
       "size": [
         300,
         260
       ],
       "flags": {},
-      "order": 23,
+      "order": 22,
       "mode": 0,
       "inputs": [
         {
@@ -1023,21 +1021,21 @@
         "simple",
         1.0
       ],
-      "title": "KSampler (seed: body)"
+      "title": "KSampler (seed: face)"
     },
     {
-      "id": 24,
+      "id": 23,
       "type": "VAEDecode",
       "pos": [
-        1710,
-        940
+        1440,
+        930
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 24,
+      "order": 23,
       "mode": 0,
       "inputs": [
         {
@@ -1067,18 +1065,18 @@
       "widgets_values": []
     },
     {
-      "id": 25,
+      "id": 24,
       "type": "SaveImage",
       "pos": [
-        2020,
-        660
+        1760,
+        640
       ],
       "size": [
-        340,
-        300
+        360,
+        320
       ],
       "flags": {},
-      "order": 25,
+      "order": 24,
       "mode": 0,
       "inputs": [
         {
@@ -1092,23 +1090,23 @@
         "Node name for S&R": "SaveImage"
       },
       "widgets_values": [
-        "regen/body"
+        "decompose/face"
       ],
-      "title": "Save: body"
+      "title": "Save: face"
     },
     {
-      "id": 34,
+      "id": 33,
       "type": "MarkdownNote",
       "pos": [
-        980,
+        700,
         1180
       ],
       "size": [
-        360,
-        150
+        380,
+        130
       ],
       "flags": {},
-      "order": 34,
+      "order": 33,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -1116,24 +1114,24 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "### top\n프롬프트: extract only **upper-body garment (jacket / shirt / top)** on white bg.\nKSampler seed 가 이 요소의 변형 seed. 이 그룹만 켜고 Queue=이 부위만 재생성."
+        "### jacket\n`extract only the jacket / upper-body outerwear on white bg`\n이 그룹만 켜고 Queue = 이 부위만 (재)생성."
       ],
       "title": "📝 주석",
       "color": "#432"
     },
     {
-      "id": 29,
+      "id": 28,
       "type": "FluxKontextImageScale",
       "pos": [
-        980,
-        1350
+        700,
+        1330
       ],
       "size": [
         260,
         80
       ],
       "flags": {},
-      "order": 29,
+      "order": 28,
       "mode": 0,
       "inputs": [
         {
@@ -1158,21 +1156,21 @@
         "Node name for S&R": "FluxKontextImageScale"
       },
       "widgets_values": [],
-      "title": "Scale: top"
+      "title": "Scale: jacket"
     },
     {
-      "id": 27,
+      "id": 26,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        1240
+        990,
+        1220
       ],
       "size": [
-        420,
-        180
+        430,
+        200
       ],
       "flags": {},
-      "order": 27,
+      "order": 26,
       "mode": 0,
       "inputs": [
         {
@@ -1215,23 +1213,23 @@
         "Node name for S&R": "TextEncodeQwenImageEditPlus"
       },
       "widgets_values": [
-        "Extract only the upper-body garment (jacket / shirt / top) from this character. Place it centered on a plain pure-white background. Remove the character and everything else. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
+        "Extract only the jacket / upper-body outerwear from this character. Place it centered on a plain pure-white background. Remove the character and all other items. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
       ],
-      "title": "Positive: top"
+      "title": "Positive: jacket"
     },
     {
-      "id": 28,
+      "id": 27,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        1450
+        990,
+        1440
       ],
       "size": [
-        420,
+        430,
         140
       ],
       "flags": {},
-      "order": 28,
+      "order": 27,
       "mode": 0,
       "inputs": [
         {
@@ -1279,18 +1277,18 @@
       "title": "Negative (empty)"
     },
     {
-      "id": 30,
+      "id": 29,
       "type": "VAEEncode",
       "pos": [
-        1270,
-        1610
+        990,
+        1600
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 30,
+      "order": 29,
       "mode": 0,
       "inputs": [
         {
@@ -1320,18 +1318,18 @@
       "widgets_values": []
     },
     {
-      "id": 31,
+      "id": 30,
       "type": "KSampler",
       "pos": [
-        1710,
-        1240
+        1440,
+        1220
       ],
       "size": [
         300,
         260
       ],
       "flags": {},
-      "order": 31,
+      "order": 30,
       "mode": 0,
       "inputs": [
         {
@@ -1377,21 +1375,21 @@
         "simple",
         1.0
       ],
-      "title": "KSampler (seed: top)"
+      "title": "KSampler (seed: jacket)"
     },
     {
-      "id": 32,
+      "id": 31,
       "type": "VAEDecode",
       "pos": [
-        1710,
-        1520
+        1440,
+        1510
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 32,
+      "order": 31,
       "mode": 0,
       "inputs": [
         {
@@ -1421,18 +1419,18 @@
       "widgets_values": []
     },
     {
-      "id": 33,
+      "id": 32,
       "type": "SaveImage",
       "pos": [
-        2020,
-        1240
+        1760,
+        1220
       ],
       "size": [
-        340,
-        300
+        360,
+        320
       ],
       "flags": {},
-      "order": 33,
+      "order": 32,
       "mode": 0,
       "inputs": [
         {
@@ -1446,23 +1444,23 @@
         "Node name for S&R": "SaveImage"
       },
       "widgets_values": [
-        "regen/top"
+        "decompose/jacket"
       ],
-      "title": "Save: top"
+      "title": "Save: jacket"
     },
     {
-      "id": 42,
+      "id": 41,
       "type": "MarkdownNote",
       "pos": [
-        980,
+        700,
         1760
       ],
       "size": [
-        360,
-        150
+        380,
+        130
       ],
       "flags": {},
-      "order": 42,
+      "order": 41,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -1470,24 +1468,24 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "### pants\n프롬프트: extract only **pants** on white bg.\nKSampler seed 가 이 요소의 변형 seed. 이 그룹만 켜고 Queue=이 부위만 재생성."
+        "### shirt\n`extract only the inner shirt / top on white bg`\n이 그룹만 켜고 Queue = 이 부위만 (재)생성."
       ],
       "title": "📝 주석",
       "color": "#432"
     },
     {
-      "id": 37,
+      "id": 36,
       "type": "FluxKontextImageScale",
       "pos": [
-        980,
-        1930
+        700,
+        1910
       ],
       "size": [
         260,
         80
       ],
       "flags": {},
-      "order": 37,
+      "order": 36,
       "mode": 0,
       "inputs": [
         {
@@ -1512,21 +1510,21 @@
         "Node name for S&R": "FluxKontextImageScale"
       },
       "widgets_values": [],
-      "title": "Scale: pants"
+      "title": "Scale: shirt"
     },
     {
-      "id": 35,
+      "id": 34,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        1820
+        990,
+        1800
       ],
       "size": [
-        420,
-        180
+        430,
+        200
       ],
       "flags": {},
-      "order": 35,
+      "order": 34,
       "mode": 0,
       "inputs": [
         {
@@ -1569,23 +1567,23 @@
         "Node name for S&R": "TextEncodeQwenImageEditPlus"
       },
       "widgets_values": [
-        "Extract only the pants from this character. Place it centered on a plain pure-white background. Remove the character and everything else. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
+        "Extract only the inner shirt / top from this character. Place it centered on a plain pure-white background. Remove the character and all other items. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
       ],
-      "title": "Positive: pants"
+      "title": "Positive: shirt"
     },
     {
-      "id": 36,
+      "id": 35,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        2030
+        990,
+        2020
       ],
       "size": [
-        420,
+        430,
         140
       ],
       "flags": {},
-      "order": 36,
+      "order": 35,
       "mode": 0,
       "inputs": [
         {
@@ -1633,18 +1631,18 @@
       "title": "Negative (empty)"
     },
     {
-      "id": 38,
+      "id": 37,
       "type": "VAEEncode",
       "pos": [
-        1270,
-        2190
+        990,
+        2180
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 38,
+      "order": 37,
       "mode": 0,
       "inputs": [
         {
@@ -1674,18 +1672,18 @@
       "widgets_values": []
     },
     {
-      "id": 39,
+      "id": 38,
       "type": "KSampler",
       "pos": [
-        1710,
-        1820
+        1440,
+        1800
       ],
       "size": [
         300,
         260
       ],
       "flags": {},
-      "order": 39,
+      "order": 38,
       "mode": 0,
       "inputs": [
         {
@@ -1731,21 +1729,21 @@
         "simple",
         1.0
       ],
-      "title": "KSampler (seed: pants)"
+      "title": "KSampler (seed: shirt)"
     },
     {
-      "id": 40,
+      "id": 39,
       "type": "VAEDecode",
       "pos": [
-        1710,
-        2100
+        1440,
+        2090
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 40,
+      "order": 39,
       "mode": 0,
       "inputs": [
         {
@@ -1775,18 +1773,18 @@
       "widgets_values": []
     },
     {
-      "id": 41,
+      "id": 40,
       "type": "SaveImage",
       "pos": [
-        2020,
-        1820
+        1760,
+        1800
       ],
       "size": [
-        340,
-        300
+        360,
+        320
       ],
       "flags": {},
-      "order": 41,
+      "order": 40,
       "mode": 0,
       "inputs": [
         {
@@ -1800,23 +1798,23 @@
         "Node name for S&R": "SaveImage"
       },
       "widgets_values": [
-        "regen/pants"
+        "decompose/shirt"
       ],
-      "title": "Save: pants"
+      "title": "Save: shirt"
     },
     {
-      "id": 50,
+      "id": 49,
       "type": "MarkdownNote",
       "pos": [
-        980,
+        700,
         2340
       ],
       "size": [
-        360,
-        150
+        380,
+        130
       ],
       "flags": {},
-      "order": 50,
+      "order": 49,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -1824,24 +1822,24 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "### belt\n프롬프트: extract only **belt** on white bg.\nKSampler seed 가 이 요소의 변형 seed. 이 그룹만 켜고 Queue=이 부위만 재생성."
+        "### pants\n`extract only the pants on white bg`\n이 그룹만 켜고 Queue = 이 부위만 (재)생성."
       ],
       "title": "📝 주석",
       "color": "#432"
     },
     {
-      "id": 45,
+      "id": 44,
       "type": "FluxKontextImageScale",
       "pos": [
-        980,
-        2510
+        700,
+        2490
       ],
       "size": [
         260,
         80
       ],
       "flags": {},
-      "order": 45,
+      "order": 44,
       "mode": 0,
       "inputs": [
         {
@@ -1866,21 +1864,21 @@
         "Node name for S&R": "FluxKontextImageScale"
       },
       "widgets_values": [],
-      "title": "Scale: belt"
+      "title": "Scale: pants"
     },
     {
-      "id": 43,
+      "id": 42,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        2400
+        990,
+        2380
       ],
       "size": [
-        420,
-        180
+        430,
+        200
       ],
       "flags": {},
-      "order": 43,
+      "order": 42,
       "mode": 0,
       "inputs": [
         {
@@ -1923,23 +1921,23 @@
         "Node name for S&R": "TextEncodeQwenImageEditPlus"
       },
       "widgets_values": [
-        "Extract only the belt from this character. Place it centered on a plain pure-white background. Remove the character and everything else. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
+        "Extract only the pants from this character. Place it centered on a plain pure-white background. Remove the character and all other items. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
       ],
-      "title": "Positive: belt"
+      "title": "Positive: pants"
     },
     {
-      "id": 44,
+      "id": 43,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        2610
+        990,
+        2600
       ],
       "size": [
-        420,
+        430,
         140
       ],
       "flags": {},
-      "order": 44,
+      "order": 43,
       "mode": 0,
       "inputs": [
         {
@@ -1987,18 +1985,18 @@
       "title": "Negative (empty)"
     },
     {
-      "id": 46,
+      "id": 45,
       "type": "VAEEncode",
       "pos": [
-        1270,
-        2770
+        990,
+        2760
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 46,
+      "order": 45,
       "mode": 0,
       "inputs": [
         {
@@ -2028,18 +2026,18 @@
       "widgets_values": []
     },
     {
-      "id": 47,
+      "id": 46,
       "type": "KSampler",
       "pos": [
-        1710,
-        2400
+        1440,
+        2380
       ],
       "size": [
         300,
         260
       ],
       "flags": {},
-      "order": 47,
+      "order": 46,
       "mode": 0,
       "inputs": [
         {
@@ -2085,21 +2083,21 @@
         "simple",
         1.0
       ],
-      "title": "KSampler (seed: belt)"
+      "title": "KSampler (seed: pants)"
     },
     {
-      "id": 48,
+      "id": 47,
       "type": "VAEDecode",
       "pos": [
-        1710,
-        2680
+        1440,
+        2670
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 48,
+      "order": 47,
       "mode": 0,
       "inputs": [
         {
@@ -2129,18 +2127,18 @@
       "widgets_values": []
     },
     {
-      "id": 49,
+      "id": 48,
       "type": "SaveImage",
       "pos": [
-        2020,
-        2400
+        1760,
+        2380
       ],
       "size": [
-        340,
-        300
+        360,
+        320
       ],
       "flags": {},
-      "order": 49,
+      "order": 48,
       "mode": 0,
       "inputs": [
         {
@@ -2154,23 +2152,23 @@
         "Node name for S&R": "SaveImage"
       },
       "widgets_values": [
-        "regen/belt"
+        "decompose/pants"
       ],
-      "title": "Save: belt"
+      "title": "Save: pants"
     },
     {
-      "id": 58,
+      "id": 57,
       "type": "MarkdownNote",
       "pos": [
-        980,
+        700,
         2920
       ],
       "size": [
-        360,
-        150
+        380,
+        130
       ],
       "flags": {},
-      "order": 58,
+      "order": 57,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -2178,24 +2176,24 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "### shoes\n프롬프트: extract only **pair of shoes** on white bg.\nKSampler seed 가 이 요소의 변형 seed. 이 그룹만 켜고 Queue=이 부위만 재생성."
+        "### gloves\n`extract only the gloves on white bg`\n이 그룹만 켜고 Queue = 이 부위만 (재)생성."
       ],
       "title": "📝 주석",
       "color": "#432"
     },
     {
-      "id": 53,
+      "id": 52,
       "type": "FluxKontextImageScale",
       "pos": [
-        980,
-        3090
+        700,
+        3070
       ],
       "size": [
         260,
         80
       ],
       "flags": {},
-      "order": 53,
+      "order": 52,
       "mode": 0,
       "inputs": [
         {
@@ -2220,21 +2218,21 @@
         "Node name for S&R": "FluxKontextImageScale"
       },
       "widgets_values": [],
-      "title": "Scale: shoes"
+      "title": "Scale: gloves"
     },
     {
-      "id": 51,
+      "id": 50,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        2980
+        990,
+        2960
       ],
       "size": [
-        420,
-        180
+        430,
+        200
       ],
       "flags": {},
-      "order": 51,
+      "order": 50,
       "mode": 0,
       "inputs": [
         {
@@ -2277,23 +2275,23 @@
         "Node name for S&R": "TextEncodeQwenImageEditPlus"
       },
       "widgets_values": [
-        "Extract only the pair of shoes from this character. Place it centered on a plain pure-white background. Remove the character and everything else. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
+        "Extract only the gloves from this character. Place it centered on a plain pure-white background. Remove the character and all other items. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
       ],
-      "title": "Positive: shoes"
+      "title": "Positive: gloves"
     },
     {
-      "id": 52,
+      "id": 51,
       "type": "TextEncodeQwenImageEditPlus",
       "pos": [
-        1270,
-        3190
+        990,
+        3180
       ],
       "size": [
-        420,
+        430,
         140
       ],
       "flags": {},
-      "order": 52,
+      "order": 51,
       "mode": 0,
       "inputs": [
         {
@@ -2341,18 +2339,18 @@
       "title": "Negative (empty)"
     },
     {
-      "id": 54,
+      "id": 53,
       "type": "VAEEncode",
       "pos": [
-        1270,
-        3350
+        990,
+        3340
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 54,
+      "order": 53,
       "mode": 0,
       "inputs": [
         {
@@ -2382,18 +2380,18 @@
       "widgets_values": []
     },
     {
-      "id": 55,
+      "id": 54,
       "type": "KSampler",
       "pos": [
-        1710,
-        2980
+        1440,
+        2960
       ],
       "size": [
         300,
         260
       ],
       "flags": {},
-      "order": 55,
+      "order": 54,
       "mode": 0,
       "inputs": [
         {
@@ -2439,21 +2437,21 @@
         "simple",
         1.0
       ],
-      "title": "KSampler (seed: shoes)"
+      "title": "KSampler (seed: gloves)"
     },
     {
-      "id": 56,
+      "id": 55,
       "type": "VAEDecode",
       "pos": [
-        1710,
-        3260
+        1440,
+        3250
       ],
       "size": [
-        200,
+        220,
         60
       ],
       "flags": {},
-      "order": 56,
+      "order": 55,
       "mode": 0,
       "inputs": [
         {
@@ -2483,18 +2481,18 @@
       "widgets_values": []
     },
     {
-      "id": 57,
+      "id": 56,
       "type": "SaveImage",
       "pos": [
-        2020,
-        2980
+        1760,
+        2960
       ],
       "size": [
-        340,
-        300
+        360,
+        320
       ],
       "flags": {},
-      "order": 57,
+      "order": 56,
       "mode": 0,
       "inputs": [
         {
@@ -2508,9 +2506,1425 @@
         "Node name for S&R": "SaveImage"
       },
       "widgets_values": [
-        "regen/shoes"
+        "decompose/gloves"
       ],
-      "title": "Save: shoes"
+      "title": "Save: gloves"
+    },
+    {
+      "id": 65,
+      "type": "MarkdownNote",
+      "pos": [
+        700,
+        3500
+      ],
+      "size": [
+        380,
+        130
+      ],
+      "flags": {},
+      "order": 65,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "### boots\n`extract only the boots on white bg`\n이 그룹만 켜고 Queue = 이 부위만 (재)생성."
+      ],
+      "title": "📝 주석",
+      "color": "#432"
+    },
+    {
+      "id": 60,
+      "type": "FluxKontextImageScale",
+      "pos": [
+        700,
+        3650
+      ],
+      "size": [
+        260,
+        80
+      ],
+      "flags": {},
+      "order": 60,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 100
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            101,
+            102,
+            103
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FluxKontextImageScale"
+      },
+      "widgets_values": [],
+      "title": "Scale: boots"
+    },
+    {
+      "id": 58,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        990,
+        3540
+      ],
+      "size": [
+        430,
+        200
+      ],
+      "flags": {},
+      "order": 58,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 104
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 106
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 101
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            111
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        "Extract only the boots from this character. Place it centered on a plain pure-white background. Remove the character and all other items. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
+      ],
+      "title": "Positive: boots"
+    },
+    {
+      "id": 59,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        990,
+        3760
+      ],
+      "size": [
+        430,
+        140
+      ],
+      "flags": {},
+      "order": 59,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 105
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 107
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 102
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            112
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "title": "Negative (empty)"
+    },
+    {
+      "id": 61,
+      "type": "VAEEncode",
+      "pos": [
+        990,
+        3920
+      ],
+      "size": [
+        220,
+        60
+      ],
+      "flags": {},
+      "order": 61,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 103
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 108
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            113
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEEncode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 62,
+      "type": "KSampler",
+      "pos": [
+        1440,
+        3540
+      ],
+      "size": [
+        300,
+        260
+      ],
+      "flags": {},
+      "order": 62,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 110
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 111
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 112
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 113
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            114
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        1006,
+        "randomize",
+        4,
+        1,
+        "euler",
+        "simple",
+        1.0
+      ],
+      "title": "KSampler (seed: boots)"
+    },
+    {
+      "id": 63,
+      "type": "VAEDecode",
+      "pos": [
+        1440,
+        3830
+      ],
+      "size": [
+        220,
+        60
+      ],
+      "flags": {},
+      "order": 63,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 114
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 109
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            115
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 64,
+      "type": "SaveImage",
+      "pos": [
+        1760,
+        3540
+      ],
+      "size": [
+        360,
+        320
+      ],
+      "flags": {},
+      "order": 64,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 115
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "decompose/boots"
+      ],
+      "title": "Save: boots"
+    },
+    {
+      "id": 73,
+      "type": "MarkdownNote",
+      "pos": [
+        700,
+        4080
+      ],
+      "size": [
+        380,
+        130
+      ],
+      "flags": {},
+      "order": 73,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "### goggles\n`extract only the goggles / eyewear on white bg`\n이 그룹만 켜고 Queue = 이 부위만 (재)생성."
+      ],
+      "title": "📝 주석",
+      "color": "#432"
+    },
+    {
+      "id": 68,
+      "type": "FluxKontextImageScale",
+      "pos": [
+        700,
+        4230
+      ],
+      "size": [
+        260,
+        80
+      ],
+      "flags": {},
+      "order": 68,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 116
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            117,
+            118,
+            119
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FluxKontextImageScale"
+      },
+      "widgets_values": [],
+      "title": "Scale: goggles"
+    },
+    {
+      "id": 66,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        990,
+        4120
+      ],
+      "size": [
+        430,
+        200
+      ],
+      "flags": {},
+      "order": 66,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 120
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 122
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 117
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            127
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        "Extract only the goggles / eyewear from this character. Place it centered on a plain pure-white background. Remove the character and all other items. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
+      ],
+      "title": "Positive: goggles"
+    },
+    {
+      "id": 67,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        990,
+        4340
+      ],
+      "size": [
+        430,
+        140
+      ],
+      "flags": {},
+      "order": 67,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 121
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 123
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 118
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            128
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "title": "Negative (empty)"
+    },
+    {
+      "id": 69,
+      "type": "VAEEncode",
+      "pos": [
+        990,
+        4500
+      ],
+      "size": [
+        220,
+        60
+      ],
+      "flags": {},
+      "order": 69,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 119
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 124
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            129
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEEncode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 70,
+      "type": "KSampler",
+      "pos": [
+        1440,
+        4120
+      ],
+      "size": [
+        300,
+        260
+      ],
+      "flags": {},
+      "order": 70,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 126
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 127
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 128
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 129
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            130
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        1007,
+        "randomize",
+        4,
+        1,
+        "euler",
+        "simple",
+        1.0
+      ],
+      "title": "KSampler (seed: goggles)"
+    },
+    {
+      "id": 71,
+      "type": "VAEDecode",
+      "pos": [
+        1440,
+        4410
+      ],
+      "size": [
+        220,
+        60
+      ],
+      "flags": {},
+      "order": 71,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 130
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 125
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            131
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 72,
+      "type": "SaveImage",
+      "pos": [
+        1760,
+        4120
+      ],
+      "size": [
+        360,
+        320
+      ],
+      "flags": {},
+      "order": 72,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 131
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "decompose/goggles"
+      ],
+      "title": "Save: goggles"
+    },
+    {
+      "id": 81,
+      "type": "MarkdownNote",
+      "pos": [
+        700,
+        4660
+      ],
+      "size": [
+        380,
+        130
+      ],
+      "flags": {},
+      "order": 81,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "### belt\n`extract only the belt on white bg`\n이 그룹만 켜고 Queue = 이 부위만 (재)생성."
+      ],
+      "title": "📝 주석",
+      "color": "#432"
+    },
+    {
+      "id": 76,
+      "type": "FluxKontextImageScale",
+      "pos": [
+        700,
+        4810
+      ],
+      "size": [
+        260,
+        80
+      ],
+      "flags": {},
+      "order": 76,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 132
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            133,
+            134,
+            135
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FluxKontextImageScale"
+      },
+      "widgets_values": [],
+      "title": "Scale: belt"
+    },
+    {
+      "id": 74,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        990,
+        4700
+      ],
+      "size": [
+        430,
+        200
+      ],
+      "flags": {},
+      "order": 74,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 136
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 138
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 133
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            143
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        "Extract only the belt from this character. Place it centered on a plain pure-white background. Remove the character and all other items. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
+      ],
+      "title": "Positive: belt"
+    },
+    {
+      "id": 75,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        990,
+        4920
+      ],
+      "size": [
+        430,
+        140
+      ],
+      "flags": {},
+      "order": 75,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 137
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 139
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 134
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            144
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "title": "Negative (empty)"
+    },
+    {
+      "id": 77,
+      "type": "VAEEncode",
+      "pos": [
+        990,
+        5080
+      ],
+      "size": [
+        220,
+        60
+      ],
+      "flags": {},
+      "order": 77,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 135
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 140
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            145
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEEncode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 78,
+      "type": "KSampler",
+      "pos": [
+        1440,
+        4700
+      ],
+      "size": [
+        300,
+        260
+      ],
+      "flags": {},
+      "order": 78,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 142
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 143
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 144
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 145
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            146
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        1008,
+        "randomize",
+        4,
+        1,
+        "euler",
+        "simple",
+        1.0
+      ],
+      "title": "KSampler (seed: belt)"
+    },
+    {
+      "id": 79,
+      "type": "VAEDecode",
+      "pos": [
+        1440,
+        4990
+      ],
+      "size": [
+        220,
+        60
+      ],
+      "flags": {},
+      "order": 79,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 146
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 141
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            147
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 80,
+      "type": "SaveImage",
+      "pos": [
+        1760,
+        4700
+      ],
+      "size": [
+        360,
+        320
+      ],
+      "flags": {},
+      "order": 80,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 147
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "decompose/belt"
+      ],
+      "title": "Save: belt"
+    },
+    {
+      "id": 89,
+      "type": "MarkdownNote",
+      "pos": [
+        700,
+        5240
+      ],
+      "size": [
+        380,
+        130
+      ],
+      "flags": {},
+      "order": 89,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "### backpack\n`extract only the backpack on white bg`\n이 그룹만 켜고 Queue = 이 부위만 (재)생성."
+      ],
+      "title": "📝 주석",
+      "color": "#432"
+    },
+    {
+      "id": 84,
+      "type": "FluxKontextImageScale",
+      "pos": [
+        700,
+        5390
+      ],
+      "size": [
+        260,
+        80
+      ],
+      "flags": {},
+      "order": 84,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 148
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            149,
+            150,
+            151
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FluxKontextImageScale"
+      },
+      "widgets_values": [],
+      "title": "Scale: backpack"
+    },
+    {
+      "id": 82,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        990,
+        5280
+      ],
+      "size": [
+        430,
+        200
+      ],
+      "flags": {},
+      "order": 82,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 152
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 154
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 149
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            159
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        "Extract only the backpack from this character. Place it centered on a plain pure-white background. Remove the character and all other items. Preserve the original art style, colors, and lighting. Single object, product-shot style, no text, no shadow."
+      ],
+      "title": "Positive: backpack"
+    },
+    {
+      "id": 83,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        990,
+        5500
+      ],
+      "size": [
+        430,
+        140
+      ],
+      "flags": {},
+      "order": 83,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 153
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 155
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 150
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            160
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "title": "Negative (empty)"
+    },
+    {
+      "id": 85,
+      "type": "VAEEncode",
+      "pos": [
+        990,
+        5660
+      ],
+      "size": [
+        220,
+        60
+      ],
+      "flags": {},
+      "order": 85,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 151
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 156
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            161
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEEncode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 86,
+      "type": "KSampler",
+      "pos": [
+        1440,
+        5280
+      ],
+      "size": [
+        300,
+        260
+      ],
+      "flags": {},
+      "order": 86,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 158
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 159
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 160
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 161
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            162
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        1009,
+        "randomize",
+        4,
+        1,
+        "euler",
+        "simple",
+        1.0
+      ],
+      "title": "KSampler (seed: backpack)"
+    },
+    {
+      "id": 87,
+      "type": "VAEDecode",
+      "pos": [
+        1440,
+        5570
+      ],
+      "size": [
+        220,
+        60
+      ],
+      "flags": {},
+      "order": 87,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 162
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 157
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            163
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 88,
+      "type": "SaveImage",
+      "pos": [
+        1760,
+        5280
+      ],
+      "size": [
+        360,
+        320
+      ],
+      "flags": {},
+      "order": 88,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 163
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "decompose/backpack"
+      ],
+      "title": "Save: backpack"
     }
   ],
   "links": [
@@ -2542,31 +3956,31 @@
       4,
       8,
       0,
-      13,
+      12,
       0,
       "IMAGE"
     ],
     [
       5,
-      13,
+      12,
+      0,
+      10,
+      2,
+      "IMAGE"
+    ],
+    [
+      6,
+      12,
       0,
       11,
       2,
       "IMAGE"
     ],
     [
-      6,
-      13,
-      0,
-      12,
-      2,
-      "IMAGE"
-    ],
-    [
       7,
-      13,
+      12,
       0,
-      14,
+      13,
       0,
       "IMAGE"
     ],
@@ -2574,7 +3988,7 @@
       8,
       6,
       0,
-      11,
+      10,
       0,
       "CLIP"
     ],
@@ -2582,7 +3996,7 @@
       9,
       6,
       0,
-      12,
+      11,
       0,
       "CLIP"
     ],
@@ -2590,7 +4004,7 @@
       10,
       7,
       0,
-      11,
+      10,
       1,
       "VAE"
     ],
@@ -2598,7 +4012,7 @@
       11,
       7,
       0,
-      12,
+      11,
       1,
       "VAE"
     ],
@@ -2606,7 +4020,7 @@
       12,
       7,
       0,
-      14,
+      13,
       1,
       "VAE"
     ],
@@ -2614,7 +4028,7 @@
       13,
       7,
       0,
-      16,
+      15,
       1,
       "VAE"
     ],
@@ -2622,47 +4036,47 @@
       14,
       5,
       0,
-      15,
+      14,
       0,
       "MODEL"
     ],
     [
       15,
-      11,
+      10,
       0,
-      15,
+      14,
       1,
       "CONDITIONING"
     ],
     [
       16,
-      12,
+      11,
       0,
-      15,
+      14,
       2,
       "CONDITIONING"
     ],
     [
       17,
-      14,
+      13,
       0,
-      15,
+      14,
       3,
       "LATENT"
     ],
     [
       18,
-      15,
+      14,
       0,
-      16,
+      15,
       0,
       "LATENT"
     ],
     [
       19,
-      16,
+      15,
       0,
-      17,
+      16,
       0,
       "IMAGE"
     ],
@@ -2670,31 +4084,31 @@
       20,
       8,
       0,
-      21,
+      20,
       0,
       "IMAGE"
     ],
     [
       21,
-      21,
+      20,
+      0,
+      18,
+      2,
+      "IMAGE"
+    ],
+    [
+      22,
+      20,
       0,
       19,
       2,
       "IMAGE"
     ],
     [
-      22,
-      21,
-      0,
-      20,
-      2,
-      "IMAGE"
-    ],
-    [
       23,
-      21,
+      20,
       0,
-      22,
+      21,
       0,
       "IMAGE"
     ],
@@ -2702,7 +4116,7 @@
       24,
       6,
       0,
-      19,
+      18,
       0,
       "CLIP"
     ],
@@ -2710,7 +4124,7 @@
       25,
       6,
       0,
-      20,
+      19,
       0,
       "CLIP"
     ],
@@ -2718,7 +4132,7 @@
       26,
       7,
       0,
-      19,
+      18,
       1,
       "VAE"
     ],
@@ -2726,7 +4140,7 @@
       27,
       7,
       0,
-      20,
+      19,
       1,
       "VAE"
     ],
@@ -2734,7 +4148,7 @@
       28,
       7,
       0,
-      22,
+      21,
       1,
       "VAE"
     ],
@@ -2742,7 +4156,7 @@
       29,
       7,
       0,
-      24,
+      23,
       1,
       "VAE"
     ],
@@ -2750,47 +4164,47 @@
       30,
       5,
       0,
-      23,
+      22,
       0,
       "MODEL"
     ],
     [
       31,
-      19,
+      18,
       0,
-      23,
+      22,
       1,
       "CONDITIONING"
     ],
     [
       32,
-      20,
+      19,
       0,
-      23,
+      22,
       2,
       "CONDITIONING"
     ],
     [
       33,
-      22,
+      21,
       0,
-      23,
+      22,
       3,
       "LATENT"
     ],
     [
       34,
-      23,
+      22,
       0,
-      24,
+      23,
       0,
       "LATENT"
     ],
     [
       35,
-      24,
+      23,
       0,
-      25,
+      24,
       0,
       "IMAGE"
     ],
@@ -2798,31 +4212,31 @@
       36,
       8,
       0,
-      29,
+      28,
       0,
       "IMAGE"
     ],
     [
       37,
-      29,
+      28,
+      0,
+      26,
+      2,
+      "IMAGE"
+    ],
+    [
+      38,
+      28,
       0,
       27,
       2,
       "IMAGE"
     ],
     [
-      38,
-      29,
-      0,
-      28,
-      2,
-      "IMAGE"
-    ],
-    [
       39,
-      29,
+      28,
       0,
-      30,
+      29,
       0,
       "IMAGE"
     ],
@@ -2830,7 +4244,7 @@
       40,
       6,
       0,
-      27,
+      26,
       0,
       "CLIP"
     ],
@@ -2838,7 +4252,7 @@
       41,
       6,
       0,
-      28,
+      27,
       0,
       "CLIP"
     ],
@@ -2846,7 +4260,7 @@
       42,
       7,
       0,
-      27,
+      26,
       1,
       "VAE"
     ],
@@ -2854,7 +4268,7 @@
       43,
       7,
       0,
-      28,
+      27,
       1,
       "VAE"
     ],
@@ -2862,7 +4276,7 @@
       44,
       7,
       0,
-      30,
+      29,
       1,
       "VAE"
     ],
@@ -2870,7 +4284,7 @@
       45,
       7,
       0,
-      32,
+      31,
       1,
       "VAE"
     ],
@@ -2878,47 +4292,47 @@
       46,
       5,
       0,
-      31,
+      30,
       0,
       "MODEL"
     ],
     [
       47,
-      27,
+      26,
       0,
-      31,
+      30,
       1,
       "CONDITIONING"
     ],
     [
       48,
-      28,
+      27,
       0,
-      31,
+      30,
       2,
       "CONDITIONING"
     ],
     [
       49,
-      30,
+      29,
       0,
-      31,
+      30,
       3,
       "LATENT"
     ],
     [
       50,
-      31,
+      30,
       0,
-      32,
+      31,
       0,
       "LATENT"
     ],
     [
       51,
-      32,
+      31,
       0,
-      33,
+      32,
       0,
       "IMAGE"
     ],
@@ -2926,31 +4340,31 @@
       52,
       8,
       0,
-      37,
+      36,
       0,
       "IMAGE"
     ],
     [
       53,
-      37,
+      36,
+      0,
+      34,
+      2,
+      "IMAGE"
+    ],
+    [
+      54,
+      36,
       0,
       35,
       2,
       "IMAGE"
     ],
     [
-      54,
-      37,
-      0,
-      36,
-      2,
-      "IMAGE"
-    ],
-    [
       55,
-      37,
+      36,
       0,
-      38,
+      37,
       0,
       "IMAGE"
     ],
@@ -2958,7 +4372,7 @@
       56,
       6,
       0,
-      35,
+      34,
       0,
       "CLIP"
     ],
@@ -2966,7 +4380,7 @@
       57,
       6,
       0,
-      36,
+      35,
       0,
       "CLIP"
     ],
@@ -2974,7 +4388,7 @@
       58,
       7,
       0,
-      35,
+      34,
       1,
       "VAE"
     ],
@@ -2982,7 +4396,7 @@
       59,
       7,
       0,
-      36,
+      35,
       1,
       "VAE"
     ],
@@ -2990,7 +4404,7 @@
       60,
       7,
       0,
-      38,
+      37,
       1,
       "VAE"
     ],
@@ -2998,7 +4412,7 @@
       61,
       7,
       0,
-      40,
+      39,
       1,
       "VAE"
     ],
@@ -3006,47 +4420,47 @@
       62,
       5,
       0,
-      39,
+      38,
       0,
       "MODEL"
     ],
     [
       63,
-      35,
+      34,
       0,
-      39,
+      38,
       1,
       "CONDITIONING"
     ],
     [
       64,
-      36,
+      35,
       0,
-      39,
+      38,
       2,
       "CONDITIONING"
     ],
     [
       65,
-      38,
+      37,
       0,
-      39,
+      38,
       3,
       "LATENT"
     ],
     [
       66,
-      39,
+      38,
       0,
-      40,
+      39,
       0,
       "LATENT"
     ],
     [
       67,
-      40,
+      39,
       0,
-      41,
+      40,
       0,
       "IMAGE"
     ],
@@ -3054,31 +4468,31 @@
       68,
       8,
       0,
-      45,
+      44,
       0,
       "IMAGE"
     ],
     [
       69,
-      45,
+      44,
+      0,
+      42,
+      2,
+      "IMAGE"
+    ],
+    [
+      70,
+      44,
       0,
       43,
       2,
       "IMAGE"
     ],
     [
-      70,
-      45,
-      0,
-      44,
-      2,
-      "IMAGE"
-    ],
-    [
       71,
-      45,
+      44,
       0,
-      46,
+      45,
       0,
       "IMAGE"
     ],
@@ -3086,7 +4500,7 @@
       72,
       6,
       0,
-      43,
+      42,
       0,
       "CLIP"
     ],
@@ -3094,7 +4508,7 @@
       73,
       6,
       0,
-      44,
+      43,
       0,
       "CLIP"
     ],
@@ -3102,7 +4516,7 @@
       74,
       7,
       0,
-      43,
+      42,
       1,
       "VAE"
     ],
@@ -3110,7 +4524,7 @@
       75,
       7,
       0,
-      44,
+      43,
       1,
       "VAE"
     ],
@@ -3118,7 +4532,7 @@
       76,
       7,
       0,
-      46,
+      45,
       1,
       "VAE"
     ],
@@ -3126,7 +4540,7 @@
       77,
       7,
       0,
-      48,
+      47,
       1,
       "VAE"
     ],
@@ -3134,47 +4548,47 @@
       78,
       5,
       0,
-      47,
+      46,
       0,
       "MODEL"
     ],
     [
       79,
-      43,
+      42,
       0,
-      47,
+      46,
       1,
       "CONDITIONING"
     ],
     [
       80,
-      44,
+      43,
       0,
-      47,
+      46,
       2,
       "CONDITIONING"
     ],
     [
       81,
-      46,
+      45,
       0,
-      47,
+      46,
       3,
       "LATENT"
     ],
     [
       82,
-      47,
+      46,
       0,
-      48,
+      47,
       0,
       "LATENT"
     ],
     [
       83,
-      48,
+      47,
       0,
-      49,
+      48,
       0,
       "IMAGE"
     ],
@@ -3182,31 +4596,31 @@
       84,
       8,
       0,
-      53,
+      52,
       0,
       "IMAGE"
     ],
     [
       85,
-      53,
+      52,
+      0,
+      50,
+      2,
+      "IMAGE"
+    ],
+    [
+      86,
+      52,
       0,
       51,
       2,
       "IMAGE"
     ],
     [
-      86,
-      53,
-      0,
-      52,
-      2,
-      "IMAGE"
-    ],
-    [
       87,
-      53,
+      52,
       0,
-      54,
+      53,
       0,
       "IMAGE"
     ],
@@ -3214,7 +4628,7 @@
       88,
       6,
       0,
-      51,
+      50,
       0,
       "CLIP"
     ],
@@ -3222,7 +4636,7 @@
       89,
       6,
       0,
-      52,
+      51,
       0,
       "CLIP"
     ],
@@ -3230,7 +4644,7 @@
       90,
       7,
       0,
-      51,
+      50,
       1,
       "VAE"
     ],
@@ -3238,7 +4652,7 @@
       91,
       7,
       0,
-      52,
+      51,
       1,
       "VAE"
     ],
@@ -3246,7 +4660,7 @@
       92,
       7,
       0,
-      54,
+      53,
       1,
       "VAE"
     ],
@@ -3254,7 +4668,7 @@
       93,
       7,
       0,
-      56,
+      55,
       1,
       "VAE"
     ],
@@ -3262,47 +4676,559 @@
       94,
       5,
       0,
-      55,
+      54,
       0,
       "MODEL"
     ],
     [
       95,
-      51,
+      50,
       0,
-      55,
+      54,
       1,
       "CONDITIONING"
     ],
     [
       96,
-      52,
+      51,
       0,
-      55,
+      54,
       2,
       "CONDITIONING"
     ],
     [
       97,
-      54,
+      53,
       0,
-      55,
+      54,
       3,
       "LATENT"
     ],
     [
       98,
-      55,
+      54,
       0,
-      56,
+      55,
       0,
       "LATENT"
     ],
     [
       99,
+      55,
+      0,
       56,
       0,
-      57,
+      "IMAGE"
+    ],
+    [
+      100,
+      8,
+      0,
+      60,
+      0,
+      "IMAGE"
+    ],
+    [
+      101,
+      60,
+      0,
+      58,
+      2,
+      "IMAGE"
+    ],
+    [
+      102,
+      60,
+      0,
+      59,
+      2,
+      "IMAGE"
+    ],
+    [
+      103,
+      60,
+      0,
+      61,
+      0,
+      "IMAGE"
+    ],
+    [
+      104,
+      6,
+      0,
+      58,
+      0,
+      "CLIP"
+    ],
+    [
+      105,
+      6,
+      0,
+      59,
+      0,
+      "CLIP"
+    ],
+    [
+      106,
+      7,
+      0,
+      58,
+      1,
+      "VAE"
+    ],
+    [
+      107,
+      7,
+      0,
+      59,
+      1,
+      "VAE"
+    ],
+    [
+      108,
+      7,
+      0,
+      61,
+      1,
+      "VAE"
+    ],
+    [
+      109,
+      7,
+      0,
+      63,
+      1,
+      "VAE"
+    ],
+    [
+      110,
+      5,
+      0,
+      62,
+      0,
+      "MODEL"
+    ],
+    [
+      111,
+      58,
+      0,
+      62,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      112,
+      59,
+      0,
+      62,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      113,
+      61,
+      0,
+      62,
+      3,
+      "LATENT"
+    ],
+    [
+      114,
+      62,
+      0,
+      63,
+      0,
+      "LATENT"
+    ],
+    [
+      115,
+      63,
+      0,
+      64,
+      0,
+      "IMAGE"
+    ],
+    [
+      116,
+      8,
+      0,
+      68,
+      0,
+      "IMAGE"
+    ],
+    [
+      117,
+      68,
+      0,
+      66,
+      2,
+      "IMAGE"
+    ],
+    [
+      118,
+      68,
+      0,
+      67,
+      2,
+      "IMAGE"
+    ],
+    [
+      119,
+      68,
+      0,
+      69,
+      0,
+      "IMAGE"
+    ],
+    [
+      120,
+      6,
+      0,
+      66,
+      0,
+      "CLIP"
+    ],
+    [
+      121,
+      6,
+      0,
+      67,
+      0,
+      "CLIP"
+    ],
+    [
+      122,
+      7,
+      0,
+      66,
+      1,
+      "VAE"
+    ],
+    [
+      123,
+      7,
+      0,
+      67,
+      1,
+      "VAE"
+    ],
+    [
+      124,
+      7,
+      0,
+      69,
+      1,
+      "VAE"
+    ],
+    [
+      125,
+      7,
+      0,
+      71,
+      1,
+      "VAE"
+    ],
+    [
+      126,
+      5,
+      0,
+      70,
+      0,
+      "MODEL"
+    ],
+    [
+      127,
+      66,
+      0,
+      70,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      128,
+      67,
+      0,
+      70,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      129,
+      69,
+      0,
+      70,
+      3,
+      "LATENT"
+    ],
+    [
+      130,
+      70,
+      0,
+      71,
+      0,
+      "LATENT"
+    ],
+    [
+      131,
+      71,
+      0,
+      72,
+      0,
+      "IMAGE"
+    ],
+    [
+      132,
+      8,
+      0,
+      76,
+      0,
+      "IMAGE"
+    ],
+    [
+      133,
+      76,
+      0,
+      74,
+      2,
+      "IMAGE"
+    ],
+    [
+      134,
+      76,
+      0,
+      75,
+      2,
+      "IMAGE"
+    ],
+    [
+      135,
+      76,
+      0,
+      77,
+      0,
+      "IMAGE"
+    ],
+    [
+      136,
+      6,
+      0,
+      74,
+      0,
+      "CLIP"
+    ],
+    [
+      137,
+      6,
+      0,
+      75,
+      0,
+      "CLIP"
+    ],
+    [
+      138,
+      7,
+      0,
+      74,
+      1,
+      "VAE"
+    ],
+    [
+      139,
+      7,
+      0,
+      75,
+      1,
+      "VAE"
+    ],
+    [
+      140,
+      7,
+      0,
+      77,
+      1,
+      "VAE"
+    ],
+    [
+      141,
+      7,
+      0,
+      79,
+      1,
+      "VAE"
+    ],
+    [
+      142,
+      5,
+      0,
+      78,
+      0,
+      "MODEL"
+    ],
+    [
+      143,
+      74,
+      0,
+      78,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      144,
+      75,
+      0,
+      78,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      145,
+      77,
+      0,
+      78,
+      3,
+      "LATENT"
+    ],
+    [
+      146,
+      78,
+      0,
+      79,
+      0,
+      "LATENT"
+    ],
+    [
+      147,
+      79,
+      0,
+      80,
+      0,
+      "IMAGE"
+    ],
+    [
+      148,
+      8,
+      0,
+      84,
+      0,
+      "IMAGE"
+    ],
+    [
+      149,
+      84,
+      0,
+      82,
+      2,
+      "IMAGE"
+    ],
+    [
+      150,
+      84,
+      0,
+      83,
+      2,
+      "IMAGE"
+    ],
+    [
+      151,
+      84,
+      0,
+      85,
+      0,
+      "IMAGE"
+    ],
+    [
+      152,
+      6,
+      0,
+      82,
+      0,
+      "CLIP"
+    ],
+    [
+      153,
+      6,
+      0,
+      83,
+      0,
+      "CLIP"
+    ],
+    [
+      154,
+      7,
+      0,
+      82,
+      1,
+      "VAE"
+    ],
+    [
+      155,
+      7,
+      0,
+      83,
+      1,
+      "VAE"
+    ],
+    [
+      156,
+      7,
+      0,
+      85,
+      1,
+      "VAE"
+    ],
+    [
+      157,
+      7,
+      0,
+      87,
+      1,
+      "VAE"
+    ],
+    [
+      158,
+      5,
+      0,
+      86,
+      0,
+      "MODEL"
+    ],
+    [
+      159,
+      82,
+      0,
+      86,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      160,
+      83,
+      0,
+      86,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      161,
+      85,
+      0,
+      86,
+      3,
+      "LATENT"
+    ],
+    [
+      162,
+      86,
+      0,
+      87,
+      0,
+      "LATENT"
+    ],
+    [
+      163,
+      87,
+      0,
+      88,
       0,
       "IMAGE"
     ]
@@ -3311,72 +5237,120 @@
     {
       "title": "요소: hair",
       "bounding": [
-        960,
+        680,
         10,
-        1430,
+        1470,
         540
       ],
-      "color": "#a1309b",
+      "color": "#3f789e",
       "font_size": 24,
       "flags": {}
     },
     {
-      "title": "요소: body",
+      "title": "요소: face",
       "bounding": [
-        960,
+        680,
         590,
-        1430,
+        1470,
         540
       ],
-      "color": "#a1309b",
+      "color": "#3f789e",
       "font_size": 24,
       "flags": {}
     },
     {
-      "title": "요소: top",
+      "title": "요소: jacket",
       "bounding": [
-        960,
+        680,
         1170,
-        1430,
+        1470,
         540
       ],
-      "color": "#a1309b",
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "요소: shirt",
+      "bounding": [
+        680,
+        1750,
+        1470,
+        540
+      ],
+      "color": "#3f789e",
       "font_size": 24,
       "flags": {}
     },
     {
       "title": "요소: pants",
       "bounding": [
-        960,
-        1750,
-        1430,
+        680,
+        2330,
+        1470,
         540
       ],
-      "color": "#a1309b",
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "요소: gloves",
+      "bounding": [
+        680,
+        2910,
+        1470,
+        540
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "요소: boots",
+      "bounding": [
+        680,
+        3490,
+        1470,
+        540
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "요소: goggles",
+      "bounding": [
+        680,
+        4070,
+        1470,
+        540
+      ],
+      "color": "#3f789e",
       "font_size": 24,
       "flags": {}
     },
     {
       "title": "요소: belt",
       "bounding": [
-        960,
-        2330,
-        1430,
+        680,
+        4650,
+        1470,
         540
       ],
-      "color": "#a1309b",
+      "color": "#3f789e",
       "font_size": 24,
       "flags": {}
     },
     {
-      "title": "요소: shoes",
+      "title": "요소: backpack",
       "bounding": [
-        960,
-        2910,
-        1430,
+        680,
+        5230,
+        1470,
         540
       ],
-      "color": "#a1309b",
+      "color": "#3f789e",
       "font_size": 24,
       "flags": {}
     }
