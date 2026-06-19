@@ -24,6 +24,19 @@ VAE  = "qwen_image_vae.safetensors"
 LORA = "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors"
 STEPS, CFG, SAMPLER, SCHED, SHIFT = 4, 1, "euler", "simple", 3
 
+# HF 다운로드 노드용 (target_folder, 검증된 다운로드 URL). 워크플로우가 자동으로 받는다.
+# 노드: 'Hugging Face Download Model' (custom_nodes/ComfyUI_HuggingFace_Downloader)
+DL = {
+    "unet": ("diffusion_models",
+             "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors"),
+    "clip": ("text_encoders",
+             "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"),
+    "vae":  ("vae",
+             "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors"),
+    "lora": ("loras",
+             "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors"),
+}
+
 PROMPT_TMPL = (
     "Extract only {PHRASE} from this character. "
     "Place it centered on a plain pure-white background. "
@@ -62,6 +75,8 @@ def build(elements):
     def link(o, oslot, t, tslot, typ):
         _lid[0] += 1; links.append([_lid[0], o, oslot, t, tslot, typ]); return _lid[0]
     def inp(name, typ, l=None): return {"name": name, "type": typ, "link": l}
+    def winp(name, l, typ="COMBO"):  # 위젯을 input 으로 변환한 슬롯 (다운로드 노드가 파일명 주입)
+        return {"localized_name": name, "name": name, "type": typ, "widget": {"name": name}, "link": l}
     def out(name, typ, ls): return {"name": name, "type": typ, "links": list(ls), "slot_index": 0}
     def node(nid, typ, pos, widgets, inputs, outputs, title=None, size=(300, 100), color=None):
         n = {"id": nid, "type": typ, "pos": list(pos), "size": list(size), "flags": {},
@@ -87,37 +102,58 @@ def build(elements):
         "_커스텀 노드 불필요(전부 코어). 모델은 download_models.ps1 로 받는다._",
         (620, 300)))
 
-    # ---- 공유: 모델 로더 체인 ----
+    # ---- 공유: 모델 로더 체인 (+ 자동 다운로드 노드) ----
     N_UNET, N_LORA, N_MSAF, N_CFG = newid(), newid(), newid(), newid()
     N_CLIP, N_VAE, N_LOAD = newid(), newid(), newid()
+    N_DLU, N_DLC, N_DLV, N_DLL = newid(), newid(), newid(), newid()
 
     nodes.append(note(newid(), (20, 340),
-        "**Qwen 모델 (공유 로더)** — 모든 레인이 이 MODEL/CLIP/VAE 공유.\n"
-        "`./download_models.ps1` 로 4개 파일 받기 (약 20GB).\n"
-        "VRAM: fp8 ~ 다소 빠듯(16GB+ 권장, 오프로딩 가능). 저VRAM이면\n"
-        "UNETLoader 를 'Unet Loader (GGUF)' 로 교체 + GGUF 파일 사용.",
-        (400, 160)))
+        "**Qwen 모델 — 워크플로우가 자동 다운로드.**\n"
+        "왼쪽 `HF Download` 노드 4개가 모델을 받아 각 로더에 파일명을 주입한다.\n"
+        "Queue 한 번이면 없는 파일만 받고(있으면 skip) 그 다음 로더가 로드.\n"
+        "필요 노드: `ComfyUI_HuggingFace_Downloader` (Manager 에서 설치).\n"
+        "총 ~20GB · VRAM fp8 16GB+ 권장(저VRAM은 GGUF 로 교체).",
+        (440, 180)))
+
+    # 다운로드 노드 (왼쪽 컬럼) -> 로더 파일명 input 으로
+    l_dlu = link(N_DLU, 0, N_UNET, 0, "*")
+    l_dlc = link(N_DLC, 0, N_CLIP, 0, "*")
+    l_dlv = link(N_DLV, 0, N_VAE, 0, "*")
+    l_dll = link(N_DLL, 0, N_LORA, 1, "*")  # slot 1 (slot 0 = model)
+    def dl(nid, key, pos, title):
+        tgt, url = DL[key]
+        return node(nid, "Hugging Face Download Model", pos, [tgt, url, ""], [],
+                    [out("model name", "*", [])], title, (430, 120), color="#253")
+    nodes.append(dl(N_DLU, "unet", (-470, 520), "⬇ HF: diffusion (Qwen Edit 2509)"))
+    nodes.append(dl(N_DLL, "lora", (-470, 670), "⬇ HF: Lightning 4-step LoRA"))
+    nodes.append(dl(N_DLC, "clip", (-470, 1000), "⬇ HF: text encoder (Qwen2.5-VL)"))
+    nodes.append(dl(N_DLV, "vae",  (-470, 1150), "⬇ HF: VAE"))
 
     l_unet = link(N_UNET, 0, N_LORA, 0, "MODEL")
     l_lora = link(N_LORA, 0, N_MSAF, 0, "MODEL")
     l_msaf = link(N_MSAF, 0, N_CFG, 0, "MODEL")
-    nodes.append(node(N_UNET, "UNETLoader", (20, 520), [UNET, "default"], [],
+    # 로더: 파일명 위젯을 input 으로 변환(다운로드 노드가 주입). widgets_values 는 fallback 으로 유지.
+    nodes.append(node(N_UNET, "UNETLoader", (20, 540), [UNET, "default"],
+        [winp("unet_name", l_dlu)],
         [out("MODEL", "MODEL", [l_unet])], "Load Diffusion (Qwen Edit 2509)", (340, 100)))
-    nodes.append(node(N_LORA, "LoraLoaderModelOnly", (20, 650), [LORA, 1.0],
-        [inp("model", "MODEL", l_unet)], [out("MODEL", "MODEL", [l_lora])], "Lightning 4-step LoRA", (340, 100)))
-    nodes.append(node(N_MSAF, "ModelSamplingAuraFlow", (20, 780), [float(SHIFT)],
+    nodes.append(node(N_LORA, "LoraLoaderModelOnly", (20, 690), [LORA, 1.0],
+        [inp("model", "MODEL", l_unet), winp("lora_name", l_dll)],
+        [out("MODEL", "MODEL", [l_lora])], "Lightning 4-step LoRA", (340, 120)))
+    nodes.append(node(N_MSAF, "ModelSamplingAuraFlow", (20, 840), [float(SHIFT)],
         [inp("model", "MODEL", l_lora)], [out("MODEL", "MODEL", [l_msaf])], None, (340, 80)))
     cfg_out_links = []
-    nodes.append(node(N_CFG, "CFGNorm", (20, 890), [float(CFG)],
+    nodes.append(node(N_CFG, "CFGNorm", (20, 950), [float(CFG)],
         [inp("model", "MODEL", l_msaf)], [out("MODEL", "MODEL", cfg_out_links)], None, (340, 80)))
     clip_out_links = []
-    nodes.append(node(N_CLIP, "CLIPLoader", (20, 1000), [CLIP, "qwen_image", "default"], [],
+    nodes.append(node(N_CLIP, "CLIPLoader", (20, 1060), [CLIP, "qwen_image", "default"],
+        [winp("clip_name", l_dlc)],
         [out("CLIP", "CLIP", clip_out_links)], "Load CLIP (Qwen2.5-VL)", (340, 100)))
     vae_out_links = []
-    nodes.append(node(N_VAE, "VAELoader", (20, 1130), [VAE], [],
+    nodes.append(node(N_VAE, "VAELoader", (20, 1190), [VAE],
+        [winp("vae_name", l_dlv)],
         [out("VAE", "VAE", vae_out_links)], "Load VAE", (340, 80)))
     load_out_links = []
-    nodes.append(node(N_LOAD, "LoadImage", (20, 1230), ["input.png", "image"], [],
+    nodes.append(node(N_LOAD, "LoadImage", (20, 1300), ["input.png", "image"], [],
         [out("IMAGE", "IMAGE", load_out_links), out("MASK", "MASK", [])], "Load Input (T-pose)", (340, 330)))
 
     # ---- 요소 레인 ----

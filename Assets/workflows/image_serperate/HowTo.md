@@ -11,18 +11,22 @@ ComfyUI 내장 공식 템플릿 `image_qwen_image_edit_2509.json` 의 파이프�
 
 ## 0. 구성
 
-- 워크플로우 1개: **`decompose.json`** (커스텀 노드 **0개**, 전부 ComfyUI 코어 노드).
+- 워크플로우 1개: **`decompose.json`**. **모델을 워크플로우가 직접 다운로드**한다(수동 다운로드 불필요).
 - 요소 목록은 **`elements.txt`** 로 가변 지정 → `python build_workflow.py` 로 `decompose.json` 재생성.
 - 엔진: **Qwen-Image-Edit-2509** + Qwen2.5-VL 인코더 + qwen_image_vae + Lightning 4-step LoRA.
+- 커스텀 노드: **`ComfyUI_HuggingFace_Downloader` 1개만** 필요(모델 자동 다운로드용). 나머지는 코어 노드.
 - 출력: 요소별 **흰 배경 PNG** (`output/decompose/<요소>_*.png`). 알파 PNG가 필요하면 §6 참고.
 
 파이프라인(요소 레인 1개):
 ```
-LoadImage ─ FluxKontextImageScale ┬─ TextEncodeQwenImageEditPlus(+프롬프트) ┐
-                                  ├─ TextEncodeQwenImageEditPlus(neg, 빈)  ├─ KSampler ─ VAEDecode ─ SaveImage
-                                  └─ VAEEncode ───────────────────(latent)─┘
-공유: UNETLoader → Lightning LoRA → ModelSamplingAuraFlow(shift 3) → CFGNorm(1) / CLIPLoader / VAELoader
+[HF Download]→ UNETLoader → Lightning LoRA → ModelSamplingAuraFlow(shift 3) → CFGNorm(1)   ┐ (공유)
+[HF Download]→ CLIPLoader      [HF Download]→ VAELoader                                     │
+LoadImage ─ FluxKontextImageScale ┬─ TextEncodeQwenImageEditPlus(+프롬프트) ┐               │
+                                  ├─ TextEncodeQwenImageEditPlus(neg, 빈)  ├─ KSampler ◀────┘
+                                  └─ VAEEncode ───────────────────(latent)─┘   └ VAEDecode ─ SaveImage
 KSampler: euler · simple · steps 4 · cfg 1 · denoise 1   (Lightning 4-step 카논 값)
+
+* 4개 `HF Download` 노드가 각 로더의 파일명(unet/clip/vae/lora)을 input 으로 주입 → 파일이 없으면 받고, 있으면 skip.
 ```
 
 ---
@@ -34,7 +38,7 @@ KSampler: euler · simple · steps 4 · cfg 1 · denoise 1   (Lightning 4-step �
 | 실행 위치 | **GPU PC** (현재 개발 머신은 GPU 없음 → 설계/생성만, 런타임 미검증) |
 | 모델 디스크 | 약 **20GB** (fp8 diffusion ~14GB + 인코더 ~8GB + VAE + LoRA) |
 | VRAM | **fp8: 16GB+ 권장**(오프로딩 시 그 이하도 가능) / **GGUF Q4: ~12GB** |
-| 커스텀 노드 | **없음.** `TextEncodeQwenImageEditPlus` 등은 최신 ComfyUI 코어 노드 |
+| 커스텀 노드 | **`ComfyUI_HuggingFace_Downloader` 1개** (모델 자동 다운로드). 나머지는 코어 |
 | ComfyUI | 최신으로 업데이트 (2509 템플릿/노드 포함 버전) |
 
 ---
@@ -42,19 +46,19 @@ KSampler: euler · simple · steps 4 · cfg 1 · denoise 1   (Lightning 4-step �
 ## 2. 설치 (GPU PC, 최초 1회)
 
 1. **ComfyUI 최신 업데이트** (코어에 Qwen-Image-Edit 2509 노드가 있어야 함).
-2. **모델 다운로드** — `download_models.ps1` 실행 (스크립트 안 `$COMFY` 가 설치 경로와 맞는지 확인):
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File download_models.ps1
-   ```
-   받는 파일과 위치:
+2. **커스텀 노드 1개 설치** — ComfyUI-Manager → *Install via Git URL*:
+   `https://github.com/jnxmx/ComfyUI_HuggingFace_Downloader` → 설치 후 ComfyUI 재시작.
+3. **모델 다운로드는 따로 안 한다.** `decompose.json` 첫 Queue 때 워크플로우의 `HF Download` 노드 4개가
+   아래 파일을 자동으로 받아 각 폴더에 넣고 로더에 주입한다(총 ~20GB, 한 번만):
    | 폴더 | 파일 |
    |---|---|
    | `models/diffusion_models/` | `qwen_image_edit_2509_fp8_e4m3fn.safetensors` |
    | `models/text_encoders/` | `qwen_2.5_vl_7b_fp8_scaled.safetensors` |
    | `models/vae/` | `qwen_image_vae.safetensors` |
    | `models/loras/` | `Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors` |
-3. ComfyUI 재시작.
 
+> 다운로드 노드 없이 직접 받고 싶으면 `download_models.ps1` 을 써도 된다(대체 수단, 동일 파일/경로).
+>
 > **저VRAM(≤12GB)**: fp8 대신 `QuantStack/Qwen-Image-Edit-2509-GGUF`(예: Q4_K_M)를 받아
 > `models/diffusion_models/` 에 두고, `ComfyUI-GGUF` 커스텀 노드 설치 후
 > `decompose.json` 의 **UNETLoader → "Unet Loader (GGUF)"** 로 교체.
@@ -63,9 +67,10 @@ KSampler: euler · simple · steps 4 · cfg 1 · denoise 1   (Lightning 4-step �
 
 ## 3. 사용법
 
-1. `decompose.json` 을 ComfyUI 캔버스에 **드래그**. (4개 로더가 위 파일을 가리키는지 확인 — 빨간 노드면 파일명 불일치)
+1. `decompose.json` 을 ComfyUI 캔버스에 **드래그**. (왼쪽 `HF Download` 노드 4개가 로더에 연결돼 있음)
 2. 좌측 `Load Input (T-pose)` 에 캐릭터 이미지 업로드.
-3. **Queue Prompt** → 요소마다 흰 배경 추출본이 `output/decompose/` 에 저장.
+3. **Queue Prompt** → **첫 실행은 모델 ~20GB 다운로드라 오래 걸린다**(이후엔 skip). 끝나면 요소마다
+   흰 배경 추출본이 `output/decompose/` 에 저장.
 
 ### 특정 부위만 재생성
 - 다시 만들 **요소 그룹만 남기고** 나머지 그룹을 우클릭 → **Mute Group** (또는 노드 선택 후 `Ctrl+M`).
@@ -123,8 +128,8 @@ Single object, product-shot style, no text, no shadow.
 |---|---|
 | `decompose.json` | **메인 워크플로우** (요소별 흰 배경 추출, 코어 노드만) |
 | `elements.txt` | 분해할 요소 리스트 (여기 편집) |
-| `build_workflow.py` | `elements.txt` → `decompose.json` 생성기 |
-| `download_models.ps1` | Qwen 모델 4종 다운로드 |
+| `build_workflow.py` | `elements.txt` → `decompose.json` 생성기 (다운로드 노드 + 로더 자동 배선) |
+| `download_models.ps1` | (선택) 노드 안 쓰고 직접 받는 대체 스크립트 |
 | `HowTo.md` | 이 문서 |
 
 > 노드/링크 구조는 공식 2509 템플릿 값과 대조해 검증했으나, **이 머신엔 GPU·모델이 없어 런타임 실행은 미검증.**

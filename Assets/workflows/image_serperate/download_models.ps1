@@ -23,7 +23,7 @@ $files = @(
   @{ dir = "vae"; name = "qwen_image_vae.safetensors";
      url = "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors" },
   @{ dir = "loras"; name = "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors";
-     url = "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors" }
+     url = "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors" }
 )
 
 foreach ($f in $files) {
