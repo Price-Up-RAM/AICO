@@ -27,6 +27,9 @@ public static class SkillViewPrefabBuilder
             Sprite uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
             view.EditorBuild(uiSprite);
 
+            // 서버 통신/데이터 공급 컴포넌트도 함께 부착 (런타임에 SkillView를 자동 참조)
+            root.AddComponent<SkillCatalogClient>();
+
             bool ok;
             PrefabUtility.SaveAsPrefabAsset(root, PrefabPath, out ok);
             Debug.Log(ok
