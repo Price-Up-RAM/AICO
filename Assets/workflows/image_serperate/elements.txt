@@ -1,0 +1,21 @@
+# 분리할 요소를 가변적으로 적는다. 쉼표 또는 줄바꿈으로 구분. '#' 줄은 주석.
+# 여기 이름을 추가/삭제하고  python build_decompose_list.py  를 돌리면
+# 요소마다 노드 레인(파서 -> 알파합성 -> PNG 저장)이 자동 생성된다.
+#
+# 사용 가능한 이름(친화적 별칭 -> ATR 클래스):
+#   hair        = hair
+#   head        = hair + face            (※ body/face 와 함께 쓰면 face 겹침)
+#   face        = face
+#   body, skin  = face + arms + legs
+#   arms        = left_arm + right_arm
+#   legs        = left_leg + right_leg
+#   top,upper,shirt,jacket = upper_clothes
+#   bottom,lower = skirt + pants + dress
+#   pants       = pants
+#   skirt       = skirt
+#   dress       = dress
+#   belt        = belt          (독립 클래스 - 상/하의와 안 겹침)
+#   shoes,footwear = left_shoe + right_shoe
+#   hat / bag / sunglasses(glasses) / scarf
+
+hair, body, top, pants, belt, shoes
