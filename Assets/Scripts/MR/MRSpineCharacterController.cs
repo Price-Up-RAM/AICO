@@ -1195,6 +1195,6 @@ public class MRSpineCharacterController : MonoBehaviour
 
     public void ApplyCharacterSize(float size)
     {
-        transform.localScale = new Vector3(size, size, size) * 0.02f;
+        transform.localScale = new Vector3(size, size, size);
     }
 }

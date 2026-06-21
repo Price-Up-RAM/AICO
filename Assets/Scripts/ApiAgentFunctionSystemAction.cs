@@ -109,20 +109,6 @@ public class ApiAgentFunctionSystemAction : MonoBehaviour
         }
     }
 
-    // 클립보드 텍스트 쓰기
-    public void WriteClipboardText(string text)
-    {
-        GUIUtility.systemCopyBuffer = text;
-        Debug.Log($"[ApiAgentFunctionSystemAction] 클립보드 텍스트 복사 완료: {text}");
-    }
-
-    // 클립보드 텍스트 읽기
-    public string ReadClipboardText()
-    {
-        string text = GUIUtility.systemCopyBuffer;
-        Debug.Log($"[ApiAgentFunctionSystemAction] 클립보드 텍스트 읽기 완료: {text}");
-        return text;
-    }
 #else
     public bool FocusWindow(string windowTitle)
     {
@@ -147,4 +133,19 @@ public class ApiAgentFunctionSystemAction : MonoBehaviour
         Debug.LogWarning("[ApiAgentFunctionSystemAction] Windows 환경에서만 지원됩니다.");
     }
 #endif
+
+    // 클립보드 텍스트 쓰기
+    public void WriteClipboardText(string text)
+    {
+        GUIUtility.systemCopyBuffer = text;
+        Debug.Log($"[ApiAgentFunctionSystemAction] 클립보드 텍스트 복사 완료: {text}");
+    }
+
+    // 클립보드 텍스트 읽기
+    public string ReadClipboardText()
+    {
+        string text = GUIUtility.systemCopyBuffer;
+        Debug.Log($"[ApiAgentFunctionSystemAction] 클립보드 텍스트 읽기 완료: {text}");
+        return text;
+    }
 }
