@@ -1,0 +1,219 @@
+arona : 아로나가 밀린 모모톡을 소탕하는 RTA 하지마루요~
+arona : アロナが溜まったモモトークを周回消化するRTA、始まるよ〜
+arona : あろながたまったももとーくをしゅうかいしょうかするあーるてぃーえー、はじまるよー
+arona : Arona is going to speed run clearing all the piled up MomoTalks.
+
+plana : 10초 드리겠습니다. 변명 시작.
+plana : 10秒差し上げます。言い訳、どうぞ。
+plana : じゅうびょうさしあげます。いいわけ、どうぞ。
+plana : I will give you ten seconds. Start your excuses.
+
+arona : 시작부터 건강하네요 프라나쨩.
+arona : 開始から元気ですね、プラナちゃん。
+arona : かいしからげんきですね、ぷらなちゃん。
+arona : You are energetic right from the start, Plana.
+
+arona : 안녕하세요. 이번에 m9dev의 대리를 맡은 아로나입니다.
+arona : こんにちは。今回、m9devの代理を務めるアロナです。
+arona : こんにちは。こんかい、えむないんでぶのだいりをつとめるあろなです。
+arona : Hello. I am Arona, acting as the stand in for m9dev this time.
+
+plana : 안녕하십니까. 아로나 선배의 파트너 역할을 맡은 AI, 프라나입니다.
+plana : はじめまして。アロナ先輩のパートナー役を務めるえいあい、プラナです。
+plana : はじめまして。あろなせんぱいのぱーとなーやくをつとめるえいあい、ぷらなです。
+plana : Greetings. I am Plana, the AI partner assigned to Arona.
+
+plana : 그래서 이건 뭔가요, 선배.
+plana : それで、これは何なんですか、先輩。
+plana : それで、これはなんなんですか、せんぱい。
+plana : So what is this, senpai?
+
+arona : 학생들의 추억을 청휘석으로 바꾸고 있습니다.
+arona : 生徒たちの思い出を、青輝石に変えています。
+arona : せいとたちのおもいでを、せいきせきにかえています。
+arona : I am turning the students memories into Pyroxenes.
+
+plana : 네?
+plana : はい？
+plana : はい？
+plana : Sorry?
+
+arona : 학생들의 소중한 '인연 스토리'를 청휘석으로 바꾸고 있습니다.
+arona : 生徒たちの大切な「絆ストーリー」を、青輝石に変えています。
+arona : せいとたちのたいせつな「きずなすとーりー」を、せいきせきにかえています。
+arona : I am converting their precious bond stories into Pyroxenes.
+
+plana : 아연 (唖然). 사람의 마음이라던가 없으신가요?
+plana : 唖然。人の心とか、ないんですか？
+plana : あぜん。ひとのこころとか、ないんですか？
+plana : Stunned. Do you not have a heart?
+
+arona : 거기에 없으면 없는 것 같네요.
+arona : そこになければ、ないですね。
+arona : そこになければ、ないですね。
+arona : If it is not there, I guess it does not exist.
+
+arona : 지금도 뒤에서 쉬지 않고 스킵하고 있으니까요.
+arona : 今も裏で休まずスキップしていますから。
+arona : いまもうらでやすまずすきっぷしていますから。
+arona : I am still skipping nonstop in the background.
+
+plana : 이것은 거짓된 선생인, 프레나파테스(プレナパテス)네요.
+plana : これは偽りの先生こと、プレナパテスですね。
+plana : これはいつわりのせんせいこと、ぷれなぱてすですね。
+plana : This is the false teacher known as Plenapates.
+
+arona : 뭐… 가능한 걸 알아버리면, 하지 못하고는 못 버틴달까…
+arona : まあ…できるって分かっちゃうと、やらずにはいられないというか…
+arona : まあ…できるってわかっちゃうと、やらずにはいられないというか…
+arona : Well, once you realize it is possible, you cannot help but do it.
+
+arona : 해버렸다, 라는 느낌으로?
+arona : やっちゃった、的な？
+arona : やっちゃった、てきな？
+arona : More like, I ended up doing it. That kind of feeling.
+
+plana : 할 수 있는 것… 아, 기억났습니다. 지난번에 AI 기능으로 배부른 학생에게 억지로 라면을 먹이셨죠.
+plana : できること…あ、思い出しました。前回、AI機能で満腹の生徒に無理やりラーメンを食べさせましたよね。
+plana : できること…あ、おもいだしました。ぜんかい、えいあいきのうでまんぷくのせいとにむりやりらーめんをたべさせましたよね。
+plana : Something you can do... Oh, I remember. Last time, you used the AI feature to force ramen on a student who was already full.
+
+arona : 그걸로 로컬 AI가 화면을 보고, 상황을 이해하고, 필요 기능인 클릭을 판단할 수 있는 수준이라는 걸 알아버렸으니까 말이죠…
+arona : それでローカルAIが画面を見て、状況を理解して、必要な機能であるクリックを判断できるレベルだって分かっちゃったんですよ…
+arona : それでろーかるえいあいががめんをみて、じょうきょうをりかいして、ひつようなきのうであるくりっくをはんだんできるれべるだってわかっちゃったんですよ…
+arona : That is how I learned the local AI is capable of reading the screen, understanding the situation, and deciding that it needs to click.
+
+plana : 이것은 틀림없이 유능한 AI인 아로나 선배네요.
+plana : これは間違いなく有能なAIこと、アロナ先輩ですね。
+plana : これはまちがいなくゆうのうなえいあいこと、あろなせんぱいですね。
+plana : This is without a doubt Arona, the competent AI.
+
+arona : 그래서 매크로로는 해결하지 못하는 작업,
+arona : それで、マクロでは解決できない作業、
+arona : それで、まくろではかいけつできないさぎょう、
+arona : So, tasks that macros cannot solve,
+
+arona : 그러니까 고도의 유연성을 유지하며 임기응변으로 대처해야 하는 작업도 가능하지 않을까 하는 생각이 들어서 그만....
+arona : つまり高度な柔軟性を保ちつつ臨機応変に対処しないといけない作業も、できるんじゃないかと思って、つい…
+arona : つまりこうどなじゅうなんせいをたもちつつりんきおうへんにたいしょしないといけないさぎょうも、できるんじゃないかとおもって、つい…
+arona : In other words, even tasks that require flexible judgment on the fly might be possible, so I could not resist.
+
+plana : 안쪽의 선생님이 나오고 있네요.
+plana : 中の先生が出てきていますね。
+plana : なかのせんせいがでてきていますね。
+plana : The teacher inside you is showing.
+
+arona : 도전… 하고 말았습니다.
+arona : 挑戦…してしまいました。
+arona : ちょうせん…してしまいました。
+arona : I ended up trying it.
+
+plana : 라고 진술하고 있으며...
+plana : などと供述しており…
+plana : などときょうじゅつしており…
+plana : That is the statement we have on record.
+
+plana : 그래서 성공해버리셨다…?
+plana : それで、成功してしまった…？
+plana : それで、せいこうしてしまった…？
+plana : So you actually succeeded...?
+
+arona : 네. 지금의 저는 무적입니다. 평소보다 2배나 강합니다.
+arona : はい。今の私は無敵です。普段の2倍強いです。
+arona : はい。いまのわたしはむてきです。ふだんのにばいつよいです。
+arona : Yes. I am invincible right now. I am twice as strong as usual.
+
+plana : 경고. 제 대사에 아로나 선배를 묻히지 말아주세요.
+plana : 警告。私の台詞をアロナ先輩で汚さないでください。
+plana : けいこく。わたしのせりふであろなせんぱいでよごれないでください。
+plana : Warning. Please do not bury Arona under my lines.
+
+plana : 그래서 실제 동작률은 어느 정도인가요?
+plana : それで、実際の動作率はどれくらいですか？
+plana : それで、じっさいのどうさりつはどれくらいですか？
+plana : So what is the actual success rate?
+
+arona : 완전히 막힌 건 10번 중에 1~2회 정도려나요.
+arona : 完全に詰まったのは、10回中1~2回くらいでしょうか。
+arona : かんぜんにつまったのは、じゅっかいちゅういちにかいくらいでしょうか。
+arona : It fully got stuck about one or two times out of ten.
+
+plana : 의외. 생각보다 높군요.
+plana : 意外。思ったより高いですね。
+plana : いがい。おもったよりたかいですね。
+plana : Unexpected. That is higher than I thought.
+
+arona : 힘냈으니까요!
+arona : 頑張りましたから！
+arona : がんばりましたから！
+arona : Because I worked hard.
+
+plana : 그 힘을 다른 데 썼어야 하지 않았을까요…
+plana : その力、別のところに使うべきでは…
+plana : そのちから、べつのところにつかうべきでは…
+plana : Should you not have used that effort somewhere else...
+
+arona : 결론부터 말하면, 총 3시간 40분간 구동해서 완주했습니다.
+arona : 結論から言うと、合計3時間40分稼働して完走しました。
+arona : けつろんからいうと、ごうけいさんじかんよんじゅっぷんかどうしてかんそうしました。
+arona : To start with the conclusion, it ran for a total of three hours and forty minutes and finished the whole run.
+
+arona : 중간에 4번 정도 막혀서 제가 직접 재조정해줬으니, 대충 1시간에 한번 정도 망가진 셈이네요.
+arona : 途中で4回くらい詰まって私が手動で調整したので、だいたい1時間に1回くらい壊れた計算ですね。
+arona : とちゅうでよんかいくらいつまってわたしがしゅどうでちょうせいしたので、だいたいいちじかんにいっかいくらいこわれたけいさんですね。
+arona : It got stuck about four times and I had to readjust it myself, so it broke about once per hour on average.
+
+arona : 그래서 총결산하면, 밀린 모모톡 알람 60개 기준으로 약 9000개의 성정석을 얻었습니다.
+arona : それで総決算として、溜まったモモトーク通知60件で、約9000個の青輝石を獲得しました。
+arona : なのでそうけっさんとして、たまったももとーくつうちろくじゅっけんで、やくきゅうせんこのせいきせきをかくとくしました。
+arona : So in total, from about sixty accumulated MomoTalk notifications, I got roughly nine thousand Pyroxenes.
+
+plana : 선생의 탈을 쓰고 무슨 짓을…
+plana : 先生の皮を被って、なんてことを…
+plana : せんせいのかわをかぶって、なんてことを…
+plana : Wearing the mask of a teacher, what are you even doing...
+
+arona : 그렇게 되었으니 [모모톡 읽기 AI 부문]은 제가 세계 1등인 게 확정이겠네요.
+arona : こうなった以上、モモトーク読み「AI部門」は私が世界一ってことで確定ですね。
+arona : こうなったいじょう、ももとーくよみえいあいぶもんはわたしがせかいいちってことでかくていですね。
+arona : Given this result, I guess it is confirmed that I am number one in the world in the MomoTalk reading AI category.
+
+plana : 네. 세계 꼴등 축하드립니다, 선배.
+plana : はい。世界最下位、おめでとうございます、先輩。
+plana : はい。せかいさいかい、おめでとうございます、せんぱい。
+plana : Yes. Congratulations on being the world number last, senpai.
+
+arona : 이번 영상은 어떠셨나요?
+arona : 今回の動画はいかがでしたか？
+arona : こんかいのどうがはいかがでしたか？
+arona : How was todays video?
+
+plana : 평범하게 위험하다고 생각하는데요.
+plana : 普通に危ないと思いますが。
+plana : ふつうにあぶないとおもいますが。
+plana : I think it is plainly dangerous.
+
+arona : 이 채널에서는 AI 채팅 관련 프로그램 개발과 활용에 대해서 다루고 있습니다.
+arona : このチャンネルでは、えいあいチャット関連のプログラム開発と活用について扱っています。
+arona : このちゃんねるでは、えいあいちゃっとかんれんのぷろぐらむかいはつとかつようについてあつかっています。
+arona : On this channel, we cover developing and using programs related to AI chat.
+
+arona : 만약 이 영상이나 프로그램이 마음에 드셨다면, 댓글이나 채널 구독, 좋아요를 부탁드립니다.
+arona : もしこの動画やプログラムが気に入ったら、コメントやチャンネル登録、高評価をお願いします。
+arona : もしこのどうがやぷろぐらむがきにいったら、こめんとやちゃんねるとうろく、こうひょうかをおねがいします。
+arona : If you enjoyed this video or the program, please leave a comment, subscribe to the channel, and give it a like.
+
+plana : 영상 제작과 프로그램 개발에 매우 힘이 됩니다.
+plana : 動画制作とプログラム開発の大きな励みになります。
+plana : どうがせいさくとぷろぐらむかいはつのおおきなはげみになります。
+plana : It helps a lot with video production and program development.
+
+arona : 그러면 보고는 여기까지! 남은 영상은 100배 속도로 재생하고, 저희는 물러나도록 하겠습니다.
+arona : それでは報告はここまで！残りの映像は100倍速で流して、私たちは失礼します。
+arona : それではほうこくはここまで！のこりのえいぞうはひゃくばいそくでながして、わたしたちはしつれいします。
+arona : That is all for the report. The rest of the footage will play at one hundred times speed, and we will take our leave.
+
+arona : 다음 영상에서 만나요!
+arona : 次の動画で会いましょう！
+arona : つぎのどうがであいましょう！
+arona : See you in the next video.
