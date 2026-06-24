@@ -1,9 +1,14 @@
+#if UNITY_EDITOR
 using System.Collections;
 using UnityEngine;
 
 // ApiAgentFunction 기능 테스트용 UI 클래스 (디버깅 목적)
+// 빌드에는 포함되지 않으며, 에디터에서도 showDebugPanel을 켜야 화면에 표시됩니다.
 public class ApiAgentFunctionTester : MonoBehaviour
 {
+    [Header("Debug Only - 기본 비활성, 필요할 때만 체크")]
+    [SerializeField] private bool showDebugPanel = false;
+
     private string xInput = "500";
     private string yInput = "500";
     private string skillKeyInput = "test_skill";
@@ -11,9 +16,11 @@ public class ApiAgentFunctionTester : MonoBehaviour
     [Header("Click Effect")]
     [SerializeField] private ParticleSystem fx_click; // 클릭 이펙트
     [SerializeField] private Canvas canvas; // 좌표 변환용 Canvas
-    
+
     private void Start()
     {
+        if (!showDebugPanel) return;
+
         // 테스트에 필요한 매니저들이 씬에 없으면 현재 GameObject에 부착합니다.
         if (FindObjectOfType<ApiAgentFunctionMouseAction>() == null)
         {
@@ -68,6 +75,8 @@ public class ApiAgentFunctionTester : MonoBehaviour
 
     private void OnGUI()
     {
+        if (!showDebugPanel) return;
+
         GUILayout.BeginArea(new Rect(10, 10, 300, 600));
         GUILayout.Box("ApiAgentFunction Tester");
         
@@ -503,3 +512,4 @@ public class ApiAgentFunctionTester : MonoBehaviour
         }
     }
 }
+#endif
