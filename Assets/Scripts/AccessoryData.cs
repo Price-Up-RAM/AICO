@@ -2,27 +2,37 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// JSON 저장용 데이터 구조
+// 슬롯(부위)에 장착 가능한 악세서리 아이템 1개 (프리팹 + 캐릭터별 크기 보정을 한 묶음으로 관리)
 [Serializable]
-public class AccessorySaveData
+public class AccessorySlotItem
 {
     public string accessoryName; // 악세서리 식별 이름
+    public GameObject prefab; // 연결될 프리팹
+    public Vector3 localScale; // 이 캐릭터에서 장착 시 적용할 로컬 스케일 ((0,0,0)이면 (1,1,1)로 처리)
+}
+
+// 캐릭터의 부위(슬롯) 하나에 대한 위치/회전 오프셋 + 이 부위에 끼울 수 있는 악세서리 아이템들
+[Serializable]
+public class AccessorySlotOffset
+{
+    public string slotName; // 부위 식별자: "hairpin", "neckitem", "ring" 등
     public string target1; // 1순위 본/슬롯 이름
     public string target2; // 2순위 본/슬롯 이름
     public string target3; // 3순위 본/슬롯 이름
     public Vector3 localPosition; // 장착 로컬 위치
     public Vector3 localRotation; // 장착 로컬 회전값 (오일러 각도)
+    public List<AccessorySlotItem> items = new List<AccessorySlotItem>(); // 이 부위에 장착 가능한 악세서리들 (프리팹 + 스케일)
 }
 
-// 인스펙터 노출용 프리팹 맵핑 구조체
+// 캐릭터 1명의 부위별 오프셋을 모아놓은 프로필
 [Serializable]
-public class AccessoryPrefabMapping
+public class CharacterAccessoryProfile
 {
-    public string accessoryName; // 악세서리 이름
-    public GameObject prefab; // 연결될 프리팹
+    public string characterCode; // 캐릭터 식별자 (CharAttributes.charcode). 빈 문자열이면 모든 캐릭터 공통 기본값
+    public List<AccessorySlotOffset> slots = new List<AccessorySlotOffset>(); // 이 캐릭터의 부위별 위치/회전 + 악세서리
 }
 
-// 악세서리 프리팹 데이터를 UI에서 매핑하고 Get/Set 하는 전역 컨테이너
+// 악세서리 데이터를 보관하고 Get/Set 하는 전역 컨테이너
 public class AccessoryData : MonoBehaviour
 {
     private static AccessoryData instance; // 싱글톤 인스턴스
@@ -39,57 +49,164 @@ public class AccessoryData : MonoBehaviour
         }
     }
 
-    [SerializeField] private List<AccessoryPrefabMapping> prefabMappings = new List<AccessoryPrefabMapping>(); // 프리팹 맵핑 리스트
-    [SerializeField] private List<AccessorySaveData> defaultAccessoryData = new List<AccessorySaveData>(); // 인스펙터 기본 세팅 데이터
+    [SerializeField] private List<CharacterAccessoryProfile> characterProfiles = new List<CharacterAccessoryProfile>(); // 캐릭터별 부위/악세서리 (인스펙터 기본값)
 
-    private Dictionary<string, GameObject> prefabDict = new Dictionary<string, GameObject>(); // 런타임 캐싱용 딕셔너리
-
-    // 시작 시 딕셔너리 초기화
-    private void Awake()
+    // 인스펙터에 등록된 캐릭터 프로필 전체 반환
+    public List<CharacterAccessoryProfile> GetAllCharacterProfiles()
     {
-        foreach (AccessoryPrefabMapping mapping in prefabMappings)
+        return characterProfiles;
+    }
+
+    // 캐릭터 코드로 프로필 찾기 (없으면 null)
+    public CharacterAccessoryProfile GetCharacterProfile(string characterCode)
+    {
+        foreach (CharacterAccessoryProfile profile in characterProfiles)
         {
-            if (prefabDict.ContainsKey(mapping.accessoryName) == false)
+            if (profile.characterCode == characterCode)
             {
-                // 딕셔너리에 없으면 새로 추가
-                prefabDict.Add(mapping.accessoryName, mapping.prefab);
+                // 캐릭터 코드가 일치하면 반환
+                return profile;
             }
         }
+
+        return null;
     }
 
-    // 이름으로 프리팹 가져오기
-    public GameObject GetPrefab(string name)
+    // 캐릭터 코드 + 부위 이름으로 슬롯 오프셋 찾기 (캐릭터 우선, 없으면 공통(빈 문자열) 프로필로 fallback)
+    public AccessorySlotOffset GetSlotOffset(string characterCode, string slotName)
     {
-        if (prefabDict.ContainsKey(name))
+        CharacterAccessoryProfile profile = GetCharacterProfile(characterCode);
+        AccessorySlotOffset offset = FindSlotOffset(profile, slotName);
+
+        if (offset != null)
         {
-            // 있으면 해당 프리팹 반환
-            return prefabDict[name];
+            // 캐릭터 전용 오프셋을 찾았으면 반환
+            return offset;
         }
-        else
+
+        // 캐릭터 전용 오프셋이 없으면 공통(빈 문자열) 프로필로 fallback
+        CharacterAccessoryProfile commonProfile = GetCharacterProfile("");
+        return FindSlotOffset(commonProfile, slotName);
+    }
+
+    // 프로필 내에서 부위 이름으로 오프셋 찾기
+    private AccessorySlotOffset FindSlotOffset(CharacterAccessoryProfile profile, string slotName)
+    {
+        if (profile == null)
         {
-            // 없으면 null 반환
+            // 프로필이 없으면 null 반환
             return null;
         }
+
+        foreach (AccessorySlotOffset slot in profile.slots)
+        {
+            if (slot.slotName == slotName)
+            {
+                // 부위 이름이 일치하면 반환
+                return slot;
+            }
+        }
+
+        return null;
     }
 
-    // 이름과 프리팹을 새롭게 맵핑 (Set 역할)
-    public void SetPrefab(string name, GameObject prefab)
+    // 캐릭터 코드 + 악세서리 이름으로 슬롯 아이템 찾기 (캐릭터 우선, 없으면 공통(빈 문자열)으로 fallback). 찾은 아이템이 속한 슬롯(오프셋)도 함께 반환
+    public AccessorySlotItem FindSlotItem(string characterCode, string accessoryName, out AccessorySlotOffset ownerSlot)
     {
-        if (prefabDict.ContainsKey(name))
+        CharacterAccessoryProfile profile = GetCharacterProfile(characterCode);
+        AccessorySlotItem item = FindItemInProfile(profile, accessoryName, out ownerSlot);
+
+        if (item != null)
         {
-            // 이미 있으면 덮어쓰기
-            prefabDict[name] = prefab;
+            // 캐릭터 전용 아이템을 찾았으면 반환
+            return item;
         }
-        else
-        {
-            // 없으면 새로 추가
-            prefabDict.Add(name, prefab);
-        }
+
+        // 캐릭터 전용 아이템이 없으면 공통(빈 문자열) 프로필로 fallback
+        CharacterAccessoryProfile commonProfile = GetCharacterProfile("");
+        return FindItemInProfile(commonProfile, accessoryName, out ownerSlot);
     }
 
-    // 기본 세팅 데이터 리스트 반환
-    public List<AccessorySaveData> GetDefaultData()
+    // 프로필 내 모든 슬롯을 순회하며 악세서리 이름으로 아이템 찾기
+    private AccessorySlotItem FindItemInProfile(CharacterAccessoryProfile profile, string accessoryName, out AccessorySlotOffset ownerSlot)
     {
-        return defaultAccessoryData;
+        ownerSlot = null;
+
+        if (profile == null)
+        {
+            // 프로필이 없으면 null 반환
+            return null;
+        }
+
+        foreach (AccessorySlotOffset slot in profile.slots)
+        {
+            foreach (AccessorySlotItem item in slot.items)
+            {
+                if (item.accessoryName == accessoryName)
+                {
+                    // 악세서리 이름이 일치하면 반환
+                    ownerSlot = slot;
+                    return item;
+                }
+            }
+        }
+
+        return null;
     }
+
+#if UNITY_EDITOR
+    // 에디터 캡처 툴에서 씬의 Slot/악세서리 Transform 값을 골라 인스펙터 기본값에 기록
+    public void CaptureSlotTransform(string characterCode, string slotName, string accessoryName, GameObject accessoryPrefab, Transform slot, Transform placeholder)
+    {
+        CharacterAccessoryProfile profile = GetCharacterProfile(characterCode);
+        if (profile == null)
+        {
+            profile = new CharacterAccessoryProfile();
+            profile.characterCode = characterCode;
+            characterProfiles.Add(profile);
+        }
+
+        AccessorySlotOffset offset = FindSlotOffset(profile, slotName);
+        if (offset == null)
+        {
+            offset = new AccessorySlotOffset();
+            offset.slotName = slotName;
+            offset.target1 = slot.name;
+            profile.slots.Add(offset);
+        }
+
+        offset.localPosition = slot.localPosition;
+        offset.localRotation = slot.localRotation.eulerAngles;
+
+        if (string.IsNullOrEmpty(accessoryName))
+        {
+            // 악세서리 이름이 없으면 아이템(스케일)은 기록하지 않음
+            return;
+        }
+
+        AccessorySlotItem item = null;
+        foreach (AccessorySlotItem existing in offset.items)
+        {
+            if (existing.accessoryName == accessoryName)
+            {
+                item = existing;
+                break;
+            }
+        }
+
+        if (item == null)
+        {
+            item = new AccessorySlotItem();
+            item.accessoryName = accessoryName;
+            offset.items.Add(item);
+        }
+
+        if (accessoryPrefab != null)
+        {
+            item.prefab = accessoryPrefab;
+        }
+
+        item.localScale = placeholder != null ? placeholder.localScale : Vector3.one;
+    }
+#endif
 }
