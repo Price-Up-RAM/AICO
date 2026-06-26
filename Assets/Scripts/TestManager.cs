@@ -62,5 +62,19 @@ public class TestManager : MonoBehaviour
                 Debug.LogWarning("현재 로드된 캐릭터가 없습니다!");
             }
         }
+        else if (Input.GetKeyDown(KeyCode.Alpha6))
+        {
+            GameObject currentCharacter = CharManager.Instance.GetCurrentCharacter();
+
+            if (currentCharacter != null)
+            {
+                AccessoryManager.Instance.Equip(currentCharacter, "hairpin_placeholder");
+                Debug.Log("악세서리 장착 테스트 실행 (hairpin_placeholder)");
+            }
+            else
+            {
+                Debug.LogWarning("현재 로드된 캐릭터가 없습니다!");
+            }
+        }
     }
 }
