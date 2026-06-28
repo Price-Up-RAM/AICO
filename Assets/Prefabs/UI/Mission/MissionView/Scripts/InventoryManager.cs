@@ -1,8 +1,19 @@
 using System;
+using System.IO;
 using UnityEngine;
 
-// gold/item1~3 CRUD 싱글톤. 미션 보상 적립 대상. (MISSION_Design.md §6.2)
-// 런타임에 접근 시 자동 생성(DontDestroyOnLoad). 변경마다 즉시 저장 + InventoryChanged.
+// gold/item1~3 재화 보유. inventory.json으로 영속 저장. 미션 보상 적립 대상. 런타임 접근 시 자동 생성.
+[Serializable]
+public class InventoryData
+{
+    public int gold;
+    public int item1;
+    public int item2;
+    public int item3;
+    public int goldEarnedTotal;  // 누적 획득(도전 미션용)
+    public int goldSpentTotal;   // 누적 소비(도전 미션용)
+}
+
 public class InventoryManager : MonoBehaviour
 {
     private static InventoryManager _instance;
@@ -13,9 +24,13 @@ public class InventoryManager : MonoBehaviour
         {
             if (_instance == null && Application.isPlaying)
             {
-                GameObject go = new GameObject("InventoryManager");
-                _instance = go.AddComponent<InventoryManager>();
-                DontDestroyOnLoad(go);
+                _instance = FindFirstObjectByType<InventoryManager>();
+                if (_instance == null)
+                {
+                    GameObject go = new GameObject("InventoryManager");
+                    _instance = go.AddComponent<InventoryManager>();
+                    DontDestroyOnLoad(go);
+                }
             }
 
             return _instance;
@@ -24,26 +39,14 @@ public class InventoryManager : MonoBehaviour
 
     public event Action InventoryChanged;
 
-    private readonly InventoryRepository repository = new InventoryRepository();
-    private InventoryData data;
+    private InventoryData data = new InventoryData();
 
-    public int Gold => Data.gold;
-    public int GoldEarnedTotal => Data.goldEarnedTotal;
-    public int GoldSpentTotal => Data.goldSpentTotal;
-    public int ItemTotal => Data.item1 + Data.item2 + Data.item3;
+    public int Gold => data.gold;
+    public int GoldEarnedTotal => data.goldEarnedTotal;
+    public int GoldSpentTotal => data.goldSpentTotal;
+    public int ItemTotal => data.item1 + data.item2 + data.item3;
 
-    private InventoryData Data
-    {
-        get
-        {
-            if (data == null)
-            {
-                data = repository.Load() ?? new InventoryData();
-            }
-
-            return data;
-        }
-    }
+    private string SavePath => Path.Combine(Application.persistentDataPath, "inventory.json");
 
     private void Awake()
     {
@@ -54,31 +57,71 @@ public class InventoryManager : MonoBehaviour
         }
 
         _instance = this;
-        data = repository.Load() ?? new InventoryData();
+        Load();
+    }
+
+    private void Load()
+    {
+        string path = SavePath;
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            string json = File.ReadAllText(path);
+            InventoryData loaded = JsonUtility.FromJson<InventoryData>(json);
+            if (loaded != null)
+            {
+                data = loaded;
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[Inventory] 로드 실패: " + e.Message);
+        }
+    }
+
+    // 저장 + 변경 통지
+    private void Persist()
+    {
+        if (Application.isPlaying)
+        {
+            try
+            {
+                File.WriteAllText(SavePath, JsonUtility.ToJson(data, true));
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Inventory] 저장 실패: " + e.Message);
+            }
+        }
+
+        InventoryChanged?.Invoke();
     }
 
     public int GetItem(int slot)
     {
         switch (slot)
         {
-            case 1: return Data.item1;
-            case 2: return Data.item2;
-            case 3: return Data.item3;
+            case 1: return data.item1;
+            case 2: return data.item2;
+            case 3: return data.item3;
             default: return 0;
         }
     }
 
     public InventoryData GetSnapshot()
     {
-        InventoryData d = Data;
         return new InventoryData
         {
-            gold = d.gold,
-            item1 = d.item1,
-            item2 = d.item2,
-            item3 = d.item3,
-            goldEarnedTotal = d.goldEarnedTotal,
-            goldSpentTotal = d.goldSpentTotal,
+            gold = data.gold,
+            item1 = data.item1,
+            item2 = data.item2,
+            item3 = data.item3,
+            goldEarnedTotal = data.goldEarnedTotal,
+            goldSpentTotal = data.goldSpentTotal,
         };
     }
 
@@ -91,12 +134,12 @@ public class InventoryManager : MonoBehaviour
 
         if (amount > 0)
         {
-            Data.gold += amount;
-            Data.goldEarnedTotal += amount;
+            data.gold += amount;
+            data.goldEarnedTotal += amount;
         }
         else
         {
-            Data.gold = Mathf.Max(0, Data.gold + amount);
+            data.gold = Mathf.Max(0, data.gold + amount);
         }
 
         Persist();
@@ -104,18 +147,13 @@ public class InventoryManager : MonoBehaviour
 
     public bool SpendGold(int amount)
     {
-        if (amount <= 0)
+        if (amount <= 0 || data.gold < amount)
         {
             return false;
         }
 
-        if (Data.gold < amount)
-        {
-            return false;
-        }
-
-        Data.gold -= amount;
-        Data.goldSpentTotal += amount;
+        data.gold -= amount;
+        data.goldSpentTotal += amount;
         Persist();
         return true;
     }
@@ -133,12 +171,7 @@ public class InventoryManager : MonoBehaviour
 
     public bool SpendItem(int slot, int amount)
     {
-        if (amount <= 0)
-        {
-            return false;
-        }
-
-        if (GetItem(slot) < amount)
+        if (amount <= 0 || GetItem(slot) < amount)
         {
             return false;
         }
@@ -148,7 +181,6 @@ public class InventoryManager : MonoBehaviour
         return true;
     }
 
-    // 미션 보상 일괄 적립.
     public void AddReward(MissionReward reward)
     {
         if (reward == null || reward.IsEmpty)
@@ -158,34 +190,28 @@ public class InventoryManager : MonoBehaviour
 
         if (reward.gold != 0)
         {
-            Data.gold += reward.gold;
+            data.gold += reward.gold;
             if (reward.gold > 0)
             {
-                Data.goldEarnedTotal += reward.gold;
+                data.goldEarnedTotal += reward.gold;
             }
         }
 
-        if (reward.item1 != 0)
-        {
-            Data.item1 = Mathf.Max(0, Data.item1 + reward.item1);
-        }
-
-        if (reward.item2 != 0)
-        {
-            Data.item2 = Mathf.Max(0, Data.item2 + reward.item2);
-        }
-
-        if (reward.item3 != 0)
-        {
-            Data.item3 = Mathf.Max(0, Data.item3 + reward.item3);
-        }
+        if (reward.item1 != 0) data.item1 = Mathf.Max(0, data.item1 + reward.item1);
+        if (reward.item2 != 0) data.item2 = Mathf.Max(0, data.item2 + reward.item2);
+        if (reward.item3 != 0) data.item3 = Mathf.Max(0, data.item3 + reward.item3);
 
         Persist();
     }
 
     public void ResetAll()
     {
-        data = new InventoryData();
+        data.gold = 0;
+        data.item1 = 0;
+        data.item2 = 0;
+        data.item3 = 0;
+        data.goldEarnedTotal = 0;
+        data.goldSpentTotal = 0;
         Persist();
     }
 
@@ -193,15 +219,9 @@ public class InventoryManager : MonoBehaviour
     {
         switch (slot)
         {
-            case 1: Data.item1 = value; break;
-            case 2: Data.item2 = value; break;
-            case 3: Data.item3 = value; break;
+            case 1: data.item1 = value; break;
+            case 2: data.item2 = value; break;
+            case 3: data.item3 = value; break;
         }
-    }
-
-    private void Persist()
-    {
-        repository.Save(Data);
-        InventoryChanged?.Invoke();
     }
 }

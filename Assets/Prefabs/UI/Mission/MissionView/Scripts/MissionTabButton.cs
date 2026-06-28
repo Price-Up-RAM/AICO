@@ -11,8 +11,8 @@ public class MissionTabButton : MonoBehaviour
     [SerializeField] private TMP_Text label;
     [SerializeField] private TMP_Text countText;
 
-    private MissionCategory category;
-    private Action<MissionCategory> onClick;
+    private MissionTab category;
+    private Action<MissionTab> onClick;
     private bool bound;
 
     public void BindExisting()
@@ -22,10 +22,11 @@ public class MissionTabButton : MonoBehaviour
             return;
         }
 
-        button = GetComponent<Button>();
-        background = GetComponent<Image>();
-        label = MissionUi.FindComponent<TMP_Text>(transform, "Label");
-        countText = MissionUi.FindComponent<TMP_Text>(transform, "Count");
+        // 인스펙터 등록 우선, 비면 탐색(fallback)
+        button = button != null ? button : GetComponent<Button>();
+        background = background != null ? background : GetComponent<Image>();
+        label = label != null ? label : MissionUi.FindComponent<TMP_Text>(transform, "Label");
+        countText = countText != null ? countText : MissionUi.FindComponent<TMP_Text>(transform, "Count");
 
         if (button != null)
         {
@@ -36,7 +37,7 @@ public class MissionTabButton : MonoBehaviour
         bound = true;
     }
 
-    public void Setup(MissionCategory category, string labelText, string count, bool selected, Action<MissionCategory> onClick)
+    public void Setup(MissionTab category, string labelText, string count, bool selected, Action<MissionTab> onClick)
     {
         BindExisting();
         this.category = category;

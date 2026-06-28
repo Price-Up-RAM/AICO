@@ -1,5 +1,11 @@
 # Mission UI 설계 (계획 문서)
 
+> ⚠️ **아키텍처 변경 (2026-06-27)**: JSON 전면 폐지. 미션 정의+진행 상태를 `MissionInfo` 한 클래스로 통합하고,
+> `MissionList`(싱글톤 MonoBehaviour)가 `List<MissionInfo>`를 **코드로 1줄씩** 보유·관리한다(ChangeCharManager 방식).
+> 진행도·재화(인벤토리)는 **메모리 전용**(저장 없음). 아래 문서의 `MissionCatalog`/`MissionManager`/`MissionRepository`/
+> `InventoryRepository`/`MissionDef`/`MissionProgress`/`missions.json`·`inventory.json` 언급은 **구버전 설계**이며,
+> 현재 구현은 `MissionInfo.cs` + `MissionList.cs` + `InventoryManager.cs`(메모리)로 대체되었다.
+
 > 작성: 2026-06-23 · 미션(업적) 패널 신규 작업. 구현은 이 문서를 기준으로 자가검수한다.
 > 레퍼런스 레이아웃: 첨부 이미지(좌측 탭 분류 + 우측 미션 카드 리스트, 카드 안에
 > 설명 / 진행 게이지 / 현황·목표 / 보상 + 성공 시 도장).

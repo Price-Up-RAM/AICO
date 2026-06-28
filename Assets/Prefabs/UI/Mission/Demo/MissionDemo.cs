@@ -15,7 +15,7 @@ public class MissionDemo : MonoBehaviour
     {
         if (view == null)
         {
-            view = FindObjectOfType<MissionView>();
+            view = FindFirstObjectByType<MissionView>();
         }
 
         if (view == null)
@@ -24,9 +24,9 @@ public class MissionDemo : MonoBehaviour
             return;
         }
 
-        if (MissionManager.Instance != null)
+        if (MissionList.Instance != null)
         {
-            MissionManager.Instance.Language = language;
+            MissionList.Instance.Language = language;
         }
 
         if (seedSampleProgress)
@@ -40,7 +40,7 @@ public class MissionDemo : MonoBehaviour
     // 데모용 샘플 상태: 수령 가능 카드 + 진행 중 게이지를 섞어 보여준다. 멱등.
     private void SeedSamples()
     {
-        MissionManager m = MissionManager.Instance;
+        MissionList m = MissionList.Instance;
         if (m == null)
         {
             return;
@@ -51,12 +51,14 @@ public class MissionDemo : MonoBehaviour
         m.ReportFlag("OB0002");
 
         // 진행 중(부분 게이지) — 최초 1회만 채워 누적 방지
-        if (m.GetProgress("CV0007").currentCount == 0)
+        MissionInfo cv = m.GetById("CV0007");
+        if (cv != null && cv.current == 0)
         {
             m.Report("CV0007", 6);   // Tiered 10/50/100 → 6/10
         }
 
-        if (m.GetProgress("AF0001").currentCount == 0)
+        MissionInfo af = m.GetById("AF0001");
+        if (af != null && af.current == 0)
         {
             m.Report("AF0001", 7);   // Increment 10N → 7/10
         }

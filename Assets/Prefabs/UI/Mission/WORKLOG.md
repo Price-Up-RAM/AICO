@@ -5,16 +5,14 @@
 
 ## 지금 할 수 있는 것 (구현됨)
 
-- **데이터/로직 (런타임 무의존, 컴파일만 되면 동작)**
-  - `MissionData.cs` — enum(`MissionCategory`/`MissionType`), `MissionReward`/`LocalizedText`/`MissionTier`/
-    `MissionDef`/`MissionProgress`/`MissionSaveData`/`InventoryData` + 단계 계산 헬퍼.
-  - `MissionCatalog.cs` — 미션 정의 **38개**(읽기 전용). `All`/`GetById`/`GetByCategory`/`IsMeta`.
-  - `MissionRepository.cs` — `missions.json` 평문 저장/로드(AlarmRepository 복제).
-  - `InventoryRepository.cs` / `InventoryManager.cs` — `inventory.json` CRUD 싱글톤
-    (`AddGold/SpendGold/AddItem/SpendItem/AddReward/ResetAll` + `InventoryChanged`, 누적 획득/소비 통계).
-  - `MissionManager.cs` — 싱글톤. `Report/ReportFlag/ClaimReward/GetProgress/GetDefs/IsClaimable`,
-    인벤토리 연동(보상 적립), **메타/도전 파생 진행도 자동 계산**(카테고리 전체 달성, 누적 미션 달성,
-    골드 획득/소비, 아이템 보유). 재진입 가드.
+- **데이터/로직 (JSON 폐지, 메모리 전용)**
+  - `MissionInfo.cs` — enum(`MissionTab`/`MissionType`), `MissionReward`/`LocalizedText`/`MissionTier` +
+    **MissionInfo(정의+런타임 상태 통합)** + 단계 계산 헬퍼(`NextTarget`/`Claimable`/`Progress01`/`AllDone`).
+  - `MissionList.cs` — **싱글톤. `List<MissionInfo>`를 코드(`BuildMissions`)로 1줄씩 보유(38개)**.
+    `GetByTab/GetById/Report/ReportFlag/ClaimReward/TestIncrement/ResetAllProgress/GetTabCounts/IsClaimable`,
+    인벤토리 연동(보상 적립), **메타/도전 파생 진행도 자동 계산**. 저장 없음(메모리). 재진입 가드.
+  - `InventoryManager.cs` — gold/item1~3 재화 싱글톤(**메모리 전용**, JSON 없음).
+    `AddGold/SpendGold/AddItem/SpendItem/AddReward/ResetAll` + `InventoryChanged`, 누적 획득/소비 통계.
 - **UI (이중 모드: Build/BindExisting)**
   - `MissionUi.cs` — 공통 팩토리/다크 팔레트(SkillView 차용).
   - `MissionTabButton.cs` — 좌측 카테고리 탭(선택 강조 + `달성/전체` 뱃지).
@@ -29,7 +27,9 @@
 - 설계 문서는 카드/탭을 별도 보조 프리팹(Jukebox 방식)으로 언급했으나, **Alarm 방식(단일 프리팹 +
   비활성 템플릿 클론)** 으로 구현했다. 카드 템플릿 `CardTemplate`(비활성)을 런타임에 `Instantiate`해 채운다.
   탭 5개는 `TabColumn`에 정적으로 베이크된다.
-- 진행 저장은 **평문 JSON**(HMAC은 develop까지 보류, 설계 §6.1).
+- **영속성**: 진행도는 `missions.json`(id/current/claimedTiers), 재화는 `inventory.json`(평문). 정의는 코드(`MissionDatabase`)에만.
+- **집계 방식**: `Report`(누적) / `ReportFlag`(단발) / `ReportBest`(한 세션 최고치, 예 "한 번의 대화에 바나나 5회") / 인벤토리·메타는 `UpdateDerived` 자동.
+- 미션 정의는 `MissionDatabase.Build()`에 코드로 1줄씩. 추가/수정은 여기서(프리팹 재베이크 불필요, UI 구조 바꿀 때만 베이크).
 - 도장/서랍 애니메이션은 DOTween(`Assets/Plugins/Demigiant/DOTween`).
 
 ## 내가(사용자가) 해야 할 일
@@ -43,7 +43,7 @@
    - 카드의 `받기` 클릭 → 보상 적립 + **도장이 찍히는 연출**(사운드는 `stampClip` 지정 시).
    - 보상 여러 개인 카드의 칩 클릭 → **서랍이 좌측으로 펼쳐지는지**.
    - `stampClip`에 효과음 에셋을 지정하면 도장 시 사운드 재생.
-4. **(추후) 게임 이벤트 연동** — 대화/설정/입력 시스템에서 `MissionManager.Instance.Report("CV0007")`,
+4. **(추후) 게임 이벤트 연동** — 대화/설정/입력 시스템에서 `MissionList.Instance.Report("CV0007")`,
    `ReportFlag("OB0003")` 등 호출 훅 배선. UIManager/UIPositionManager 연계(Skills CLAUDE.md 절차).
 
 ## 남은 것 / 열린 결정

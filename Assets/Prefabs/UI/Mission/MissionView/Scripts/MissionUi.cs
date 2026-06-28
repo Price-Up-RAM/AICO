@@ -27,6 +27,80 @@ public static class MissionUi
 
     public static TMP_FontAsset FontOverride;
 
+    // 보상 아이콘(외부 입력). kind: 0=gold, 1=item1, 2=item2, 3=item3. null이면 텍스트 폴백.
+    public static Sprite GoldIcon;
+    public static Sprite Item1Icon;
+    public static Sprite Item2Icon;
+    public static Sprite Item3Icon;
+
+    public static Sprite GetRewardIcon(int kind)
+    {
+        switch (kind)
+        {
+            case 0: return GoldIcon;
+            case 1: return Item1Icon;
+            case 2: return Item2Icon;
+            case 3: return Item3Icon;
+            default: return null;
+        }
+    }
+
+    // 보상 셀에 아이콘+수량을 채운다. 아이콘 없으면 텍스트 폴백(G50). (CardRow와 Drawer가 공용)
+    public static void ApplyRewardCell(Image icon, TMP_Text amount, int kind, int value)
+    {
+        Sprite sprite = GetRewardIcon(kind);
+        if (icon != null)
+        {
+            icon.enabled = sprite != null;
+            if (sprite != null)
+            {
+                icon.sprite = sprite;
+                icon.color = Color.white;
+            }
+        }
+
+        if (amount != null)
+        {
+            if (sprite != null)
+            {
+                amount.text = value.ToString();
+                amount.alignment = TextAlignmentOptions.BottomRight;
+                amount.fontSize = 13f;
+            }
+            else
+            {
+                amount.text = MissionReward.KindLabel(kind) + value;
+                amount.alignment = TextAlignmentOptions.Center;
+                amount.fontSize = 15f;
+            }
+        }
+    }
+
+    // 보상 셀: 사각 테두리 + 흰 배경(유지) + [Content(페이드 대상): 아이콘 + 우하단 수량].
+    // 배경은 그대로 두고 Content만 페이드인/아웃하면 빈 칸 없이 보상이 바뀐다.
+    public static GameObject CreateRewardCell(string name, Transform parent, out Image icon, out TMP_Text amount)
+    {
+        GameObject cell = CreatePanel(name, parent, GaugeBorder); // 테두리
+        GameObject bg = CreatePanel("Bg", cell.transform, Color.white);
+        SetStretch(bg, new Vector4(2f, 2f, 2f, 2f));
+
+        GameObject content = CreateUIObject("Content", bg.transform); // 페이드 대상(아이콘+수량)
+        SetStretch(content, Vector4.zero);
+        content.AddComponent<CanvasGroup>();
+
+        GameObject iconGo = CreateUIObject("Icon", content.transform);
+        SetStretch(iconGo, new Vector4(5f, 5f, 5f, 7f));
+        icon = iconGo.AddComponent<Image>();
+        icon.preserveAspect = true;
+        icon.raycastTarget = false;
+
+        amount = CreateText("Amount", content.transform, string.Empty, 13f, new Color(0.1f, 0.1f, 0.12f, 1f),
+            TextAlignmentOptions.BottomRight);
+        SetStretch(amount.gameObject, new Vector4(2f, 2f, 4f, 2f));
+        amount.fontStyle = FontStyles.Bold;
+        return cell;
+    }
+
     public static GameObject CreateUIObject(string name, Transform parent)
     {
         GameObject go = new GameObject(name, typeof(RectTransform));

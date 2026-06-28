@@ -3,9 +3,9 @@ using UnityEngine.EventSystems;
 
 /// <summary>
 /// 테스트 전용: 미션 카드를 "꾸욱 누르면(롱프레스)" 그 카드의 미션만 진행도 +1.
-/// 최대치는 MissionManager.TestIncrement가 막는다.
+/// 최대치는 MissionList.TestIncrement가 막는다.
 ///
-/// 결합도 최소화: 같은 GameObject의 MissionCardRow에서 id만 읽고, MissionManager.TestIncrement만 호출.
+/// 결합도 최소화: 같은 GameObject의 MissionCardRow에서 id만 읽고, MissionList.TestIncrement만 호출.
 /// 프리팹에 굽지 않고 MissionView가 런타임에만 AddComponent한다(enableTestPoke).
 /// 제거하려면 이 파일 + MissionView의 AddComponent 한 줄만 지우면 된다.
 /// </summary>
@@ -49,9 +49,9 @@ public class MissionTestPoke : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         }
 
         fired = true; // 한 번 누름당 +1 (증가 시 카드가 갱신되며 다시 눌러야 함)
-        if (row != null && !string.IsNullOrEmpty(row.MissionId) && MissionManager.Instance != null)
+        if (row != null && !string.IsNullOrEmpty(row.MissionId) && MissionList.Instance != null)
         {
-            MissionManager.Instance.TestIncrement(row.MissionId);
+            MissionList.Instance.TestIncrement(row.MissionId);
         }
     }
 }
