@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Cleverous.VaultInventory;
 using UnityEngine;
 
 // JSON 직렬화를 위한 리스트 래퍼 (캐릭터별 부위/악세서리 데이터를 통째로 저장)
@@ -8,6 +9,21 @@ using UnityEngine;
 public class AccessorySaveDataList
 {
     public List<CharacterAccessoryProfile> characterProfiles = new List<CharacterAccessoryProfile>(); // 캐릭터별 부위 오프셋 + 악세서리 아이템
+}
+
+// 슬롯 하나에 현재 장착된 악세서리 (저장/복원용)
+[Serializable]
+public class EquippedSlotState
+{
+    public string slotName;
+    public string accessoryName;
+}
+
+// 캐릭터 인벤토리 저장 파일에 함께 담을 장착 상태 목록 (CharInventoryOwner가 직렬화)
+[Serializable]
+public class EquippedStateList
+{
+    public List<EquippedSlotState> slots = new List<EquippedSlotState>();
 }
 
 // 악세서리 JSON IO 및 장착/해제를 관리하는 매니저 클래스
@@ -27,13 +43,32 @@ public class AccessoryManager : MonoBehaviour
         }
     }
 
+    [SerializeField] private List<AccessoryItem> allItems = new List<AccessoryItem>(); // accessoryName -> 프리팹 조회용 아이템 목록 (인스펙터에 직접 등록)
+
     // 캐릭터별 프로필 캐시 (키: characterCode, 빈 문자열이면 공통 기본값)
     private Dictionary<string, CharacterAccessoryProfile> profileDict = new Dictionary<string, CharacterAccessoryProfile>();
+
+    // 캐릭터별 현재 장착 상태 (키: charcode, 값: slotName -> accessoryName). 저장/복원(CharInventoryOwner)에 사용
+    private Dictionary<string, Dictionary<string, string>> equippedState = new Dictionary<string, Dictionary<string, string>>();
 
     // 시작 시 JSON 데이터 로드
     private void Start()
     {
         LoadAccessoryData();
+    }
+
+    // accessoryName으로 등록된 AccessoryItem(Vault SO)을 찾아 그 ArtPrefab을 반환
+    private GameObject FindAccessoryPrefab(string accessoryName)
+    {
+        foreach (AccessoryItem item in allItems)
+        {
+            if (item != null && item.accessoryName == accessoryName)
+            {
+                return item.ArtPrefab;
+            }
+        }
+
+        return null;
     }
 
     /* JSON 구조 샘플 (accessory_data.json):
@@ -45,14 +80,11 @@ public class AccessoryManager : MonoBehaviour
                     {
                         "slotName": "hairpin",
                         "target1": "Slot_HairPin_R",
-                        "target2": "",
-                        "target3": "",
                         "localPosition": {"x":0.0, "y":0.0, "z":0.0},
                         "localRotation": {"x":0.0, "y":0.0, "z":0.0},
                         "items": [
                             {
                                 "accessoryName": "hairpin_placeholder",
-                                "prefab": null,
                                 "localScale": {"x":1.0, "y":1.0, "z":1.0}
                             }
                         ]
@@ -63,7 +95,7 @@ public class AccessoryManager : MonoBehaviour
     }
     // characterCode가 빈 문자열이면 해당 부위/악세서리를 쓰는 모든 캐릭터의 공통 기본값(fallback)으로 쓰임.
     // localScale이 (0,0,0)이면 (1,1,1)로 처리됨 (캐릭터별 크기 보정용).
-    // JSON의 prefab 필드는 직렬화되지 않으므로(GameObject 참조 불가) 저장/로드 시 인스펙터 등록 프리팹을 그대로 사용함.
+    // 실제 프리팹은 accessoryName으로 AccessoryManager.allItems에서 AccessoryItem(Vault SO)을 찾아 그 ArtPrefab을 사용함.
     */
     // JSON 데이터 파일 로드 및 인스펙터 기본 데이터 병합
     public void LoadAccessoryData()
@@ -176,26 +208,9 @@ public class AccessoryManager : MonoBehaviour
 
         Transform finalTargetBone = null; // 최종 부모가 될 Transform
 
-        if (savedOffset != null)
+        if (savedOffset != null && string.IsNullOrEmpty(savedOffset.target1) == false)
         {
-            // 부위 오프셋의 target 1, 2, 3 우선순위로 탐색 (Fallback)
-            if (string.IsNullOrEmpty(savedOffset.target1) == false)
-            {
-                // 1순위 탐색
-                finalTargetBone = getSlotTransformFromName(target, savedOffset.target1);
-            }
-
-            if (finalTargetBone == null && string.IsNullOrEmpty(savedOffset.target2) == false)
-            {
-                // 2순위 탐색
-                finalTargetBone = getSlotTransformFromName(target, savedOffset.target2);
-            }
-
-            if (finalTargetBone == null && string.IsNullOrEmpty(savedOffset.target3) == false)
-            {
-                // 3순위 탐색
-                finalTargetBone = getSlotTransformFromName(target, savedOffset.target3);
-            }
+            finalTargetBone = getSlotTransformFromName(target, savedOffset.target1);
         }
         else if (string.IsNullOrEmpty(finalSlotName) == false)
         {
@@ -218,10 +233,12 @@ public class AccessoryManager : MonoBehaviour
         if (string.IsNullOrEmpty(accessoryName))
         {
             // 장착할 악세서리 이름이 없거나 빈 문자열이면 기존 것을 벗기는 것으로 종료
+            SetEquippedState(characterCode, finalSlotName, null);
             return;
         }
 
-        if (slotItem == null || slotItem.prefab == null)
+        GameObject accessoryPrefab = FindAccessoryPrefab(accessoryName);
+        if (accessoryPrefab == null)
         {
             // 등록된 프리팹이 없으면 새로 장착하지 않고 종료
             return;
@@ -232,13 +249,93 @@ public class AccessoryManager : MonoBehaviour
         finalTargetBone.localRotation = Quaternion.Euler(finalRot);
 
         // 새로운 악세서리 인스턴스화 후 부모 설정. 악세서리는 Slot의 로컬 원점에 얹고 스케일만 적용한다.
-        GameObject newAccessory = Instantiate(slotItem.prefab, finalTargetBone);
+        GameObject newAccessory = Instantiate(accessoryPrefab, finalTargetBone);
         newAccessory.transform.localPosition = Vector3.zero;
         newAccessory.transform.localRotation = Quaternion.identity;
         newAccessory.transform.localScale = finalScale;
+
+        SetEquippedState(characterCode, finalSlotName, accessoryName);
     }
 
-    // 지정된 대상(Slot/Bone)의 악세서리를 명시적으로 해제
+    // 캐릭터의 슬롯별 장착 상태를 갱신 (accessoryName이 null/빈 문자열이면 해당 슬롯 기록 제거)
+    private void SetEquippedState(string characterCode, string slotName, string accessoryName)
+    {
+        if (string.IsNullOrEmpty(characterCode) || string.IsNullOrEmpty(slotName))
+        {
+            // 상태를 캐릭터/슬롯 단위로 구분할 수 없으면 추적하지 않음
+            return;
+        }
+
+        if (equippedState.ContainsKey(characterCode) == false)
+        {
+            equippedState[characterCode] = new Dictionary<string, string>();
+        }
+
+        if (string.IsNullOrEmpty(accessoryName))
+        {
+            equippedState[characterCode].Remove(slotName);
+        }
+        else
+        {
+            equippedState[characterCode][slotName] = accessoryName;
+        }
+    }
+
+    // 캐릭터의 특정 악세서리가 현재 장착 중인지 확인 (장착 중이면 어느 슬롯인지도 반환). 인벤토리 클릭 토글(장착<->해제)에 사용
+    public bool IsEquipped(string characterCode, string accessoryName, out string equippedSlotName)
+    {
+        equippedSlotName = null;
+
+        if (string.IsNullOrEmpty(characterCode) || equippedState.ContainsKey(characterCode) == false)
+        {
+            return false;
+        }
+
+        foreach (KeyValuePair<string, string> pair in equippedState[characterCode])
+        {
+            if (pair.Value == accessoryName)
+            {
+                equippedSlotName = pair.Key;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // 캐릭터의 현재 장착 상태를 저장용 리스트로 반환 (CharInventoryOwner가 JSON에 함께 저장)
+    public EquippedStateList GetEquippedState(string characterCode)
+    {
+        EquippedStateList result = new EquippedStateList();
+
+        if (string.IsNullOrEmpty(characterCode) || equippedState.ContainsKey(characterCode) == false)
+        {
+            return result;
+        }
+
+        foreach (KeyValuePair<string, string> pair in equippedState[characterCode])
+        {
+            result.slots.Add(new EquippedSlotState { slotName = pair.Key, accessoryName = pair.Value });
+        }
+
+        return result;
+    }
+
+    // 저장된 장착 상태를 캐릭터에 재적용 (CharInventoryOwner가 로드 시 호출)
+    public void RestoreEquippedState(GameObject target, EquippedStateList state)
+    {
+        if (target == null || state == null)
+        {
+            return;
+        }
+
+        foreach (EquippedSlotState slot in state.slots)
+        {
+            Equip(target, slot.accessoryName, slot.slotName);
+        }
+    }
+
+    // 지정된 대상(부위 이름 또는 본 이름)의 악세서리를 명시적으로 해제
     public void UnEquip(GameObject target, string targetName)
     {
         if (target == null || string.IsNullOrEmpty(targetName))
@@ -247,7 +344,13 @@ public class AccessoryManager : MonoBehaviour
             return;
         }
 
-        Transform targetBone = getSlotTransformFromName(target, targetName); // 타겟 검색
+        string characterCode = target.GetComponent<CharAttributes>()?.charcode;
+
+        // targetName이 논리 부위 이름(slotName)이면 캡처된 target1(본 이름)으로 변환, 아니면 본 이름 그대로 사용
+        AccessorySlotOffset savedOffset = AccessoryData.Instance.GetSlotOffset(characterCode, targetName);
+        string boneName = (savedOffset != null && string.IsNullOrEmpty(savedOffset.target1) == false) ? savedOffset.target1 : targetName;
+
+        Transform targetBone = getSlotTransformFromName(target, boneName); // 타겟 검색
 
         if (targetBone != null)
         {
@@ -255,6 +358,7 @@ public class AccessoryManager : MonoBehaviour
             {
                 // 악세서리가 장착되어 있으면 파괴
                 RemoveEquippedAccessory(targetBone);
+                SetEquippedState(characterCode, targetName, null);
             }
         }
     }

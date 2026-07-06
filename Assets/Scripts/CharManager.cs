@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Cleverous.VaultInventory;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -43,6 +44,9 @@ public class CharManager : MonoBehaviour
 
     // 오류시 보낼 기본 값
     public Sprite sampleSprite;
+
+    // 캐릭터에 부착할 인벤토리 설정 (슬롯 개수 등)
+    public InventoryConfig playerInventoryConfig;
 
     private async void Awake()
     {
@@ -227,6 +231,7 @@ public class CharManager : MonoBehaviour
                     setAskBalloonVar(currentCharacter);
                     setTalkMenuVar(currentCharacter);
                     setStatusManagerVar(currentCharacter);
+                    setInventoryVar(currentCharacter);
                     setEmotionFaceController(currentCharacter);
                     AnimationPlayerManager.Instance.RegisterPlayer(currentCharacter);
 
@@ -284,6 +289,7 @@ public class CharManager : MonoBehaviour
         setAskBalloonVar(currentCharacter);
         setTalkMenuVar(currentCharacter);
         setStatusManagerVar(currentCharacter);
+        setInventoryVar(currentCharacter);
         setEmotionFaceController(currentCharacter);
         AnimationPlayerManager.Instance.RegisterPlayer(currentCharacter);
 
@@ -456,6 +462,7 @@ public class CharManager : MonoBehaviour
         setAskBalloonVar(currentCharacter);
         setTalkMenuVar(currentCharacter);
         setStatusManagerVar(currentCharacter);
+        setInventoryVar(currentCharacter);
         setEmotionFaceController(currentCharacter);
         AnimationPlayerManager.Instance.RegisterPlayer(currentCharacter);
 
@@ -1050,6 +1057,21 @@ public class CharManager : MonoBehaviour
     public void setStatusManagerVar(GameObject charObj)
     {
         StatusManager.Instance.characterTransform = charObj.GetComponent<RectTransform>();
+    }
+    // 캐릭터에 Inventory + CharInventoryOwner가 없으면 붙여서 인벤토리를 사용할 수 있게 함
+    public void setInventoryVar(GameObject charObj)
+    {
+        Inventory inventory = charObj.GetComponent<Inventory>();
+        if (inventory == null)
+        {
+            inventory = charObj.AddComponent<Inventory>();
+        }
+        inventory.Configuration = playerInventoryConfig;
+
+        if (charObj.GetComponent<CharInventoryOwner>() == null)
+        {
+            charObj.AddComponent<CharInventoryOwner>();
+        }
     }
     public void setEmotionFaceController(GameObject charObj)
     {

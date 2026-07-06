@@ -478,6 +478,15 @@ public class AnimationPlayerManager : MonoBehaviour
             renderer.enabled = false;
         }
 
+        // 이 clone은 애니메이션 클립 수집용 probe일 뿐인 진짜 캐릭터가 아니므로,
+        // CharInventoryOwner.Start()가 실행되어 OnPlayerSpawn을 재발동하면 InventoryUi가 이 probe로 재바인딩되어버린다.
+        // Instantiate 직후 같은 프레임에서 비활성화해야 Start() 자체가 실행되지 않는다 (Destroy는 다음 프레임까지 실행을 막지 못함).
+        CharInventoryOwner cloneInventoryOwner = clone.GetComponent<CharInventoryOwner>();
+        if (cloneInventoryOwner != null)
+        {
+            cloneInventoryOwner.enabled = false;
+        }
+
         Animator cloneAnimator = clone.GetComponent<Animator>();
         if (cloneAnimator == null)
         {

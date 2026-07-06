@@ -12,13 +12,13 @@
 *   **타입:** `[System.Serializable]` 클래스
 *   **프로퍼티:**
     *   `string accessoryName` : 악세서리 식별 이름 (예: "arona_chipao")
-    *   `string target1`, `string target2`, `string target3` : 장착될 대상의 이름 (본 또는 슬롯). `target1`을 먼저 찾고, 없으면 `target2`, 그래도 없으면 `target3`으로 Fallback 탐색.
+    *   `string target1` : 장착될 대상의 이름 (본 또는 슬롯).
     *   `Vector3 localPosition` : 장착 시 적용될 단일 로컬 위치
     *   `Vector3 localRotation` : 장착 시 적용될 단일 로컬 회전값
 
-### B. 악세서리 프리팹 딕셔너리 (Static Class)
-**역할:** 유니티 인스펙터(UI)에서 악세서리 이름과 프리팹(`GameObject`)을 직접 연결(Mapping)하고, 이를 `static`하게 유지하여 어디서든 값을 Get/Set 할 수 있도록 제공하는 정적 데이터 클래스.
-*   에디터 노출을 위해 별도의 관리자 스크립트나 클래스 구조를 활용해 인스펙터에서 설정된 값들을 전역 정적 변수로 캐싱합니다.
+### B. 악세서리 프리팹 조회 (Vault 연동)
+**역할:** 프리팹은 `AccessoryData`/`AccessorySlotItem`이 직접 들고 있지 않고, `accessoryName` 문자열로 `AccessoryItem`(Cleverous Vault의 `UseableItem` 서브클래스, SO)을 찾아 그 `ArtPrefab`을 사용한다.
+*   `AccessoryManager`에 인스펙터로 등록된 `AccessoryItem` 목록(`allItems`)에서 `accessoryName`이 일치하는 아이템을 찾아 `ArtPrefab`을 가져온다.
 
 ---
 
@@ -38,8 +38,8 @@ public void Equip(GameObject target, string accessoryName, string targetName = n
 1.  **변칙 파라미터 적용:**
     *   `targetName`, `localPosition`, `localRotation` 파라미터가 `null`이 아닐 경우 전달된 파라미터 값을 최우선으로 사용.
     *   `null`일 경우 `AccessoryManager`가 로드한 `accessory_data.json` 데이터에서 해당 악세서리 이름의 기본 세팅을 찾아 사용.
-2.  **타겟(Slot/Bone) Fallback 탐색:**
-    *   파라미터로 받은 타겟이나 JSON의 `target1` -> `target2` -> `target3` 순서대로 대상을 검색하여 가장 먼저 찾아지는 부위를 최종 부모로 결정.
+2.  **타겟(Slot/Bone) 탐색:**
+    *   파라미터로 받은 타겟이나 JSON의 `target1`으로 대상을 검색하여 최종 부모로 결정.
 3.  **기존 장착 여부 확인 및 해제 (Unequip 대체):**
     *   `bool HasEquippedAccessory(Transform slot)` (또는 유사한 체크 로직) 메서드를 활용하여, 결정된 대상(Slot) 하위에 이미 장착된 악세서리가 있는지 확인.
     *   이미 장착된 다른 악세서리가 있다면 기존 악세서리를 파괴(해제).

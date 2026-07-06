@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// 슬롯(부위)에 장착 가능한 악세서리 아이템 1개 (프리팹 + 캐릭터별 크기 보정을 한 묶음으로 관리)
+// 슬롯(부위)에 장착 가능한 악세서리 아이템 1개 (악세서리 식별 이름 + 캐릭터별 크기 보정을 한 묶음으로 관리)
+// 실제 프리팹은 여기서 들고 있지 않고, accessoryName으로 AccessoryItem(Vault SO)을 찾아 그 ArtPrefab을 사용한다.
 [Serializable]
 public class AccessorySlotItem
 {
-    public string accessoryName; // 악세서리 식별 이름
-    public GameObject prefab; // 연결될 프리팹
+    public string accessoryName; // 악세서리 식별 이름 (AccessoryItem.accessoryName과 매칭)
     public Vector3 localScale; // 이 캐릭터에서 장착 시 적용할 로컬 스케일 ((0,0,0)이면 (1,1,1)로 처리)
 }
 
@@ -16,12 +16,10 @@ public class AccessorySlotItem
 public class AccessorySlotOffset
 {
     public string slotName; // 부위 식별자: "hairpin", "neckitem", "ring" 등
-    public string target1; // 1순위 본/슬롯 이름
-    public string target2; // 2순위 본/슬롯 이름
-    public string target3; // 3순위 본/슬롯 이름
+    public string target1; // 본/슬롯 이름
     public Vector3 localPosition; // 장착 로컬 위치
     public Vector3 localRotation; // 장착 로컬 회전값 (오일러 각도)
-    public List<AccessorySlotItem> items = new List<AccessorySlotItem>(); // 이 부위에 장착 가능한 악세서리들 (프리팹 + 스케일)
+    public List<AccessorySlotItem> items = new List<AccessorySlotItem>(); // 이 부위에 장착 가능한 악세서리들 (이름 + 스케일)
 }
 
 // 캐릭터 1명의 부위별 오프셋을 모아놓은 프로필
@@ -156,7 +154,7 @@ public class AccessoryData : MonoBehaviour
 
 #if UNITY_EDITOR
     // 에디터 캡처 툴에서 씬의 Slot/악세서리 Transform 값을 골라 인스펙터 기본값에 기록
-    public void CaptureSlotTransform(string characterCode, string slotName, string accessoryName, GameObject accessoryPrefab, Transform slot, Transform placeholder)
+    public void CaptureSlotTransform(string characterCode, string slotName, string accessoryName, Transform slot, Transform placeholder)
     {
         CharacterAccessoryProfile profile = GetCharacterProfile(characterCode);
         if (profile == null)
@@ -199,11 +197,6 @@ public class AccessoryData : MonoBehaviour
             item = new AccessorySlotItem();
             item.accessoryName = accessoryName;
             offset.items.Add(item);
-        }
-
-        if (accessoryPrefab != null)
-        {
-            item.prefab = accessoryPrefab;
         }
 
         item.localScale = placeholder != null ? placeholder.localScale : Vector3.one;

@@ -9,25 +9,16 @@ public class AccessoryDataEditor : Editor
     private const string PrefKeyCharacterCode = "AccessoryDataEditor.captureCharacterCode";
     private const string PrefKeySlotName = "AccessoryDataEditor.captureSlotName";
     private const string PrefKeyAccessoryName = "AccessoryDataEditor.captureAccessoryName";
-    private const string PrefKeyPrefabGuid = "AccessoryDataEditor.capturePrefabGuid";
 
     private string captureCharacterCode;
     private string captureSlotName;
     private string captureAccessoryName;
-    private GameObject capturePrefab;
 
     private void OnEnable()
     {
         captureCharacterCode = EditorPrefs.GetString(PrefKeyCharacterCode, "");
         captureSlotName = EditorPrefs.GetString(PrefKeySlotName, "hairpin");
         captureAccessoryName = EditorPrefs.GetString(PrefKeyAccessoryName, "hairpin_placeholder");
-
-        string prefabGuid = EditorPrefs.GetString(PrefKeyPrefabGuid, "");
-        if (string.IsNullOrEmpty(prefabGuid) == false)
-        {
-            string path = AssetDatabase.GUIDToAssetPath(prefabGuid);
-            capturePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-        }
     }
 
     public override void OnInspectorGUI()
@@ -41,21 +32,12 @@ public class AccessoryDataEditor : Editor
         captureCharacterCode = EditorGUILayout.TextField("Character Code", captureCharacterCode);
         captureSlotName = EditorGUILayout.TextField("Slot Name (부위 식별자)", captureSlotName);
         captureAccessoryName = EditorGUILayout.TextField("Accessory Name", captureAccessoryName);
-        capturePrefab = (GameObject)EditorGUILayout.ObjectField("Accessory Prefab", capturePrefab, typeof(GameObject), false);
         if (EditorGUI.EndChangeCheck())
         {
             // 값이 바뀌면 즉시 EditorPrefs에 저장
             EditorPrefs.SetString(PrefKeyCharacterCode, captureCharacterCode);
             EditorPrefs.SetString(PrefKeySlotName, captureSlotName);
             EditorPrefs.SetString(PrefKeyAccessoryName, captureAccessoryName);
-
-            string guid = "";
-            if (capturePrefab != null)
-            {
-                string path = AssetDatabase.GetAssetPath(capturePrefab);
-                guid = AssetDatabase.AssetPathToGUID(path);
-            }
-            EditorPrefs.SetString(PrefKeyPrefabGuid, guid);
         }
 
         Transform selected = Selection.activeTransform;
@@ -98,7 +80,7 @@ public class AccessoryDataEditor : Editor
             {
                 AccessoryData data = (AccessoryData)target;
                 Undo.RecordObject(data, "Capture Accessory Slot");
-                data.CaptureSlotTransform(captureCharacterCode, captureSlotName, captureAccessoryName, capturePrefab, selected, placeholder);
+                data.CaptureSlotTransform(captureCharacterCode, captureSlotName, captureAccessoryName, selected, placeholder);
                 EditorUtility.SetDirty(data);
             }
         }
