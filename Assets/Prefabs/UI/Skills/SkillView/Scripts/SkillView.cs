@@ -94,6 +94,12 @@ public class SkillView : MonoBehaviour
     [Tooltip("둥근 모서리용 9-slice 스프라이트. 베이크 시 빌트인 UISprite가 지정된다.")]
     [SerializeField] private Sprite panelSprite;
 
+    [Header("View Toggle Icons")]
+    [Tooltip("상세뷰일 때 표시(누르면 리스트로 전환). 미지정 시 '목록' 텍스트. 예: Flat GUI/Icons/List.png")]
+    [SerializeField] private Sprite listIcon;
+    [Tooltip("리스트뷰일 때 표시(누르면 상세로 전환). 미지정 시 '상세' 텍스트. 예: Flat GUI/Icons/Grid.png")]
+    [SerializeField] private Sprite gridIcon;
+
     [Header("Data")]
     [SerializeField] private List<SkillEntry> skills = new List<SkillEntry>();
     [SerializeField]
@@ -125,11 +131,22 @@ public class SkillView : MonoBehaviour
     private Button saveButton;
     private Button reloadButton;
     private Button deleteButton;
-    private Button enabledButton; // on/off 토글 (CrudRow, 삭제 왼쪽)
+    private SkillSlideToggle enabledToggle; // on/off 스위치 (CrudRow, 좌측). 런타임 주입.
     private Button newButton;
     private Button previousSkillButton;
     private Button nextSkillButton;
     private Button aiButton;
+    private Button viewModeButton; // Header: 상세 ↔ 전체리스트 전환. 런타임 주입.
+    private Image viewModeIcon;    // 뷰 전환 버튼의 아이콘(sprite). 없으면 텍스트 fallback.
+    private TextMeshProUGUI viewModeText;
+
+    // 전체 리스트 = 본문 위 오버레이(ignoreLayout). 헤더/셀렉터/창 크기·위치를 전혀 안 건드린다.
+    private enum ViewMode { Detail, List }
+    private ViewMode viewMode = ViewMode.Detail;
+    private GameObject listView;
+    private RectTransform listContent;
+    private TMP_FontAsset boundFont; // 런타임 주입 텍스트가 프리팹과 같은 폰트를 쓰도록.
+
     private readonly List<GameObject> tagPills = new List<GameObject>();
     private readonly List<SkillEntry> visibleSkills = new List<SkillEntry>();
     private string selectedCategoryFilter = AllCategoryFilter;
@@ -151,13 +168,16 @@ public class SkillView : MonoBehaviour
             Build();
         }
         Refresh();
+        ApplyViewMode();
     }
 
     // ── 공개 API ─────────────────────────────────────────────────────────────
     public void Show()
     {
         gameObject.SetActive(true);
+        viewMode = ViewMode.Detail; // 열 때는 항상 상세뷰
         Refresh();
+        ApplyViewMode();
     }
 
     public void Hide()
@@ -188,6 +208,10 @@ public class SkillView : MonoBehaviour
         RefreshLanguageOptions();
         RefreshBadges();
         RefreshContent();
+        if (viewMode == ViewMode.List)
+        {
+            RefreshList();
+        }
     }
 
     public void ApplyRecommendedDescription(string description)
@@ -482,24 +506,23 @@ public class SkillView : MonoBehaviour
         SetInteractable(previousSkillButton, visibleSkills.Count > 0);
         SetInteractable(nextSkillButton, visibleSkills.Count > 0);
 
-        // on/off 토글은 모든 source(레지스트리 포함)에서 활성. 드래프트(미저장)만 비활성.
+        // on/off 스위치는 모든 source(레지스트리 포함)에서 활성. 드래프트(미저장)만 비활성.
         bool canToggle = current != null && !current.isDraft;
-        SetInteractable(enabledButton, canToggle);
-        UpdateEnabledButtonVisual(current);
+        if (enabledToggle != null)
+        {
+            enabledToggle.SetInteractable(canToggle);
+        }
+        UpdateEnabledVisual(current);
     }
 
-    // on/off 버튼 라벨/색을 현재 상태에 맞춘다.
-    private void UpdateEnabledButtonVisual(SkillEntry current)
+    // on/off 스위치 상태를 현재 스킬에 맞춘다.
+    private void UpdateEnabledVisual(SkillEntry current)
     {
-        if (enabledButton == null)
+        if (enabledToggle == null)
         {
             return;
         }
-        bool on = current != null && current.isEnabled;
-        SetButtonLabel(enabledButton, on ? "ON" : "OFF");
-        SetButtonImageColor(enabledButton, current != null && !current.isDraft
-            ? (on ? EnabledOn : EnabledOff)
-            : InputBg);
+        enabledToggle.SetOn(current != null && current.isEnabled);
     }
 
     private static void SetButtonImageColor(Button button, Color color)
@@ -787,18 +810,162 @@ public class SkillView : MonoBehaviour
         RefreshContent();
     }
 
-    // on/off 토글: 모든 source에 대해 동작(레지스트리 포함). 저장 전 드래프트는 무시.
-    private void OnEnabledClicked()
+    // on/off 스위치 콜백: 모든 source(레지스트리 포함) 동작. 드래프트는 비활성이라 발생 안 함.
+    private void OnEnabledToggleChanged(bool on)
     {
         ResetDeleteArm();
         SkillEntry current = Current;
         if (current == null || current.isDraft)
         {
+            UpdateEnabledVisual(current);
             return;
         }
-        current.isEnabled = !current.isEnabled;
-        UpdateEnabledButtonVisual(current);
+        current.isEnabled = on;
         ToggleEnabledRequested?.Invoke(current);
+    }
+
+    // ── 전체 리스트 (상세 ↔ 리스트) ──────────────────────────────────────────
+    private void OnViewModeClicked()
+    {
+        if (viewMode == ViewMode.Detail)
+        {
+            RemoveDraftSkills();
+            ResetDeleteArm();
+            viewMode = ViewMode.List;
+        }
+        else
+        {
+            viewMode = ViewMode.Detail;
+        }
+        Refresh();
+        ApplyViewMode();
+    }
+
+    // 리스트 모드: 헤더만 남기고 상세 본문 섹션을 inactive(뒤에 비치지 않게), 오버레이를 켠다.
+    // 상세 모드: 본문을 다시 active, 오버레이를 끈다. (본문은 수동 앵커라 껐다 켜도 헤더/위치 불변)
+    private void ApplyViewMode()
+    {
+        bool list = viewMode == ViewMode.List;
+
+        SetSectionActive("SelectorRow", !list);
+        SetSectionActive("TagArea", !list);
+        SetSectionActive("CrudRow", !list);
+        SetSectionActive("InputArea", !list);
+        if (list && nameInput != null)
+        {
+            SetActive(nameInput.gameObject, false);
+        }
+
+        SetActive(listView, list);
+        UpdateViewModeButtonVisual(list);
+        if (list)
+        {
+            RefreshList();
+        }
+    }
+
+    // 뷰 전환 버튼 표시: sprite가 있으면 아이콘, 없으면 텍스트 fallback.
+    // 상세뷰 → listIcon(리스트로), 리스트뷰 → gridIcon(상세로).
+    private void UpdateViewModeButtonVisual(bool list)
+    {
+        Sprite icon = list ? gridIcon : listIcon;
+        if (viewModeIcon != null)
+        {
+            viewModeIcon.sprite = icon;
+            viewModeIcon.enabled = icon != null;
+        }
+        if (viewModeText != null)
+        {
+            viewModeText.text = list ? "상세" : "목록";
+            viewModeText.gameObject.SetActive(icon == null);
+        }
+    }
+
+    private void SetSectionActive(string name, bool on)
+    {
+        Transform t = FindDeepChild(transform, name);
+        if (t != null)
+        {
+            SetActive(t.gameObject, on);
+        }
+    }
+
+    // visibleSkills를 (이름 + on/off 스위치) 행으로 다시 그린다.
+    private void RefreshList()
+    {
+        if (listContent == null)
+        {
+            return;
+        }
+
+        for (int i = listContent.childCount - 1; i >= 0; i--)
+        {
+            Destroy(listContent.GetChild(i).gameObject);
+        }
+
+        for (int i = 0; i < visibleSkills.Count; i++)
+        {
+            CreateListRow(visibleSkills[i], i);
+        }
+    }
+
+    // 한 행: 배경 버튼(선택) + 좌측 이름 + 우측 on/off 스위치.
+    private void CreateListRow(SkillEntry entry, int index)
+    {
+        GameObject root = CreatePanel("Row_" + index, listContent, PanelBg2);
+        Layout(root, minH: 40f, prefH: 40f);
+        HorizontalLayoutGroup row = AddRow(root, 8f, 10, 10);
+        row.childAlignment = TextAnchor.MiddleLeft;
+
+        Button select = root.AddComponent<Button>();
+        select.targetGraphic = root.GetComponent<Image>();
+
+        string name = !string.IsNullOrEmpty(entry.displayName) ? entry.displayName
+            : (!string.IsNullOrEmpty(entry.id) ? entry.id : "Skill " + (index + 1));
+        TextMeshProUGUI label = CreateText("NameLabel", root.transform, name, 15, TextWhite, TextAlignmentOptions.MidlineLeft);
+        Layout(label.gameObject, flexW: 1f);
+
+        SkillSlideToggle toggle = CreateSlideToggle("Toggle", root.transform);
+        Layout(toggle.gameObject, prefW: 52f, minW: 52f, prefH: 26f, minH: 26f);
+        toggle.SetInteractable(!entry.isDraft);
+        toggle.SetOn(entry.isEnabled);
+
+        int captured = index;
+        SkillEntry capturedEntry = entry;
+        select.onClick.AddListener(() => OnListRowSelected(captured));
+        toggle.ValueChanged += on => OnListRowToggle(capturedEntry, on);
+    }
+
+    // 행 클릭 → 해당 스킬 선택 + 상세뷰 복귀.
+    private void OnListRowSelected(int index)
+    {
+        if (index < 0 || index >= visibleSkills.Count)
+        {
+            return;
+        }
+        selectedIndex = index;
+        ResetDeleteArm();
+        viewMode = ViewMode.Detail;
+        RefreshIndexLabel();
+        RefreshBadges();
+        RefreshContent();
+        ApplyViewMode();
+        SkillSelected?.Invoke(Current);
+    }
+
+    // 행 스위치 → on/off만 처리(선택 이동 없음). 서버 저장은 상세뷰와 동일 경로.
+    private void OnListRowToggle(SkillEntry entry, bool on)
+    {
+        if (entry == null || entry.isDraft)
+        {
+            return;
+        }
+        entry.isEnabled = on;
+        ToggleEnabledRequested?.Invoke(entry);
+        if (ReferenceEquals(entry, Current))
+        {
+            UpdateEnabledVisual(entry);
+        }
     }
 
     // 삭제는 2단계 확인: 첫 클릭은 "삭제 확인?"으로 무장, 두 번째 클릭에 실제 삭제.
@@ -966,13 +1133,20 @@ public class SkillView : MonoBehaviour
         saveButton = FindComponent<Button>("SaveButton");
         reloadButton = FindComponent<Button>("ReloadButton");
         deleteButton = FindComponent<Button>("DeleteButton");
-        enabledButton = FindComponent<Button>("EnabledButton");
+        enabledToggle = FindComponent<SkillSlideToggle>("EnabledToggle");
         newButton = FindComponent<Button>("NewButton");
         previousSkillButton = FindComponent<Button>("PreviousSkillButton");
         nextSkillButton = FindComponent<Button>("NextSkillButton");
         aiButton = FindComponent<Button>("AIButton");
 
+        // 런타임 주입 텍스트가 프리팹과 같은 폰트를 쓰도록 기존 텍스트 폰트를 캡처한다.
+        TextMeshProUGUI titleText = FindComponent<TextMeshProUGUI>("HeaderTitleText");
+        if (titleText != null) boundFont = titleText.font;
+        else if (indexLabel != null) boundFont = indexLabel.font;
+
         EnsurePrefabBoundControls();
+        enabledToggle = FindComponent<SkillSlideToggle>("EnabledToggle");
+        viewModeButton = FindComponent<Button>("ViewModeButton");
 
         skillDropdown = FindComponent<TMP_Dropdown>("SkillDropdown");
         languageDropdown = FindComponent<TMP_Dropdown>("LanguageDropdown");
@@ -1016,17 +1190,29 @@ public class SkillView : MonoBehaviour
         BindButton("SaveButton", OnSaveClicked);
         BindButton("ReloadButton", OnReloadClicked);
         BindButton("DeleteButton", OnDeleteClicked);
-        BindButton("EnabledButton", OnEnabledClicked);
+        BindButton("ViewModeButton", OnViewModeClicked);
+
+        if (enabledToggle != null)
+        {
+            enabledToggle.ValueChanged -= OnEnabledToggleChanged;
+            enabledToggle.ValueChanged += OnEnabledToggleChanged;
+        }
     }
 
     private void EnsurePrefabBoundControls()
     {
-        // 구 베이크 프리팹에 on/off 버튼이 없으면 CrudRow의 삭제 왼쪽(스페이서 다음)에 생성.
+        // (1) CrudRow 왼쪽에 스위치형 on/off 토글 주입 (구 ON/OFF 버튼은 제거).
         Transform crudRow = FindDeepChild(transform, "CrudRow");
         if (crudRow != null)
         {
-            enabledButton = EnsureButton("EnabledButton", crudRow, "ON", 1, 60f);
+            EnsureEnabledToggle(crudRow);
         }
+
+        // (2) Header 우측(닫기 왼쪽)에 전체리스트 전환 버튼 주입. 헤더 크기 불변.
+        EnsureViewModeButton();
+
+        // (3) 본문 위 전체리스트 오버레이 주입 (ignoreLayout → 헤더/본문/창 불변).
+        EnsureListView();
 
         Transform selectorRow = FindDeepChild(transform, "SelectorRow");
         if (selectorRow == null)
@@ -1040,6 +1226,92 @@ public class SkillView : MonoBehaviour
         EnsureDropdown("CategoryFilterDropdown", selectorRow, 3, 112f);
         newButton = EnsureButton("NewButton", selectorRow, "+", 4, 32f);
         EnsureButton("AIButton", selectorRow, "AI", 5, 36f);
+    }
+
+    // CrudRow는 레이아웃 그룹이 없다(수동 앵커 배치) → "활성" 라벨 + 스위치를 왼쪽에 명시 앵커.
+    private void EnsureEnabledToggle(Transform crudRow)
+    {
+        Transform legacy = FindDeepChild(crudRow, "EnabledButton");
+        if (legacy != null)
+        {
+            Destroy(legacy.gameObject);
+        }
+
+        enabledToggle = FindComponent<SkillSlideToggle>("EnabledToggle");
+        if (enabledToggle != null)
+        {
+            return;
+        }
+
+        TextMeshProUGUI label = CreateText("EnabledLabel", crudRow, "활성", 14, TextMuted, TextAlignmentOptions.MidlineLeft);
+        AnchorLeft(label.GetComponent<RectTransform>(), 12f, 34f, 24f);
+
+        enabledToggle = CreateSlideToggle("EnabledToggle", crudRow);
+        AnchorLeft(enabledToggle.GetComponent<RectTransform>(), 52f, 46f, 26f);
+    }
+
+    // Header도 레이아웃 그룹이 없다 → "목록" 버튼을 우측(1/8 라벨 왼쪽)에 명시 앵커.
+    private void EnsureViewModeButton()
+    {
+        viewModeButton = FindComponent<Button>("ViewModeButton");
+        if (viewModeButton != null)
+        {
+            return;
+        }
+
+        Transform header = FindDeepChild(transform, "Header");
+        if (header == null)
+        {
+            return;
+        }
+
+        viewModeButton = CreateButton("ViewModeButton", header, "목록", HeaderBg, 15);
+        // IndexLabel(우측 x=-92, 폭88 → 좌단 -136) 왼쪽에 둔다.
+        AnchorRight(viewModeButton.GetComponent<RectTransform>(), -168f, 48f, 28f);
+        viewModeText = viewModeButton.GetComponentInChildren<TextMeshProUGUI>();
+
+        // 아이콘 자식(sprite 지정 시 텍스트 대신 표시).
+        GameObject iconGo = CreateUIObject("Icon", viewModeButton.transform);
+        viewModeIcon = iconGo.AddComponent<Image>();
+        viewModeIcon.raycastTarget = false;
+        viewModeIcon.preserveAspect = true;
+        viewModeIcon.color = TextWhite;
+        RectTransform iconRect = iconGo.GetComponent<RectTransform>();
+        iconRect.anchorMin = new Vector2(0.5f, 0.5f);
+        iconRect.anchorMax = new Vector2(0.5f, 0.5f);
+        iconRect.pivot = new Vector2(0.5f, 0.5f);
+        iconRect.sizeDelta = new Vector2(22f, 22f);
+        iconRect.anchoredPosition = Vector2.zero;
+    }
+
+    private static void AnchorLeft(RectTransform rt, float x, float w, float h)
+    {
+        rt.anchorMin = new Vector2(0f, 0.5f);
+        rt.anchorMax = new Vector2(0f, 0.5f);
+        rt.pivot = new Vector2(0f, 0.5f);
+        rt.sizeDelta = new Vector2(w, h);
+        rt.anchoredPosition = new Vector2(x, 0f);
+    }
+
+    private static void AnchorRight(RectTransform rt, float x, float w, float h)
+    {
+        rt.anchorMin = new Vector2(1f, 0.5f);
+        rt.anchorMax = new Vector2(1f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(w, h);
+        rt.anchoredPosition = new Vector2(x, 0f);
+    }
+
+    private void EnsureListView()
+    {
+        Transform existing = FindDeepChild(transform, "ListView");
+        if (existing != null)
+        {
+            listView = existing.gameObject;
+            listContent = FindComponent<RectTransform>("ListContent");
+            return;
+        }
+        BuildListViewOverlay();
     }
 
     private void EnsureNameInput(Transform selectorRow)
@@ -1298,15 +1570,17 @@ public class SkillView : MonoBehaviour
         Layout(row, minH: 36f, prefH: 36f);
         HorizontalLayoutGroup layout = AddRow(row, 8f);
         layout.childForceExpandHeight = true;
-        layout.childAlignment = TextAnchor.MiddleRight;
+        layout.childAlignment = TextAnchor.MiddleLeft;
+
+        // on/off 스위치 (좌측 정렬). 모든 source(레지스트리 포함)에서 동작.
+        TextMeshProUGUI enabledLabel = CreateText("EnabledLabel", row.transform, "활성", 14, TextMuted, TextAlignmentOptions.MidlineLeft);
+        Layout(enabledLabel.gameObject, prefW: 34f, minW: 34f);
+        enabledToggle = CreateSlideToggle("EnabledToggle", row.transform);
+        Layout(enabledToggle.gameObject, prefW: 52f, minW: 52f, prefH: 26f, minH: 26f);
+        enabledToggle.ValueChanged += OnEnabledToggleChanged;
 
         GameObject spacer = CreateUIObject("Spacer", row.transform);
         Layout(spacer, flexW: 1f);
-
-        // on/off 토글 (삭제 왼쪽). 모든 source(레지스트리 포함)에서 동작.
-        enabledButton = CreateButton("EnabledButton", row.transform, "ON", EnabledOn, 14);
-        Layout(enabledButton.gameObject, prefW: 60f, minW: 52f);
-        enabledButton.onClick.AddListener(OnEnabledClicked);
 
         deleteButton = CreateButton("DeleteButton", row.transform, "삭제", DangerRed, 16);
         Layout(deleteButton.gameObject, prefW: 88f, minW: 72f);
@@ -1351,6 +1625,90 @@ public class SkillView : MonoBehaviour
         contentInput.richText = false;
         contentInput.verticalScrollbar = scrollbar;
         contentInput.targetGraphic = area.GetComponent<Image>();
+    }
+
+    // 전체 리스트 = 본문 영역을 1:1로 덮는 오버레이. ignoreLayout이라 헤더/창에 영향 없음.
+    // 헤더는 상단에서 54px(높이) 차지 → 상단 오프셋 54. 좌우/하단 12(본문 패딩과 동일).
+    private void BuildListViewOverlay()
+    {
+        GameObject area = CreatePanel("ListView", transform, RootBg);
+        RectTransform rect = area.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 0f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.offsetMin = new Vector2(12f, 12f);
+        rect.offsetMax = new Vector2(-12f, -54f);
+
+        LayoutElement ignore = GetOrAdd<LayoutElement>(area);
+        ignore.ignoreLayout = true;
+
+        ScrollRect scroll = area.AddComponent<ScrollRect>();
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 24f;
+
+        GameObject viewport = CreateUIObject("Viewport", area.transform);
+        SetStretch(viewport, new Vector4(10f, 10f, 18f, 10f));
+        viewport.AddComponent<RectMask2D>();
+
+        GameObject content = CreateUIObject("ListContent", viewport.transform);
+        RectTransform contentRect = content.GetComponent<RectTransform>();
+        contentRect.anchorMin = new Vector2(0f, 1f);
+        contentRect.anchorMax = new Vector2(1f, 1f);
+        contentRect.pivot = new Vector2(0.5f, 1f);
+        contentRect.sizeDelta = Vector2.zero;
+
+        VerticalLayoutGroup listLayout = content.AddComponent<VerticalLayoutGroup>();
+        listLayout.spacing = 6f;
+        listLayout.childControlWidth = true;
+        listLayout.childControlHeight = true;
+        listLayout.childForceExpandWidth = true;
+        listLayout.childForceExpandHeight = false;
+        listLayout.childAlignment = TextAnchor.UpperLeft;
+
+        ContentSizeFitter fitter = content.AddComponent<ContentSizeFitter>();
+        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        Scrollbar scrollbar = CreateVerticalScrollbar("ListScrollbar", area.transform);
+
+        scroll.viewport = viewport.GetComponent<RectTransform>();
+        scroll.content = contentRect;
+        scroll.verticalScrollbar = scrollbar;
+
+        listView = area;
+        listContent = contentRect;
+        area.SetActive(false); // 기본은 상세뷰
+    }
+
+    // 스위치형 토글 생성. 루트(투명 클릭영역) → 트랙(고정 크기, 중앙) → 노브.
+    private SkillSlideToggle CreateSlideToggle(string name, Transform parent)
+    {
+        GameObject root = CreateUIObject(name, parent);
+        Image hit = root.AddComponent<Image>();
+        hit.color = new Color(0f, 0f, 0f, 0f); // 투명하지만 클릭은 받음
+        hit.raycastTarget = true;
+        SkillSlideToggle toggle = root.AddComponent<SkillSlideToggle>();
+
+        GameObject trackGo = CreatePanel("Track", root.transform, EnabledOff);
+        RectTransform trackRect = trackGo.GetComponent<RectTransform>();
+        trackRect.anchorMin = new Vector2(0.5f, 0.5f);
+        trackRect.anchorMax = new Vector2(0.5f, 0.5f);
+        trackRect.pivot = new Vector2(0.5f, 0.5f);
+        trackRect.sizeDelta = new Vector2(46f, 24f);
+        trackRect.anchoredPosition = Vector2.zero;
+        Image trackImage = trackGo.GetComponent<Image>();
+        trackImage.raycastTarget = false;
+
+        GameObject knobGo = CreatePanel("Knob", trackGo.transform, TextWhite);
+        Image knobImage = knobGo.GetComponent<Image>();
+        knobImage.raycastTarget = false;
+        RectTransform knobRect = knobGo.GetComponent<RectTransform>();
+        knobRect.sizeDelta = new Vector2(18f, 18f);
+
+        toggle.Configure(trackImage, knobRect, EnabledOn, EnabledOff);
+        return toggle;
     }
 
     // ── 팩토리 헬퍼 ───────────────────────────────────────────────────────────
@@ -1608,6 +1966,10 @@ public class SkillView : MonoBehaviour
         {
             return font;
         }
+        if (boundFont != null)
+        {
+            return boundFont;
+        }
         return TMP_Settings.defaultFontAsset;
     }
 
@@ -1666,6 +2028,14 @@ public class SkillView : MonoBehaviour
         if (button != null)
         {
             button.interactable = on;
+        }
+    }
+
+    private static void SetActive(GameObject go, bool on)
+    {
+        if (go != null && go.activeSelf != on)
+        {
+            go.SetActive(on);
         }
     }
 
