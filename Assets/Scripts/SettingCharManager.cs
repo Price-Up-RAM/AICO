@@ -44,6 +44,8 @@ public class SettingCharManager : MonoBehaviour
     private string configFilePath;
     public bool isLoaded = false;
 
+    public event Action<string> OnCharacterSettingChanged;
+
     [Serializable]
     public class CharSetting
     {
@@ -55,6 +57,8 @@ public class SettingCharManager : MonoBehaviour
     public class CharCodeSetting
     {
         public float char_size;
+        public int affection = 0;
+        public string voiceId = "";
     }
 
     [Serializable]
@@ -194,6 +198,20 @@ public class SettingCharManager : MonoBehaviour
         settingsCharData.char_code_info_dict[charCode].char_size = charSize;
         SaveToFile();
     }
+
+    public CharCodeSetting GetCharCodeSetting(string charCode)
+    {
+        if (string.IsNullOrEmpty(charCode)) return null;
+        if (!settingsCharData.char_code_info_dict.ContainsKey(charCode))
+        {
+            settingsCharData.char_code_info_dict[charCode] = new CharCodeSetting();
+            SaveToFile();
+        }
+        return settingsCharData.char_code_info_dict[charCode];
+    }
+
+    public void AddAffection(string charCode, int amount) { var setting = GetCharCodeSetting(charCode); if (setting != null) { setting.affection = Mathf.Clamp(setting.affection + amount, 0, 300); SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); } }
+    public void SetVoice(string charCode, string voiceId) { var setting = GetCharCodeSetting(charCode); if (setting != null) { setting.voiceId = voiceId; SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); } }
 
     public CharSetting GetCharSetting(string charName)
     {
