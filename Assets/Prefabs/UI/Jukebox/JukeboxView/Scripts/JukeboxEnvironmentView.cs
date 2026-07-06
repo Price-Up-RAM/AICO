@@ -28,14 +28,19 @@ public class JukeboxEnvironmentView : MonoBehaviour
     private AudioSource sfxSource;
 
     private readonly Dictionary<string, JukeboxCatalog.TrackDef> defsById = new Dictionary<string, JukeboxCatalog.TrackDef>();
+    private readonly Dictionary<string, JukeboxCatalog.SfxCategory> catsById = new Dictionary<string, JukeboxCatalog.SfxCategory>();
     private readonly Dictionary<string, AudioClip> clipCache = new Dictionary<string, AudioClip>();
-    private readonly Dictionary<string, float> sfxNextTime = new Dictionary<string, float>();
+    private readonly Dictionary<string, float> sfxNextTime = new Dictionary<string, float>(); // key = 카테고리 id
 
     private void Awake()
     {
         foreach (JukeboxCatalog.TrackDef d in JukeboxCatalog.Sfx)
         {
             defsById[d.id] = d;
+        }
+        foreach (JukeboxCatalog.SfxCategory c in JukeboxCatalog.SfxCategories)
+        {
+            catsById[c.id] = c;
         }
 
         save = JukeboxSettings.Load();
@@ -76,8 +81,8 @@ public class JukeboxEnvironmentView : MonoBehaviour
             string id = ids[i];
             if (now >= sfxNextTime[id])
             {
-                PlaySfxOneShot(id);
-                sfxNextTime[id] = now + RandomInterval(id);
+                PlayCategoryRandom(id);
+                ScheduleNext(id, now, "after play");
             }
         }
     }
@@ -104,22 +109,73 @@ public class JukeboxEnvironmentView : MonoBehaviour
 
     private bool ClipAvailable(JukeboxCatalog.TrackDef def)
     {
-        return File.Exists(Path.Combine(Application.streamingAssetsPath, "Jukebox", def.file));
+        return File.Exists(ResolveClipPath(def.file));
     }
 
-    private void PlaySfxOneShot(string id)
+    private bool CategoryAvailable(JukeboxCatalog.SfxCategory cat)
     {
-        if (!defsById.TryGetValue(id, out JukeboxCatalog.TrackDef def))
+        if (cat == null) return false;
+        foreach (JukeboxCatalog.TrackDef d in cat.tracks)
         {
+            if (ClipAvailable(d)) return true;
+        }
+        return false;
+    }
+
+    // 카테고리 안에서 재생 가능한 파일 1개를 랜덤으로 골라 one-shot 재생. (rain1~3 중 랜덤 등)
+    private void PlayCategoryRandom(string catId)
+    {
+        if (!catsById.TryGetValue(catId, out JukeboxCatalog.SfxCategory cat))
+        {
+            Debug.LogWarning($"[JukeboxEnv] SFX category not found: {catId}");
             return;
         }
-        GetClip(def, clip =>
+
+        List<JukeboxCatalog.TrackDef> available = new List<JukeboxCatalog.TrackDef>();
+        foreach (JukeboxCatalog.TrackDef d in cat.tracks)
+        {
+            if (ClipAvailable(d)) available.Add(d);
+        }
+        if (available.Count == 0)
+        {
+            Debug.LogWarning($"[JukeboxEnv] Sample skipped: no available files in category {catId}.");
+            return;
+        }
+
+        JukeboxCatalog.TrackDef picked = available[UnityEngine.Random.Range(0, available.Count)];
+        float volume = Master * JukeboxSettings.GetState(save, catId).volume;
+        GetClip(picked, clip =>
         {
             if (clip != null && sfxSource != null)
             {
-                sfxSource.PlayOneShot(clip, Master * JukeboxSettings.GetState(save, id).volume);
+                sfxSource.PlayOneShot(clip, volume);
+                Debug.Log($"[JukeboxEnv] PlayCategoryRandom: cat={catId}, picked={picked.id}, file={picked.file}, volume={volume:0.00}");
+            }
+            else
+            {
+                Debug.LogWarning($"[JukeboxEnv] Play skipped: cat={catId}, file={picked.file}, clipNull={clip == null}, sourceNull={sfxSource == null}");
             }
         });
+    }
+
+    // 헤더 Sample 버튼: 재생 가능한 카테고리 중 랜덤 1개를 골라 그 안에서 랜덤 파일 재생.
+    private void PlayRandomSample()
+    {
+        save = JukeboxSettings.Load();
+
+        List<JukeboxCatalog.SfxCategory> available = new List<JukeboxCatalog.SfxCategory>();
+        foreach (JukeboxCatalog.SfxCategory cat in JukeboxCatalog.SfxCategories)
+        {
+            if (CategoryAvailable(cat)) available.Add(cat);
+        }
+        if (available.Count == 0)
+        {
+            Debug.LogWarning("[JukeboxEnv] Sample skipped: no available SFX files.");
+            return;
+        }
+
+        JukeboxCatalog.SfxCategory pickedCat = available[UnityEngine.Random.Range(0, available.Count)];
+        PlayCategoryRandom(pickedCat.id);
     }
 
     private void GetClip(JukeboxCatalog.TrackDef def, Action<AudioClip> onLoaded)
@@ -134,9 +190,10 @@ public class JukeboxEnvironmentView : MonoBehaviour
 
     private IEnumerator LoadClipCoroutine(JukeboxCatalog.TrackDef def, Action<AudioClip> onLoaded)
     {
-        string fullPath = Path.Combine(Application.streamingAssetsPath, "Jukebox", def.file);
+        string fullPath = ResolveClipPath(def.file);
         if (!File.Exists(fullPath))
         {
+            Debug.LogWarning($"[JukeboxEnv] SFX file missing: {def.file} -> {fullPath}");
             onLoaded?.Invoke(null);
             yield break;
         }
@@ -169,12 +226,29 @@ public class JukeboxEnvironmentView : MonoBehaviour
         }
     }
 
+    private static string ResolveClipPath(string file)
+    {
+        if (string.IsNullOrEmpty(file))
+        {
+            return string.Empty;
+        }
+
+        string normalized = file.Replace('\\', '/');
+        if (normalized.StartsWith("Assets/"))
+        {
+            string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            return Path.Combine(projectRoot, normalized);
+        }
+
+        return Path.Combine(Application.streamingAssetsPath, "Jukebox", file);
+    }
+
     // ── 행 연결(인라인 빌드된 행을 찾아 값/리스너 바인딩) ─────────────────────────
     private void WireSfx()
     {
-        foreach (JukeboxCatalog.TrackDef def in JukeboxCatalog.Sfx)
+        foreach (JukeboxCatalog.SfxCategory cat in JukeboxCatalog.SfxCategories)
         {
-            Transform rowT = FindDeep(transform, "Row_" + def.id);
+            Transform rowT = FindDeep(transform, "Row_" + cat.id);
             if (rowT == null)
             {
                 continue;
@@ -184,10 +258,11 @@ public class JukeboxEnvironmentView : MonoBehaviour
             Slider vol = FindIn<Slider>(rowT, "Volume");
             TMP_InputField mn = FindIn<TMP_InputField>(rowT, "MinInput");
             TMP_InputField mx = FindIn<TMP_InputField>(rowT, "MaxInput");
+            Button sample = FindIn<Button>(rowT, "Sample");
 
-            JukeboxTrackState st = JukeboxSettings.GetState(save, def.id);
-            bool avail = ClipAvailable(def);
-            string id = def.id;
+            JukeboxTrackState st = JukeboxSettings.GetState(save, cat.id);
+            bool avail = CategoryAvailable(cat);
+            string id = cat.id;
 
             if (tg != null)
             {
@@ -214,17 +289,23 @@ public class JukeboxEnvironmentView : MonoBehaviour
                 mn.onEndEdit.AddListener(_ => OnSfxInterval(id, cmn, cmx));
                 mx.onEndEdit.AddListener(_ => OnSfxInterval(id, cmn, cmx));
             }
+            if (sample != null)
+            {
+                sample.onClick.RemoveAllListeners();
+                sample.interactable = avail;
+                sample.onClick.AddListener(() => PlayCategoryRandom(id));
+            }
         }
     }
 
     private void ApplyInitialSchedule()
     {
-        foreach (JukeboxCatalog.TrackDef def in JukeboxCatalog.Sfx)
+        foreach (JukeboxCatalog.SfxCategory cat in JukeboxCatalog.SfxCategories)
         {
-            JukeboxTrackState st = JukeboxSettings.GetState(save, def.id);
-            if (st.enabled && ClipAvailable(def))
+            JukeboxTrackState st = JukeboxSettings.GetState(save, cat.id);
+            if (st.enabled && CategoryAvailable(cat))
             {
-                sfxNextTime[def.id] = Time.unscaledTime + RandomInterval(def.id);
+                ScheduleNext(cat.id, Time.unscaledTime, "initial");
             }
         }
     }
@@ -236,11 +317,12 @@ public class JukeboxEnvironmentView : MonoBehaviour
         JukeboxSettings.Save(save);
         if (on)
         {
-            sfxNextTime[id] = Time.unscaledTime + RandomInterval(id);
+            ScheduleNext(id, Time.unscaledTime, "toggle on");
         }
         else
         {
             sfxNextTime.Remove(id);
+            Debug.Log($"[JukeboxEnv] SFX disabled: id={id}");
         }
     }
 
@@ -253,8 +335,8 @@ public class JukeboxEnvironmentView : MonoBehaviour
 
     private void OnSfxInterval(string id, TMP_InputField mn, TMP_InputField mx)
     {
-        int min = ParseInt(mn, 30);
-        int max = ParseInt(mx, 60);
+        int min = ParseInt(mn, 20);
+        int max = ParseInt(mx, 30);
         if (max < min)
         {
             max = min;
@@ -268,6 +350,25 @@ public class JukeboxEnvironmentView : MonoBehaviour
         st.minInterval = min;
         st.maxInterval = max;
         JukeboxSettings.Save(save);
+
+        if (st.enabled)
+        {
+            ScheduleNext(id, Time.unscaledTime, "interval changed");
+        }
+        else
+        {
+            Debug.Log($"[JukeboxEnv] SFX interval saved: id={id}, range={min}-{max}s (currently disabled)");
+        }
+    }
+
+    private void ScheduleNext(string id, float fromTime, string reason)
+    {
+        int seconds = RandomInterval(id);
+        sfxNextTime[id] = fromTime + seconds;
+
+        JukeboxTrackState st = JukeboxSettings.GetState(save, id);
+        string disp = catsById.TryGetValue(id, out JukeboxCatalog.SfxCategory cat) ? cat.display : "(unknown)";
+        Debug.Log($"[JukeboxEnv] SFX scheduled: cat={id} ({disp}), nextIn={seconds}s, range={st.minInterval}-{st.maxInterval}s, reason={reason}");
     }
 
     private static int ParseInt(TMP_InputField field, int fallback)
@@ -388,6 +489,10 @@ public class JukeboxEnvironmentView : MonoBehaviour
         TextMeshProUGUI title = JukeboxUi.Text("Title", header.transform, "환경음 (SFX)", 18, JukeboxUi.TextWhite, TextAlignmentOptions.MidlineLeft, font);
         JukeboxUi.Layout(title.gameObject, flexW: 1f);
 
+        Button sample = JukeboxUi.MakeButton("SampleButton", header.transform, "Sample", JukeboxUi.ButtonBg, 13, panelSprite, font);
+        sample.onClick.AddListener(PlayRandomSample);
+        JukeboxUi.Layout(sample.gameObject, prefW: 70f, minW: 70f, prefH: 30f, minH: 30f);
+
         Button close = JukeboxUi.MakeButton("CloseButton", header.transform, "×", JukeboxUi.HeaderBg, 24, panelSprite, font);
         close.onClick.AddListener(Hide);
         JukeboxUi.Layout(close.gameObject, prefW: 32f, minW: 32f);
@@ -429,16 +534,21 @@ public class JukeboxEnvironmentView : MonoBehaviour
         {
             return;
         }
-        foreach (JukeboxCatalog.TrackDef def in JukeboxCatalog.Sfx)
+        foreach (JukeboxCatalog.SfxCategory cat in JukeboxCatalog.SfxCategories)
         {
-            GameObject row = JukeboxUi.Panel("Row_" + def.id, sfxContent, panelSprite, JukeboxUi.RowBg);
+            if (FindDeep(sfxContent, "Row_" + cat.id) != null)
+            {
+                continue;
+            }
+
+            GameObject row = JukeboxUi.Panel("Row_" + cat.id, sfxContent, panelSprite, JukeboxUi.RowBg);
             JukeboxUi.Row(row, 8f, padL: 8, padR: 8, padT: 2, padB: 2);
             JukeboxUi.Layout(row, minH: 36f, prefH: 36f);
 
             Toggle tg = JukeboxUi.MakeToggle("Toggle", row.transform, panelSprite);
             JukeboxUi.Layout(tg.gameObject, prefW: 22f, minW: 22f, prefH: 22f, minH: 22f);
 
-            TextMeshProUGUI label = JukeboxUi.Text("Label", row.transform, def.display, 14, JukeboxUi.TextWhite, TextAlignmentOptions.MidlineLeft, font);
+            TextMeshProUGUI label = JukeboxUi.Text("Label", row.transform, cat.display, 14, JukeboxUi.TextWhite, TextAlignmentOptions.MidlineLeft, font);
             JukeboxUi.Layout(label.gameObject, flexW: 1f, minW: 70f);
 
             Slider vol = JukeboxUi.MakeSlider("Volume", row.transform, panelSprite);
@@ -457,6 +567,12 @@ public class JukeboxEnvironmentView : MonoBehaviour
             JukeboxUi.Layout(mx.gameObject, prefW: 38f, minW: 38f, prefH: 26f, minH: 26f);
 
             JukeboxUi.Text("Unit", ig.transform, "s", 13, JukeboxUi.TextMuted, TextAlignmentOptions.MidlineLeft, font);
+
+            // 우측: 해당 카테고리 랜덤 재생 샘플 버튼(정사각형)
+            Button sample = JukeboxUi.MakeButton("Sample", row.transform, "▶", JukeboxUi.ButtonBg, 14, panelSprite, font);
+            string cid = cat.id;
+            sample.onClick.AddListener(() => PlayCategoryRandom(cid));
+            JukeboxUi.Layout(sample.gameObject, prefW: 30f, minW: 30f, prefH: 30f, minH: 30f);
         }
     }
 

@@ -13,8 +13,8 @@ public class JukeboxTrackState
     public string id;
     public bool enabled;
     public float volume = 1f;
-    public int minInterval = 30;
-    public int maxInterval = 60;
+    public int minInterval = 20;
+    public int maxInterval = 30;
 }
 
 [Serializable]

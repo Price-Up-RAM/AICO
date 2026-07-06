@@ -12,6 +12,11 @@ public class CharAttributes : MonoBehaviour
     public float initLocalScale = 0;
     public Sprite charSprite;
 
+    public string source = "오리지널";
+    public string form = "2D";
+    public System.Collections.Generic.List<string> statusTags = new System.Collections.Generic.List<string>();
+    public System.Collections.Generic.List<string> featureTags = new System.Collections.Generic.List<string> { "AI 대화", "호감도 보유", "감정표현" };
+
     public GameObject toggleClothes = null;  // 안경, 외투 등의 변환
     public GameObject changeClothes = null;  // 옷 자체를 변경
 

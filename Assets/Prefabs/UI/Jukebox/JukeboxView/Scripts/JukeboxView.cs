@@ -28,13 +28,22 @@ public class JukeboxView : MonoBehaviour
     [Header("Wiring")]
     [SerializeField] private GameObject environmentPrefab;
 
+    [Header("Mode Icons (등록 시 아이콘 표시, 미등록 시 텍스트 폴백)")]
+    [SerializeField] private Sprite shuffleSequentialSprite; // 순차재생
+    [SerializeField] private Sprite shuffleRandomSprite;     // 랜덤재생
+    [SerializeField] private Sprite repeatNoneSprite;        // 반복없음
+    [SerializeField] private Sprite repeatAllSprite;         // 전곡반복
+    [SerializeField] private Sprite repeatOneSprite;         // 한곡반복
+
     private bool built;
     private bool runtimeReady;
     private bool listExpanded = true;
-    private bool repeatOne;   // 한곡재생(LoopOne) 여부
-    private bool randomOn;     // 목록 내 랜덤재생 on/off
+    private bool shuffleRandom;                      // false=순차재생, true=랜덤재생
+    private RepeatMode repeatMode = RepeatMode.All;  // 한곡반복 / 전곡반복 / 반복없음
     private int currentTagIndex;
     private int lastShownIndex = -2;
+
+    private enum RepeatMode { None, All, One }        // 반복없음 → 전곡반복 → 한곡반복
 
     private MRJukebox mr;
 
@@ -45,10 +54,12 @@ public class JukeboxView : MonoBehaviour
     private TextMeshProUGUI timeText;
     private TextMeshProUGUI percentText;
     private TextMeshProUGUI collapseLabel;
-    private TextMeshProUGUI modeLabel;
+    private TextMeshProUGUI shuffleLabel;
+    private TextMeshProUGUI repeatLabel;
+    private Image shuffleIcon;
+    private Image repeatIcon;
     private Slider progressSlider;
     private Slider masterSlider;
-    private Toggle randomToggle;
     private TMP_Dropdown categoryDropdown;
     private GameObject listPanel;
     private RectTransform listContent;
@@ -311,7 +322,7 @@ public class JukeboxView : MonoBehaviour
     {
         if (nowPlayingText == null) return;
         string n = mr != null ? mr.CurrentTrackName : null;
-        nowPlayingText.text = string.IsNullOrEmpty(n) ? "(none)" : n;
+        nowPlayingText.text = string.IsNullOrEmpty(n) ? string.Empty : n;
     }
 
     private void UpdateHighlight()
@@ -357,33 +368,58 @@ public class JukeboxView : MonoBehaviour
         if (mr != null) mr.SeekNormalized(v);
     }
 
-    // 한곡재생 ↔ 다음곡재생 토글
-    private void OnModeToggle()
+    // 순차재생 ↔ 랜덤재생 토글
+    private void OnShuffleToggle()
     {
-        repeatOne = !repeatOne;
+        shuffleRandom = !shuffleRandom;
         ApplyPlayMode();
-        UpdateModeLabel();
+        UpdateModeDisplay();
     }
 
-    // 목록 내 랜덤재생 on/off
-    private void OnRandomToggle(bool on)
+    // 한곡반복 → 전곡반복 → 반복없음 순환
+    private void OnRepeatCycle()
     {
-        randomOn = on;
+        repeatMode = (RepeatMode)(((int)repeatMode + 1) % 3);
         ApplyPlayMode();
+        UpdateModeDisplay();
     }
 
-    // 한곡 / 다음곡(순차) / 다음곡(랜덤) 조합을 MRJukebox 모드로 변환.
+    // 순차/랜덤 × 반복모드 조합을 MRJukebox 재생모드로 변환.
     private void ApplyPlayMode()
     {
         if (mr == null) return;
-        if (repeatOne) mr.SetPlayModeLoopOne();
-        else if (randomOn) mr.SetPlayModeRandom();
-        else mr.SetPlayModeLoopAll();
+        if (repeatMode == RepeatMode.One) mr.SetPlayModeLoopOne();       // 한곡반복
+        else if (shuffleRandom) mr.SetPlayModeRandom();                  // 랜덤재생
+        else if (repeatMode == RepeatMode.All) mr.SetPlayModeLoopAll();  // 순차 + 전곡반복
+        else mr.SetPlayModeSequential();                                // 순차 + 반복없음
     }
 
-    private void UpdateModeLabel()
+    // 등록된 스프라이트가 있으면 아이콘, 없으면 텍스트 폴백으로 현재 모드를 표시.
+    private void UpdateModeDisplay()
     {
-        if (modeLabel != null) modeLabel.text = repeatOne ? "한곡" : "다음곡";
+        Sprite shufSpr = shuffleRandom ? shuffleRandomSprite : shuffleSequentialSprite;
+        ApplyModeButton(shuffleIcon, shuffleLabel, shufSpr, shuffleRandom ? "랜덤" : "순차");
+
+        Sprite repSpr = repeatMode == RepeatMode.One ? repeatOneSprite
+                      : repeatMode == RepeatMode.All ? repeatAllSprite : repeatNoneSprite;
+        string repTxt = repeatMode == RepeatMode.One ? "한곡"
+                      : repeatMode == RepeatMode.All ? "전곡" : "없음";
+        ApplyModeButton(repeatIcon, repeatLabel, repSpr, repTxt);
+    }
+
+    private static void ApplyModeButton(Image icon, TextMeshProUGUI label, Sprite sprite, string fallbackText)
+    {
+        bool hasIcon = sprite != null;
+        if (icon != null)
+        {
+            icon.sprite = sprite;
+            icon.enabled = hasIcon;
+        }
+        if (label != null)
+        {
+            label.enabled = !hasIcon;
+            if (!hasIcon) label.text = fallbackText;
+        }
     }
 
     // ── custom 로드 (StreamingAssets/bgm) ───────────────────────────────────────
@@ -452,24 +488,21 @@ public class JukeboxView : MonoBehaviour
         BindButton("PlayButton", OnPlay);
         BindButton("PauseButton", OnPause);
         BindButton("StopButton", OnStop);
-        BindButton("ModeButton", OnModeToggle);
+        BindButton("ShuffleButton", OnShuffleToggle);
+        BindButton("RepeatButton", OnRepeatCycle);
 
         // 모드 상태 초기화(MRJukebox 현재 모드 기준).
         if (mr != null)
         {
-            repeatOne = mr.PlayMode == JukeboxPlayMode.LoopOne;
-            randomOn = mr.PlayMode == JukeboxPlayMode.Random;
-        }
-        if (randomToggle != null)
-        {
-            randomToggle.onValueChanged.RemoveListener(OnRandomToggle);
-            randomToggle.SetIsOnWithoutNotify(randomOn);
-            randomToggle.onValueChanged.AddListener(OnRandomToggle);
+            shuffleRandom = mr.PlayMode == JukeboxPlayMode.Random;
+            repeatMode = mr.PlayMode == JukeboxPlayMode.LoopOne ? RepeatMode.One
+                       : mr.PlayMode == JukeboxPlayMode.LoopAll ? RepeatMode.All
+                       : RepeatMode.None;
         }
 
         if (collapseLabel != null) collapseLabel.text = listExpanded ? "^" : "v";
         if (listPanel != null) listPanel.SetActive(listExpanded);
-        UpdateModeLabel();
+        UpdateModeDisplay();
     }
 
     private bool HasBakedHierarchy()
@@ -485,15 +518,18 @@ public class JukeboxView : MonoBehaviour
         percentText = FindComp<TextMeshProUGUI>("PercentText");
         progressSlider = FindComp<Slider>("ProgressSlider");
         masterSlider = FindComp<Slider>("MasterSlider");
-        randomToggle = FindComp<Toggle>("RandomToggle");
         categoryDropdown = FindComp<TMP_Dropdown>("CategoryDropdown");
         Transform lp = FindTransform("ListPanel");
         listPanel = lp != null ? lp.gameObject : null;
         listContent = FindTransform("BgmList") as RectTransform;
         Transform cl = FindTransform("CollapseLabel");
         collapseLabel = cl != null ? cl.GetComponent<TextMeshProUGUI>() : null;
-        Transform ml = FindTransform("ModeLabel");
-        modeLabel = ml != null ? ml.GetComponent<TextMeshProUGUI>() : null;
+        Transform sl = FindTransform("ShuffleLabel");
+        shuffleLabel = sl != null ? sl.GetComponent<TextMeshProUGUI>() : null;
+        Transform rl = FindTransform("RepeatLabel");
+        repeatLabel = rl != null ? rl.GetComponent<TextMeshProUGUI>() : null;
+        shuffleIcon = FindComp<Image>("ShuffleIcon");
+        repeatIcon = FindComp<Image>("RepeatIcon");
     }
 
     private void BindButton(string name, UnityEngine.Events.UnityAction action)
@@ -571,7 +607,6 @@ public class JukeboxView : MonoBehaviour
         BuildHeader(transform);
         BuildProgressRow(transform);
         BuildTransportRow(transform);
-        BuildOptionRow(transform);
         BuildVolumeRow(transform);
         BuildCategoryRow(transform);
         BuildList(transform);
@@ -583,7 +618,7 @@ public class JukeboxView : MonoBehaviour
         JukeboxUi.Layout(header, minH: 44f, prefH: 44f);
         JukeboxUi.Row(header, 8f, padL: 12, padR: 8);
 
-        nowPlayingText = JukeboxUi.Text("NowPlaying", header.transform, "(none)", 18, JukeboxUi.TextWhite, TextAlignmentOptions.MidlineLeft, font);
+        nowPlayingText = JukeboxUi.Text("NowPlaying", header.transform, string.Empty, 18, JukeboxUi.TextWhite, TextAlignmentOptions.MidlineLeft, font);
         JukeboxUi.Layout(nowPlayingText.gameObject, flexW: 1f);
 
         Button env = JukeboxUi.MakeButton("EnvButton", header.transform, "SFX", JukeboxUi.ButtonBg, 14, panelSprite, font);
@@ -634,41 +669,45 @@ public class JukeboxView : MonoBehaviour
         GameObject row = JukeboxUi.Panel("TransportRow", parent, panelSprite, JukeboxUi.PanelBg);
         JukeboxUi.Layout(row, minH: 40f, prefH: 40f);
         HorizontalLayoutGroup hl = JukeboxUi.Row(row, 6f, padL: 8, padR: 8);
-        hl.childAlignment = TextAnchor.MiddleCenter;
+        hl.childAlignment = TextAnchor.MiddleRight;
         hl.childForceExpandHeight = true;
 
-        Button play = JukeboxUi.MakeButton("PlayButton", row.transform, "재생", JukeboxUi.ButtonBg, 14, panelSprite, font);
+        // 좌: 재생 컨트롤
+        GameObject left = JukeboxUi.Obj("TransportLeft", row.transform);
+        HorizontalLayoutGroup leftHl = JukeboxUi.Row(left, 6f);
+        leftHl.childForceExpandHeight = true;
+        JukeboxUi.Layout(left, flexW: 1f, minH: 30f);
+
+        Button play = JukeboxUi.MakeButton("PlayButton", left.transform, "재생", JukeboxUi.ButtonBg, 14, panelSprite, font);
         play.onClick.AddListener(OnPlay);
-        JukeboxUi.Layout(play.gameObject, flexW: 1f, minW: 60f);
+        JukeboxUi.Layout(play.gameObject, flexW: 1f, minW: 44f);
 
-        Button pause = JukeboxUi.MakeButton("PauseButton", row.transform, "중지", JukeboxUi.ButtonBg, 14, panelSprite, font);
+        Button pause = JukeboxUi.MakeButton("PauseButton", left.transform, "중지", JukeboxUi.ButtonBg, 14, panelSprite, font);
         pause.onClick.AddListener(OnPause);
-        JukeboxUi.Layout(pause.gameObject, flexW: 1f, minW: 60f);
+        JukeboxUi.Layout(pause.gameObject, flexW: 1f, minW: 44f);
 
-        Button stop = JukeboxUi.MakeButton("StopButton", row.transform, "정지", JukeboxUi.ButtonBg, 14, panelSprite, font);
+        Button stop = JukeboxUi.MakeButton("StopButton", left.transform, "정지", JukeboxUi.ButtonBg, 14, panelSprite, font);
         stop.onClick.AddListener(OnStop);
-        JukeboxUi.Layout(stop.gameObject, flexW: 1f, minW: 60f);
+        JukeboxUi.Layout(stop.gameObject, flexW: 1f, minW: 44f);
 
-        // 한곡재생 / 다음곡재생 토글
-        Button mode = JukeboxUi.MakeButton("ModeButton", row.transform, "다음곡", JukeboxUi.ButtonBg, 13, panelSprite, font);
-        mode.onClick.AddListener(OnModeToggle);
-        JukeboxUi.Layout(mode.gameObject, flexW: 1f, minW: 64f);
-        modeLabel = mode.GetComponentInChildren<TextMeshProUGUI>();
-        if (modeLabel != null) modeLabel.gameObject.name = "ModeLabel";
-    }
+        // 우: 순차/랜덤, 반복 모드
+        GameObject right = JukeboxUi.Obj("TransportRight", row.transform);
+        HorizontalLayoutGroup rightHl = JukeboxUi.Row(right, 6f);
+        rightHl.childAlignment = TextAnchor.MiddleRight;
+        rightHl.childForceExpandHeight = true;
+        JukeboxUi.Layout(right, minH: 30f);
 
-    private void BuildOptionRow(Transform parent)
-    {
-        GameObject row = JukeboxUi.Obj("OptionRow", parent);
-        JukeboxUi.Layout(row, minH: 26f, prefH: 26f);
-        JukeboxUi.Row(row, 8f, padL: 4, padR: 4);
+        Button shuffle = JukeboxUi.MakeButton("ShuffleButton", right.transform, "순차재생", JukeboxUi.ButtonBg, 13, panelSprite, font);
+        shuffle.onClick.AddListener(OnShuffleToggle);
+        JukeboxUi.Layout(shuffle.gameObject, prefW: 86f, minW: 78f);
+        shuffleLabel = shuffle.GetComponentInChildren<TextMeshProUGUI>();
+        if (shuffleLabel != null) shuffleLabel.gameObject.name = "ShuffleLabel";
 
-        randomToggle = JukeboxUi.MakeToggle("RandomToggle", row.transform, panelSprite);
-        randomToggle.onValueChanged.AddListener(OnRandomToggle);
-        JukeboxUi.Layout(randomToggle.gameObject, prefW: 22f, minW: 22f, prefH: 22f, minH: 22f);
-
-        TextMeshProUGUI label = JukeboxUi.Text("RandomLabel", row.transform, "랜덤재생", 13, JukeboxUi.TextMuted, TextAlignmentOptions.MidlineLeft, font);
-        JukeboxUi.Layout(label.gameObject, flexW: 1f);
+        Button repeat = JukeboxUi.MakeButton("RepeatButton", right.transform, "전곡반복", JukeboxUi.ButtonBg, 13, panelSprite, font);
+        repeat.onClick.AddListener(OnRepeatCycle);
+        JukeboxUi.Layout(repeat.gameObject, prefW: 86f, minW: 78f);
+        repeatLabel = repeat.GetComponentInChildren<TextMeshProUGUI>();
+        if (repeatLabel != null) repeatLabel.gameObject.name = "RepeatLabel";
     }
 
     private void BuildVolumeRow(Transform parent)

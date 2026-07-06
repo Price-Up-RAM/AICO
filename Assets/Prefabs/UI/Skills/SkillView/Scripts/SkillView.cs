@@ -5,6 +5,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+// Skills UI (어두운 테마의 통합 스킬 카탈로그 패널)
 /// <summary>
 /// Skills UI. 어두운 테마의 통합 스킬 카탈로그 패널을 코드로 구성한다.
 /// 데이터는 SkillCatalogClient가 서버(/skills/list)에서 받아 SetSkills로 주입한다.
@@ -32,6 +33,8 @@ public class SkillView : MonoBehaviour
     private static readonly Color AccentBlue = new Color(0.243f, 0.325f, 0.502f, 1f);
     private static readonly Color AccentBlueHi = new Color(0.306f, 0.404f, 0.608f, 1f);
     private static readonly Color DangerRed = new Color(0.5f, 0.22f, 0.22f, 1f);
+    private static readonly Color EnabledOn = new Color(0.24f, 0.45f, 0.31f, 1f);  // on/off 켜짐(녹색)
+    private static readonly Color EnabledOff = new Color(0.34f, 0.30f, 0.30f, 1f); // on/off 꺼짐(회색)
     private static readonly Color Border = new Color(0.290f, 0.322f, 0.376f, 1f);
     private static readonly Color TextWhite = new Color(0.92f, 0.93f, 0.95f, 1f);
     private static readonly Color TextMuted = new Color(0.6f, 0.62f, 0.66f, 1f);
@@ -42,6 +45,8 @@ public class SkillView : MonoBehaviour
         { "server", new Color(0.24f, 0.32f, 0.50f, 1f) },
         { "unity", new Color(0.27f, 0.45f, 0.34f, 1f) },
         { "custom", new Color(0.55f, 0.45f, 0.20f, 1f) },
+        { "official", new Color(0.243f, 0.325f, 0.502f, 1f) },
+        { "original", new Color(0.243f, 0.325f, 0.502f, 1f) },
     };
 
     // function/tool 파라미터 정의 (server/unity 읽기 전용 표시에 사용)
@@ -59,56 +64,100 @@ public class SkillView : MonoBehaviour
     {
         public string id;                 // = API name (custom은 파일 key)
         public string displayName;        // 표시 이름
-        public string source = "custom";  // server | unity | custom
+        public string draftDisplayName;
+        public bool isDraft;
+        public string source = "custom";  // server | unity | custom | official
         public string category = string.Empty;
         public string description = string.Empty;
         public bool requireImage;
         public List<SkillParam> parameters = new List<SkillParam>();
         public string content = string.Empty; // custom 본문(body). 로컬 파일에서 로드.
 
-        public bool IsEditable => string.Equals(source, "custom", StringComparison.OrdinalIgnoreCase);
+        // custom과 official은 공존 가능(오버라이드). 세 플래그로 상태를 표현한다.
+        public bool isCustom;    // custom 오버레이(_custom)가 존재
+        public bool isOfficial;  // 원본(레지스트리 함수 또는 skills/{key}.json)이 존재
+        public bool isEnabled = true; // on/off (기본 활성). 모든 source 공통.
+
+        // 레지스트리 함수(server/unity)는 코드 제공 → 읽기 전용. 그 외 JSON 스킬은 편집 시 _custom 생성.
+        public bool IsRegistry =>
+            string.Equals(source, "server", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(source, "unity", StringComparison.OrdinalIgnoreCase);
+        public bool IsEditable => isDraft || !IsRegistry;
+        // 삭제 가능 = custom 오버레이가 있을 때(삭제 시 원본이 있으면 다시 노출). 드래프트는 취소용.
+        public bool CanDelete => isDraft || isCustom;
     }
 
     [Header("Style")]
     [Tooltip("비워두면 TMP 기본 폰트를 사용한다. 다른 UI와 맞추려면 프로젝트 기본 폰트를 지정.")]
     [SerializeField] private TMP_FontAsset font;
-    [SerializeField] private Vector2 panelSize = new Vector2(520f, 640f);
+    [SerializeField] private Vector2 panelSize = new Vector2(800f, 560f);
     [Tooltip("둥근 모서리용 9-slice 스프라이트. 베이크 시 빌트인 UISprite가 지정된다.")]
     [SerializeField] private Sprite panelSprite;
+
+    [Header("View Toggle Icons")]
+    [Tooltip("상세뷰일 때 표시(누르면 리스트로 전환). 미지정 시 '목록' 텍스트. 예: Flat GUI/Icons/List.png")]
+    [SerializeField] private Sprite listIcon;
+    [Tooltip("리스트뷰일 때 표시(누르면 상세로 전환). 미지정 시 '상세' 텍스트. 예: Flat GUI/Icons/Grid.png")]
+    [SerializeField] private Sprite gridIcon;
 
     [Header("Data")]
     [SerializeField] private List<SkillEntry> skills = new List<SkillEntry>();
     [SerializeField]
-    private List<string> languages = new List<string> { "한국어", "영어", "일본어" };
+    private List<string> languages = new List<string> { "ALL", "한국어", "영어", "일본어" };
 
     // 외부 연동용 이벤트. 구독자가 없어도 단독으로 동작한다.
     public event Action<SkillEntry> SkillSelected;
     public event Action<SkillEntry> SaveRequested;
     public event Action<SkillEntry> DeleteRequested;
+    public event Action<SkillEntry> ToggleEnabledRequested; // on/off 변경 요청
     public event Action RefreshRequested;
     public event Action<string> LanguageChanged;
+    public event Action<string, int> RecommendRequested;
 
     private bool built;
     private int selectedIndex;
     private bool deleteArmed; // 삭제 2단계 확인용
+    private int recommendToken;
+    private int activeRecommendToken;
     private Sprite roundedSprite;
 
     private TMP_InputField nameInput;
+    private TextMeshProUGUI indexLabel;
     private TMP_Dropdown skillDropdown;
     private TMP_Dropdown languageDropdown;
+    private TMP_Dropdown categoryFilterDropdown;
     private RectTransform tagContent;
     private TMP_InputField contentInput;
     private Button saveButton;
     private Button reloadButton;
     private Button deleteButton;
+    private SkillSlideToggle enabledToggle; // on/off 스위치 (CrudRow, 좌측). 런타임 주입.
+    private Button newButton;
+    private Button previousSkillButton;
+    private Button nextSkillButton;
+    private Button aiButton;
+    private Button viewModeButton; // Header: 상세 ↔ 전체리스트 전환. 런타임 주입.
+    private Image viewModeIcon;    // 뷰 전환 버튼의 아이콘(sprite). 없으면 텍스트 fallback.
+    private TextMeshProUGUI viewModeText;
+
+    // 전체 리스트 = 본문 위 오버레이(ignoreLayout). 헤더/셀렉터/창 크기·위치를 전혀 안 건드린다.
+    private enum ViewMode { Detail, List }
+    private ViewMode viewMode = ViewMode.Detail;
+    private GameObject listView;
+    private RectTransform listContent;
+    private TMP_FontAsset boundFont; // 런타임 주입 텍스트가 프리팹과 같은 폰트를 쓰도록.
+
     private readonly List<GameObject> tagPills = new List<GameObject>();
+    private readonly List<SkillEntry> visibleSkills = new List<SkillEntry>();
+    private string selectedCategoryFilter = AllCategoryFilter;
+    private const string AllCategoryFilter = "All";
 
     private SkillEntry Current =>
-        (selectedIndex >= 0 && selectedIndex < skills.Count) ? skills[selectedIndex] : null;
+        (selectedIndex >= 0 && selectedIndex < visibleSkills.Count) ? visibleSkills[selectedIndex] : null;
 
     private void Awake()
     {
-        EnsureSampleData();
+        // EnsureSampleData(); // 비활성화 (하드코딩 데이터 제거)
         if (HasBakedHierarchy())
         {
             // 프리팹에 UI가 이미 구워져 있으면 다시 만들지 않고 기존 자식에 연결만 한다.
@@ -119,23 +168,28 @@ public class SkillView : MonoBehaviour
             Build();
         }
         Refresh();
+        ApplyViewMode();
     }
 
     // ── 공개 API ─────────────────────────────────────────────────────────────
     public void Show()
     {
         gameObject.SetActive(true);
+        viewMode = ViewMode.Detail; // 열 때는 항상 상세뷰
         Refresh();
+        ApplyViewMode();
     }
 
     public void Hide()
     {
+        RemoveDraftSkills();
         gameObject.SetActive(false);
     }
 
     public void SetSkills(IEnumerable<SkillEntry> entries)
     {
         skills = entries != null ? new List<SkillEntry>(entries) : new List<SkillEntry>();
+        selectedCategoryFilter = AllCategoryFilter;
         selectedIndex = skills.Count > 0 ? 0 : -1;
         deleteArmed = false;
         Refresh();
@@ -148,10 +202,78 @@ public class SkillView : MonoBehaviour
             return;
         }
 
+        RefreshCategoryFilterOptions();
         RefreshSkillOptions();
+        RefreshIndexLabel();
         RefreshLanguageOptions();
         RefreshBadges();
         RefreshContent();
+        if (viewMode == ViewMode.List)
+        {
+            RefreshList();
+        }
+    }
+
+    public void ApplyRecommendedDescription(string description)
+    {
+        ApplyRecommendedSkill(new SkillEntry
+        {
+            source = "custom",
+            category = "Skill",
+            description = description ?? string.Empty,
+            content = description ?? string.Empty,
+        }, activeRecommendToken);
+    }
+
+    public void ApplyRecommendedSkill(SkillEntry recommended, int token)
+    {
+        if (token == 0 || token != activeRecommendToken)
+        {
+            return;
+        }
+
+        SkillEntry current = Current;
+        if (current == null || !current.IsEditable || !current.isDraft)
+        {
+            return;
+        }
+
+        if (current == null || recommended == null)
+        {
+            return;
+        }
+
+        current.source = "custom";
+        current.category = string.IsNullOrEmpty(recommended.category) ? "Skill" : recommended.category;
+        current.requireImage = recommended.requireImage;
+        current.parameters = recommended.parameters ?? new List<SkillParam>();
+        if (!string.IsNullOrWhiteSpace(recommended.displayName))
+        {
+            current.draftDisplayName = recommended.displayName.Trim();
+        }
+        if (!string.IsNullOrWhiteSpace(recommended.id))
+        {
+            current.id = recommended.id.Trim();
+        }
+        current.description = recommended.description ?? string.Empty;
+        current.content = !string.IsNullOrEmpty(recommended.content)
+            ? recommended.content
+            : current.description;
+
+        if (contentInput != null)
+        {
+            contentInput.readOnly = false;
+            contentInput.SetTextWithoutNotify(current.content);
+            contentInput.Select();
+            contentInput.ActivateInputField();
+        }
+        if (nameInput != null)
+        {
+            nameInput.SetTextWithoutNotify(GetDraftDisplayName(current));
+        }
+
+        RefreshBadges();
+        ApplyEditability();
     }
 
     // ── 데이터 갱신 ───────────────────────────────────────────────────────────
@@ -162,10 +284,12 @@ public class SkillView : MonoBehaviour
             return;
         }
 
+        RebuildVisibleSkills();
+
         List<string> names = new List<string>();
-        for (int i = 0; i < skills.Count; i++)
+        for (int i = 0; i < visibleSkills.Count; i++)
         {
-            names.Add(string.IsNullOrEmpty(skills[i].displayName) ? "Skill " + (i + 1) : skills[i].displayName);
+            names.Add(string.IsNullOrEmpty(visibleSkills[i].displayName) ? "Skill " + (i + 1) : visibleSkills[i].displayName);
         }
 
         skillDropdown.onValueChanged.RemoveListener(OnSkillValueChanged);
@@ -173,6 +297,87 @@ public class SkillView : MonoBehaviour
         skillDropdown.AddOptions(names);
         skillDropdown.SetValueWithoutNotify(Mathf.Clamp(selectedIndex, 0, Mathf.Max(0, names.Count - 1)));
         skillDropdown.onValueChanged.AddListener(OnSkillValueChanged);
+    }
+
+    private void RefreshIndexLabel()
+    {
+        if (indexLabel == null)
+        {
+            return;
+        }
+
+        int total = visibleSkills.Count;
+        int current = total > 0 ? selectedIndex + 1 : 0;
+        indexLabel.text = current + " / " + total;
+    }
+
+    private void RefreshCategoryFilterOptions()
+    {
+        if (categoryFilterDropdown == null)
+        {
+            selectedCategoryFilter = AllCategoryFilter;
+            return;
+        }
+
+        List<string> categories = new List<string>();
+        categories.Add(AllCategoryFilter);
+        for (int i = 0; i < skills.Count; i++)
+        {
+            if (skills[i].IsEditable) continue;
+            string category = skills[i].category;
+            if (!string.IsNullOrWhiteSpace(category) && !categories.Contains(category))
+            {
+                categories.Add(category);
+            }
+        }
+        categories.Sort((a, b) =>
+        {
+            if (a == AllCategoryFilter) return -1;
+            if (b == AllCategoryFilter) return 1;
+            return string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
+        });
+
+        categories.Add("Custom");
+
+        if (!categories.Contains(selectedCategoryFilter))
+        {
+            selectedCategoryFilter = AllCategoryFilter;
+        }
+
+        categoryFilterDropdown.onValueChanged.RemoveListener(OnCategoryFilterValueChanged);
+        categoryFilterDropdown.ClearOptions();
+        categoryFilterDropdown.AddOptions(categories);
+        categoryFilterDropdown.SetValueWithoutNotify(Mathf.Max(0, categories.IndexOf(selectedCategoryFilter)));
+        categoryFilterDropdown.onValueChanged.AddListener(OnCategoryFilterValueChanged);
+    }
+
+    private void RebuildVisibleSkills()
+    {
+        visibleSkills.Clear();
+        bool useFilter = !string.IsNullOrEmpty(selectedCategoryFilter) && selectedCategoryFilter != AllCategoryFilter;
+        for (int i = 0; i < skills.Count; i++)
+        {
+            SkillEntry skill = skills[i];
+            bool match = true;
+            if (useFilter)
+            {
+                if (selectedCategoryFilter == "Custom")
+                {
+                    match = skill.IsEditable;
+                }
+                else
+                {
+                    match = !skill.IsEditable && string.Equals(skill.category, selectedCategoryFilter, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            if (match)
+            {
+                visibleSkills.Add(skill);
+            }
+        }
+
+        selectedIndex = visibleSkills.Count > 0 ? Mathf.Clamp(selectedIndex, 0, visibleSkills.Count - 1) : -1;
     }
 
     private void RefreshLanguageOptions()
@@ -207,17 +412,39 @@ public class SkillView : MonoBehaviour
             return;
         }
 
-        if (!string.IsNullOrEmpty(current.source))
+        // custom과 official은 공존 가능 → 플래그로 직접 배지를 구성한다.
+        List<string> labels = new List<string>();
+        if (current.isCustom)
         {
-            tagPills.Add(CreateBadge(tagContent, current.source));
+            labels.Add("Custom");
         }
-        if (!string.IsNullOrEmpty(current.category))
+        if (current.isOfficial)
         {
-            tagPills.Add(CreateBadge(tagContent, current.category));
+            labels.Add("Official");
         }
-        if (current.requireImage)
+        if (labels.Count == 0)
         {
-            tagPills.Add(CreateBadge(tagContent, "image"));
+            // 저장 전 신규 스킬 등 플래그가 아직 없을 때
+            labels.Add("Custom");
+        }
+        // 레지스트리 함수(server/unity)는 분류 카테고리를 함께 노출
+        if (current.IsRegistry && !string.IsNullOrEmpty(current.category))
+        {
+            labels.Add(current.category);
+        }
+
+        float cursor = 0f;
+        const float spacing = 8f;
+        for (int i = 0; i < labels.Count; i++)
+        {
+            float width = GetBadgeWidth(labels[i]);
+            tagPills.Add(CreateBadge(tagContent, labels[i], cursor, width));
+            cursor += width + spacing;
+        }
+
+        if (tagContent != null)
+        {
+            tagContent.sizeDelta = new Vector2(Mathf.Max(0f, cursor - spacing), 24f);
         }
     }
 
@@ -227,7 +454,7 @@ public class SkillView : MonoBehaviour
 
         if (nameInput != null)
         {
-            nameInput.SetTextWithoutNotify(current != null ? (current.displayName ?? current.id ?? string.Empty) : string.Empty);
+            nameInput.SetTextWithoutNotify(current != null ? GetDraftDisplayName(current) : string.Empty);
         }
 
         if (contentInput != null)
@@ -249,22 +476,120 @@ public class SkillView : MonoBehaviour
         ApplyEditability();
     }
 
-    // source에 따라 편집/읽기 전용 상태를 토글한다.
+    // source/플래그에 따라 편집·삭제·토글 상태를 갱신한다.
     private void ApplyEditability()
     {
         SkillEntry current = Current;
         bool editable = current != null && current.IsEditable;
+        bool canDelete = current != null && current.CanDelete;
 
         if (nameInput != null)
         {
             nameInput.interactable = editable;
         }
+        ToggleNameEditor(editable);
         if (contentInput != null)
         {
             contentInput.readOnly = !editable;
         }
         SetInteractable(saveButton, editable);
-        SetInteractable(deleteButton, editable);
+        // 삭제는 custom 오버레이가 있을 때만(원본만 있는 official/registry는 삭제 불가).
+        SetInteractable(deleteButton, canDelete);
+        if (!deleteArmed)
+        {
+            SetButtonLabel(deleteButton, canDelete && current != null && current.isDraft ? "취소" : "삭제");
+            SetButtonImageColor(deleteButton, PanelBg2);
+        }
+        RefreshNewButtonState();
+        SetInteractable(aiButton, editable);
+        SetButtonImageColor(aiButton, editable ? AccentBlueHi : InputBg);
+        SetInteractable(previousSkillButton, visibleSkills.Count > 0);
+        SetInteractable(nextSkillButton, visibleSkills.Count > 0);
+
+        // on/off 스위치는 모든 source(레지스트리 포함)에서 활성. 드래프트(미저장)만 비활성.
+        bool canToggle = current != null && !current.isDraft;
+        if (enabledToggle != null)
+        {
+            enabledToggle.SetInteractable(canToggle);
+        }
+        UpdateEnabledVisual(current);
+    }
+
+    // on/off 스위치 상태를 현재 스킬에 맞춘다.
+    private void UpdateEnabledVisual(SkillEntry current)
+    {
+        if (enabledToggle == null)
+        {
+            return;
+        }
+        enabledToggle.SetOn(current != null && current.isEnabled);
+    }
+
+    private static void SetButtonImageColor(Button button, Color color)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        Image image = button.targetGraphic as Image;
+        if (image == null)
+        {
+            image = button.GetComponent<Image>();
+        }
+
+        if (image != null)
+        {
+            image.color = color;
+        }
+    }
+
+    private string GetDraftDisplayName(SkillEntry entry)
+    {
+        if (entry == null)
+        {
+            return string.Empty;
+        }
+        if (entry.IsEditable && !string.IsNullOrWhiteSpace(entry.draftDisplayName))
+        {
+            return entry.draftDisplayName;
+        }
+        return entry.displayName ?? entry.id ?? string.Empty;
+    }
+
+    private void ToggleNameEditor(bool editable)
+    {
+        if (skillDropdown != null)
+        {
+            skillDropdown.gameObject.SetActive(!editable);
+        }
+        if (nameInput != null)
+        {
+            SyncNameInputToDropdownRect();
+            nameInput.gameObject.SetActive(editable);
+            nameInput.interactable = editable;
+        }
+    }
+
+    private void SyncNameInputToDropdownRect()
+    {
+        if (nameInput == null || skillDropdown == null)
+        {
+            return;
+        }
+
+        RectTransform source = skillDropdown.GetComponent<RectTransform>();
+        RectTransform target = nameInput.GetComponent<RectTransform>();
+        if (source == null || target == null)
+        {
+            return;
+        }
+
+        target.anchorMin = source.anchorMin;
+        target.anchorMax = source.anchorMax;
+        target.pivot = source.pivot;
+        target.anchoredPosition = source.anchoredPosition;
+        target.sizeDelta = source.sizeDelta;
     }
 
     private static string BuildReadonlyView(SkillEntry e)
@@ -291,8 +616,66 @@ public class SkillView : MonoBehaviour
     // ── 이벤트 핸들러 ─────────────────────────────────────────────────────────
     private void OnSkillValueChanged(int index)
     {
+        bool canceledDraft = CancelDraftForNavigation(index);
         selectedIndex = index;
         ResetDeleteArm();
+        if (canceledDraft)
+        {
+            RefreshSkillOptions();
+        }
+        RefreshIndexLabel();
+        RefreshBadges();
+        RefreshContent();
+        SkillSelected?.Invoke(Current);
+    }
+
+    private void OnPreviousSkillClicked()
+    {
+        if (visibleSkills.Count == 0)
+        {
+            return;
+        }
+
+        CancelDraftForNavigation(selectedIndex);
+        selectedIndex = (selectedIndex - 1 + visibleSkills.Count) % visibleSkills.Count;
+        ResetDeleteArm();
+        RefreshSkillOptions();
+        RefreshIndexLabel();
+        RefreshBadges();
+        RefreshContent();
+        SkillSelected?.Invoke(Current);
+    }
+
+    private void OnNextSkillClicked()
+    {
+        if (visibleSkills.Count == 0)
+        {
+            return;
+        }
+
+        CancelDraftForNavigation(selectedIndex);
+        selectedIndex = (selectedIndex + 1) % visibleSkills.Count;
+        ResetDeleteArm();
+        RefreshSkillOptions();
+        RefreshIndexLabel();
+        RefreshBadges();
+        RefreshContent();
+        SkillSelected?.Invoke(Current);
+    }
+
+    private void OnCategoryFilterValueChanged(int index)
+    {
+        if (categoryFilterDropdown == null || index < 0 || index >= categoryFilterDropdown.options.Count)
+        {
+            return;
+        }
+
+        RemoveDraftSkills();
+        selectedCategoryFilter = categoryFilterDropdown.options[index].text;
+        selectedIndex = 0;
+        ResetDeleteArm();
+        RefreshSkillOptions();
+        RefreshIndexLabel();
         RefreshBadges();
         RefreshContent();
         SkillSelected?.Invoke(Current);
@@ -300,41 +683,82 @@ public class SkillView : MonoBehaviour
 
     private void OnLanguageValueChanged(int index)
     {
-        string code = "ko";
+        RemoveDraftSkills();
+        string code = string.Empty;
         if (index >= 0 && index < languages.Count)
         {
             string label = languages[index];
-            if (label == "영어") code = "en";
+            if (label == "한국어") code = "ko";
+            else if (label == "영어") code = "en";
             else if (label == "일본어") code = "ja";
         }
 
         LanguageChanged?.Invoke(code);
     }
 
+    private void OnNameDraftChanged(string value)
+    {
+        SkillEntry current = Current;
+        if (current == null || !current.IsEditable)
+        {
+            return;
+        }
+
+        current.draftDisplayName = value ?? string.Empty;
+    }
+
     private void OnRefreshClicked()
     {
         ResetDeleteArm();
+        RemoveDraftSkills();
         RefreshRequested?.Invoke();
+    }
+
+    private void OnRecommendClicked()
+    {
+        ResetDeleteArm();
+        SkillEntry current = Current;
+        if (current == null || !current.IsEditable)
+        {
+            return;
+        }
+
+        string text = contentInput != null ? contentInput.text : string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        activeRecommendToken = ++recommendToken;
+        RecommendRequested?.Invoke(text.Trim(), activeRecommendToken);
     }
 
     // 신규 custom 스킬 생성 (항상 custom). key는 저장 시 이름에서 자동 생성.
     private void OnNewClicked()
     {
         ResetDeleteArm();
+        if (HasDraftSkill())
+        {
+            RemoveDraftSkills();
+            Refresh();
+            return;
+        }
+
         SkillEntry entry = new SkillEntry
         {
             id = string.Empty,
             displayName = "새 스킬",
+            draftDisplayName = "새 스킬",
+            isDraft = true,
             source = "custom",
             category = "Skill",
             content = string.Empty,
         };
         skills.Add(entry);
-        selectedIndex = skills.Count - 1;
+        selectedCategoryFilter = "Custom";
+        selectedIndex = int.MaxValue;
 
-        RefreshSkillOptions();
-        RefreshBadges();
-        RefreshContent();
+        Refresh();
 
         if (nameInput != null)
         {
@@ -354,6 +778,7 @@ public class SkillView : MonoBehaviour
         if (nameInput != null)
         {
             current.displayName = string.IsNullOrWhiteSpace(nameInput.text) ? current.displayName : nameInput.text.Trim();
+            current.draftDisplayName = current.displayName;
         }
         if (contentInput != null)
         {
@@ -363,31 +788,208 @@ public class SkillView : MonoBehaviour
         {
             current.id = GenerateKey(current.displayName);
         }
+        current.isDraft = false;
+        current.isCustom = true; // 저장은 항상 _custom 오버레이를 만든다
 
         SaveRequested?.Invoke(current);
+        RefreshCategoryFilterOptions();
         RefreshSkillOptions(); // 라벨이 바뀌었을 수 있으므로 갱신
+        RefreshBadges();
+        ApplyEditability();
     }
 
     private void OnReloadClicked()
     {
         ResetDeleteArm();
+        SkillEntry current = Current;
+        if (current != null && current.IsEditable)
+        {
+            current.draftDisplayName = current.displayName;
+        }
         RefreshBadges();
         RefreshContent();
+    }
+
+    // on/off 스위치 콜백: 모든 source(레지스트리 포함) 동작. 드래프트는 비활성이라 발생 안 함.
+    private void OnEnabledToggleChanged(bool on)
+    {
+        ResetDeleteArm();
+        SkillEntry current = Current;
+        if (current == null || current.isDraft)
+        {
+            UpdateEnabledVisual(current);
+            return;
+        }
+        current.isEnabled = on;
+        ToggleEnabledRequested?.Invoke(current);
+    }
+
+    // ── 전체 리스트 (상세 ↔ 리스트) ──────────────────────────────────────────
+    private void OnViewModeClicked()
+    {
+        if (viewMode == ViewMode.Detail)
+        {
+            RemoveDraftSkills();
+            ResetDeleteArm();
+            viewMode = ViewMode.List;
+        }
+        else
+        {
+            viewMode = ViewMode.Detail;
+        }
+        Refresh();
+        ApplyViewMode();
+    }
+
+    // 리스트 모드: 헤더만 남기고 상세 본문 섹션을 inactive(뒤에 비치지 않게), 오버레이를 켠다.
+    // 상세 모드: 본문을 다시 active, 오버레이를 끈다. (본문은 수동 앵커라 껐다 켜도 헤더/위치 불변)
+    private void ApplyViewMode()
+    {
+        bool list = viewMode == ViewMode.List;
+
+        SetSectionActive("SelectorRow", !list);
+        SetSectionActive("TagArea", !list);
+        SetSectionActive("CrudRow", !list);
+        SetSectionActive("InputArea", !list);
+        if (list && nameInput != null)
+        {
+            SetActive(nameInput.gameObject, false);
+        }
+
+        SetActive(listView, list);
+        UpdateViewModeButtonVisual(list);
+        if (list)
+        {
+            RefreshList();
+        }
+    }
+
+    // 뷰 전환 버튼 표시: sprite가 있으면 아이콘, 없으면 텍스트 fallback.
+    // 상세뷰 → listIcon(리스트로), 리스트뷰 → gridIcon(상세로).
+    private void UpdateViewModeButtonVisual(bool list)
+    {
+        Sprite icon = list ? gridIcon : listIcon;
+        if (viewModeIcon != null)
+        {
+            viewModeIcon.sprite = icon;
+            viewModeIcon.enabled = icon != null;
+        }
+        if (viewModeText != null)
+        {
+            viewModeText.text = list ? "상세" : "목록";
+            viewModeText.gameObject.SetActive(icon == null);
+        }
+    }
+
+    private void SetSectionActive(string name, bool on)
+    {
+        Transform t = FindDeepChild(transform, name);
+        if (t != null)
+        {
+            SetActive(t.gameObject, on);
+        }
+    }
+
+    // visibleSkills를 (이름 + on/off 스위치) 행으로 다시 그린다.
+    private void RefreshList()
+    {
+        if (listContent == null)
+        {
+            return;
+        }
+
+        for (int i = listContent.childCount - 1; i >= 0; i--)
+        {
+            Destroy(listContent.GetChild(i).gameObject);
+        }
+
+        for (int i = 0; i < visibleSkills.Count; i++)
+        {
+            CreateListRow(visibleSkills[i], i);
+        }
+    }
+
+    // 한 행: 배경 버튼(선택) + 좌측 이름 + 우측 on/off 스위치.
+    private void CreateListRow(SkillEntry entry, int index)
+    {
+        GameObject root = CreatePanel("Row_" + index, listContent, PanelBg2);
+        Layout(root, minH: 40f, prefH: 40f);
+        HorizontalLayoutGroup row = AddRow(root, 8f, 10, 10);
+        row.childAlignment = TextAnchor.MiddleLeft;
+
+        Button select = root.AddComponent<Button>();
+        select.targetGraphic = root.GetComponent<Image>();
+
+        string name = !string.IsNullOrEmpty(entry.displayName) ? entry.displayName
+            : (!string.IsNullOrEmpty(entry.id) ? entry.id : "Skill " + (index + 1));
+        TextMeshProUGUI label = CreateText("NameLabel", root.transform, name, 15, TextWhite, TextAlignmentOptions.MidlineLeft);
+        Layout(label.gameObject, flexW: 1f);
+
+        SkillSlideToggle toggle = CreateSlideToggle("Toggle", root.transform);
+        Layout(toggle.gameObject, prefW: 52f, minW: 52f, prefH: 26f, minH: 26f);
+        toggle.SetInteractable(!entry.isDraft);
+        toggle.SetOn(entry.isEnabled);
+
+        int captured = index;
+        SkillEntry capturedEntry = entry;
+        select.onClick.AddListener(() => OnListRowSelected(captured));
+        toggle.ValueChanged += on => OnListRowToggle(capturedEntry, on);
+    }
+
+    // 행 클릭 → 해당 스킬 선택 + 상세뷰 복귀.
+    private void OnListRowSelected(int index)
+    {
+        if (index < 0 || index >= visibleSkills.Count)
+        {
+            return;
+        }
+        selectedIndex = index;
+        ResetDeleteArm();
+        viewMode = ViewMode.Detail;
+        RefreshIndexLabel();
+        RefreshBadges();
+        RefreshContent();
+        ApplyViewMode();
+        SkillSelected?.Invoke(Current);
+    }
+
+    // 행 스위치 → on/off만 처리(선택 이동 없음). 서버 저장은 상세뷰와 동일 경로.
+    private void OnListRowToggle(SkillEntry entry, bool on)
+    {
+        if (entry == null || entry.isDraft)
+        {
+            return;
+        }
+        entry.isEnabled = on;
+        ToggleEnabledRequested?.Invoke(entry);
+        if (ReferenceEquals(entry, Current))
+        {
+            UpdateEnabledVisual(entry);
+        }
     }
 
     // 삭제는 2단계 확인: 첫 클릭은 "삭제 확인?"으로 무장, 두 번째 클릭에 실제 삭제.
     private void OnDeleteClicked()
     {
         SkillEntry current = Current;
-        if (current == null || !current.IsEditable)
+        if (current == null || !current.CanDelete)
         {
+            return;
+        }
+
+        if (current.isDraft)
+        {
+            ResetDeleteArm();
+            skills.Remove(current);
+            Refresh();
             return;
         }
 
         if (!deleteArmed)
         {
             deleteArmed = true;
-            SetButtonLabel(deleteButton, "삭제 확인?");
+            SetButtonLabel(deleteButton, "확인");
+            SetButtonImageColor(deleteButton, DangerRed);
             return;
         }
 
@@ -395,14 +997,6 @@ public class SkillView : MonoBehaviour
         DeleteRequested?.Invoke(current);
 
         skills.Remove(current);
-        if (skills.Count == 0)
-        {
-            selectedIndex = -1;
-        }
-        else
-        {
-            selectedIndex = Mathf.Clamp(selectedIndex, 0, skills.Count - 1);
-        }
         Refresh();
     }
 
@@ -412,7 +1006,63 @@ public class SkillView : MonoBehaviour
         {
             deleteArmed = false;
             SetButtonLabel(deleteButton, "삭제");
+            SetButtonImageColor(deleteButton, PanelBg2);
         }
+    }
+
+    private void RemoveDraftSkills()
+    {
+        bool removed = false;
+        for (int i = skills.Count - 1; i >= 0; i--)
+        {
+            if (skills[i] != null && skills[i].isDraft)
+            {
+                skills.RemoveAt(i);
+                removed = true;
+            }
+        }
+        if (removed)
+        {
+            activeRecommendToken = 0;
+        }
+        selectedIndex = Mathf.Min(selectedIndex, Mathf.Max(0, skills.Count - 1));
+    }
+
+    private bool CancelDraftForNavigation(int targetIndex)
+    {
+        if (!HasDraftSkill())
+        {
+            return false;
+        }
+
+        RemoveDraftSkills();
+        RebuildVisibleSkills();
+        selectedIndex = visibleSkills.Count > 0 ? Mathf.Clamp(targetIndex, 0, visibleSkills.Count - 1) : -1;
+        return true;
+    }
+
+    private bool HasDraftSkill()
+    {
+        for (int i = 0; i < skills.Count; i++)
+        {
+            if (skills[i] != null && skills[i].isDraft)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void RefreshNewButtonState()
+    {
+        if (newButton == null)
+        {
+            return;
+        }
+
+        bool hasDraft = HasDraftSkill();
+        SetButtonLabel(newButton, hasDraft ? "×" : "+");
+        SetButtonImageColor(newButton, hasDraft ? PanelBg2 : AccentBlue);
     }
 
     // 표시 이름 → 파일/식별 키 (^[A-Za-z0-9_-]{1,64}$, 중복 시 suffix)
@@ -453,9 +1103,10 @@ public class SkillView : MonoBehaviour
 
     private bool KeyExists(string key)
     {
+        SkillEntry current = Current;
         for (int i = 0; i < skills.Count; i++)
         {
-            if (i != selectedIndex && string.Equals(skills[i].id, key, StringComparison.OrdinalIgnoreCase))
+            if (!ReferenceEquals(skills[i], current) && string.Equals(skills[i].id, key, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -474,12 +1125,37 @@ public class SkillView : MonoBehaviour
         built = true;
 
         nameInput = FindComponent<TMP_InputField>("NameInput");
+        indexLabel = FindComponent<TextMeshProUGUI>("IndexLabel");
         skillDropdown = FindComponent<TMP_Dropdown>("SkillDropdown");
         languageDropdown = FindComponent<TMP_Dropdown>("LanguageDropdown");
+        categoryFilterDropdown = FindComponent<TMP_Dropdown>("CategoryFilterDropdown");
         contentInput = FindComponent<TMP_InputField>("InputArea");
         saveButton = FindComponent<Button>("SaveButton");
         reloadButton = FindComponent<Button>("ReloadButton");
         deleteButton = FindComponent<Button>("DeleteButton");
+        enabledToggle = FindComponent<SkillSlideToggle>("EnabledToggle");
+        newButton = FindComponent<Button>("NewButton");
+        previousSkillButton = FindComponent<Button>("PreviousSkillButton");
+        nextSkillButton = FindComponent<Button>("NextSkillButton");
+        aiButton = FindComponent<Button>("AIButton");
+
+        // 런타임 주입 텍스트가 프리팹과 같은 폰트를 쓰도록 기존 텍스트 폰트를 캡처한다.
+        TextMeshProUGUI titleText = FindComponent<TextMeshProUGUI>("HeaderTitleText");
+        if (titleText != null) boundFont = titleText.font;
+        else if (indexLabel != null) boundFont = indexLabel.font;
+
+        EnsurePrefabBoundControls();
+        enabledToggle = FindComponent<SkillSlideToggle>("EnabledToggle");
+        viewModeButton = FindComponent<Button>("ViewModeButton");
+
+        skillDropdown = FindComponent<TMP_Dropdown>("SkillDropdown");
+        languageDropdown = FindComponent<TMP_Dropdown>("LanguageDropdown");
+        categoryFilterDropdown = FindComponent<TMP_Dropdown>("CategoryFilterDropdown");
+        indexLabel = FindComponent<TextMeshProUGUI>("IndexLabel");
+        previousSkillButton = FindComponent<Button>("PreviousSkillButton");
+        nextSkillButton = FindComponent<Button>("NextSkillButton");
+        newButton = FindComponent<Button>("NewButton");
+        aiButton = FindComponent<Button>("AIButton");
 
         Transform tagArea = FindDeepChild(transform, "TagArea");
         if (tagArea != null)
@@ -493,12 +1169,204 @@ public class SkillView : MonoBehaviour
             languageDropdown.onValueChanged.AddListener(OnLanguageValueChanged);
         }
 
+        if (categoryFilterDropdown != null)
+        {
+            categoryFilterDropdown.onValueChanged.RemoveListener(OnCategoryFilterValueChanged);
+            categoryFilterDropdown.onValueChanged.AddListener(OnCategoryFilterValueChanged);
+        }
+
+        if (nameInput != null)
+        {
+            nameInput.onValueChanged.RemoveListener(OnNameDraftChanged);
+            nameInput.onValueChanged.AddListener(OnNameDraftChanged);
+        }
+
         BindButton("CloseButton", Hide);
+        BindButton("PreviousSkillButton", OnPreviousSkillClicked);
+        BindButton("NextSkillButton", OnNextSkillClicked);
         BindButton("NewButton", OnNewClicked);
+        BindButton("AIButton", OnRecommendClicked);
         BindButton("RefreshButton", OnRefreshClicked);
         BindButton("SaveButton", OnSaveClicked);
         BindButton("ReloadButton", OnReloadClicked);
         BindButton("DeleteButton", OnDeleteClicked);
+        BindButton("ViewModeButton", OnViewModeClicked);
+
+        if (enabledToggle != null)
+        {
+            enabledToggle.ValueChanged -= OnEnabledToggleChanged;
+            enabledToggle.ValueChanged += OnEnabledToggleChanged;
+        }
+    }
+
+    private void EnsurePrefabBoundControls()
+    {
+        // (1) CrudRow 왼쪽에 스위치형 on/off 토글 주입 (구 ON/OFF 버튼은 제거).
+        Transform crudRow = FindDeepChild(transform, "CrudRow");
+        if (crudRow != null)
+        {
+            EnsureEnabledToggle(crudRow);
+        }
+
+        // (2) Header 우측(닫기 왼쪽)에 전체리스트 전환 버튼 주입. 헤더 크기 불변.
+        EnsureViewModeButton();
+
+        // (3) 본문 위 전체리스트 오버레이 주입 (ignoreLayout → 헤더/본문/창 불변).
+        EnsureListView();
+
+        Transform selectorRow = FindDeepChild(transform, "SelectorRow");
+        if (selectorRow == null)
+        {
+            return;
+        }
+
+        EnsureButton("PreviousSkillButton", selectorRow, "<", 0, 32f);
+        EnsureButton("NextSkillButton", selectorRow, ">", 2, 32f);
+        EnsureNameInput(selectorRow);
+        EnsureDropdown("CategoryFilterDropdown", selectorRow, 3, 112f);
+        newButton = EnsureButton("NewButton", selectorRow, "+", 4, 32f);
+        EnsureButton("AIButton", selectorRow, "AI", 5, 36f);
+    }
+
+    // CrudRow는 레이아웃 그룹이 없다(수동 앵커 배치) → "활성" 라벨 + 스위치를 왼쪽에 명시 앵커.
+    private void EnsureEnabledToggle(Transform crudRow)
+    {
+        Transform legacy = FindDeepChild(crudRow, "EnabledButton");
+        if (legacy != null)
+        {
+            Destroy(legacy.gameObject);
+        }
+
+        enabledToggle = FindComponent<SkillSlideToggle>("EnabledToggle");
+        if (enabledToggle != null)
+        {
+            return;
+        }
+
+        TextMeshProUGUI label = CreateText("EnabledLabel", crudRow, "활성", 14, TextMuted, TextAlignmentOptions.MidlineLeft);
+        AnchorLeft(label.GetComponent<RectTransform>(), 12f, 34f, 24f);
+
+        enabledToggle = CreateSlideToggle("EnabledToggle", crudRow);
+        AnchorLeft(enabledToggle.GetComponent<RectTransform>(), 52f, 46f, 26f);
+    }
+
+    // Header도 레이아웃 그룹이 없다 → "목록" 버튼을 우측(1/8 라벨 왼쪽)에 명시 앵커.
+    private void EnsureViewModeButton()
+    {
+        viewModeButton = FindComponent<Button>("ViewModeButton");
+        if (viewModeButton != null)
+        {
+            return;
+        }
+
+        Transform header = FindDeepChild(transform, "Header");
+        if (header == null)
+        {
+            return;
+        }
+
+        viewModeButton = CreateButton("ViewModeButton", header, "목록", HeaderBg, 15);
+        // IndexLabel(우측 x=-92, 폭88 → 좌단 -136) 왼쪽에 둔다.
+        AnchorRight(viewModeButton.GetComponent<RectTransform>(), -168f, 48f, 28f);
+        viewModeText = viewModeButton.GetComponentInChildren<TextMeshProUGUI>();
+
+        // 아이콘 자식(sprite 지정 시 텍스트 대신 표시).
+        GameObject iconGo = CreateUIObject("Icon", viewModeButton.transform);
+        viewModeIcon = iconGo.AddComponent<Image>();
+        viewModeIcon.raycastTarget = false;
+        viewModeIcon.preserveAspect = true;
+        viewModeIcon.color = TextWhite;
+        RectTransform iconRect = iconGo.GetComponent<RectTransform>();
+        iconRect.anchorMin = new Vector2(0.5f, 0.5f);
+        iconRect.anchorMax = new Vector2(0.5f, 0.5f);
+        iconRect.pivot = new Vector2(0.5f, 0.5f);
+        iconRect.sizeDelta = new Vector2(22f, 22f);
+        iconRect.anchoredPosition = Vector2.zero;
+    }
+
+    private static void AnchorLeft(RectTransform rt, float x, float w, float h)
+    {
+        rt.anchorMin = new Vector2(0f, 0.5f);
+        rt.anchorMax = new Vector2(0f, 0.5f);
+        rt.pivot = new Vector2(0f, 0.5f);
+        rt.sizeDelta = new Vector2(w, h);
+        rt.anchoredPosition = new Vector2(x, 0f);
+    }
+
+    private static void AnchorRight(RectTransform rt, float x, float w, float h)
+    {
+        rt.anchorMin = new Vector2(1f, 0.5f);
+        rt.anchorMax = new Vector2(1f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(w, h);
+        rt.anchoredPosition = new Vector2(x, 0f);
+    }
+
+    private void EnsureListView()
+    {
+        Transform existing = FindDeepChild(transform, "ListView");
+        if (existing != null)
+        {
+            listView = existing.gameObject;
+            listContent = FindComponent<RectTransform>("ListContent");
+            return;
+        }
+        BuildListViewOverlay();
+    }
+
+    private void EnsureNameInput(Transform selectorRow)
+    {
+        if (nameInput == null)
+        {
+            nameInput = FindComponent<TMP_InputField>("NameInput");
+        }
+        if (nameInput == null)
+        {
+            nameInput = CreateSingleLineInput("NameInput", selectorRow, "Skill name");
+        }
+        else if (nameInput.transform.parent != selectorRow)
+        {
+            nameInput.transform.SetParent(selectorRow, false);
+        }
+
+        nameInput.transform.SetSiblingIndex(1);
+        nameInput.onValueChanged.RemoveListener(OnNameDraftChanged);
+        nameInput.onValueChanged.AddListener(OnNameDraftChanged);
+        SyncNameInputToDropdownRect();
+    }
+
+    private Button EnsureButton(string name, Transform parent, string label, int siblingIndex, float width)
+    {
+        Button button = FindComponent<Button>(name);
+        if (button == null)
+        {
+            button = CreateButton(name, parent, label, PanelBg2, 18);
+            Layout(button.gameObject, prefW: width, minW: width);
+        }
+        else if (button.transform.parent != parent)
+        {
+            button.transform.SetParent(parent, false);
+        }
+
+        button.transform.SetSiblingIndex(Mathf.Clamp(siblingIndex, 0, parent.childCount - 1));
+        return button;
+    }
+
+    private TMP_Dropdown EnsureDropdown(string name, Transform parent, int siblingIndex, float width)
+    {
+        TMP_Dropdown dropdown = FindComponent<TMP_Dropdown>(name);
+        if (dropdown == null)
+        {
+            dropdown = CreateDropdown(name, parent);
+            Layout(dropdown.gameObject, prefW: width, minW: width);
+        }
+        else if (dropdown.transform.parent != parent)
+        {
+            dropdown.transform.SetParent(parent, false);
+        }
+
+        dropdown.transform.SetSiblingIndex(Mathf.Clamp(siblingIndex, 0, parent.childCount - 1));
+        return dropdown;
     }
 
     private void BindButton(string name, UnityEngine.Events.UnityAction action)
@@ -536,14 +1404,14 @@ public class SkillView : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-    /// <summary>에디터 베이크 전용. 전체 UI 계층을 코드로 생성해 프리팹에 구워 넣을 때 호출한다.</summary>
+    // 에디터 베이크 전용 (전체 UI 계층을 코드로 생성해 프리팹에 굽기)
     public void EditorBuild(Sprite roundedSpriteAsset = null)
     {
         if (roundedSpriteAsset != null)
         {
             panelSprite = roundedSpriteAsset;
         }
-        EnsureSampleData();
+        // EnsureSampleData(); // 비활성화
         Build();
         Refresh();
     }
@@ -570,14 +1438,15 @@ public class SkillView : MonoBehaviour
         ApplyRounded(rootBg, RootBg);
 
         VerticalLayoutGroup rootLayout = GetOrAdd<VerticalLayoutGroup>(gameObject);
-        rootLayout.padding = new RectOffset(16, 16, 16, 16);
-        rootLayout.spacing = 12f;
+        rootLayout.padding = new RectOffset(12, 12, 12, 12);
+        rootLayout.spacing = 8f;
         rootLayout.childControlWidth = true;
         rootLayout.childControlHeight = true;
         rootLayout.childForceExpandWidth = true;
         rootLayout.childForceExpandHeight = false;
 
         BuildHeader(transform);
+        BuildHiddenNameInput(transform);
         BuildSelectorRow(transform);
         BuildTagArea(transform);
         BuildCrudRow(transform);
@@ -587,45 +1456,79 @@ public class SkillView : MonoBehaviour
     private void BuildHeader(Transform parent)
     {
         GameObject header = CreateUIObject("Header", parent);
-        Layout(header, minH: 44f, prefH: 44f);
+        Layout(header, minH: 36f, prefH: 36f);
         HorizontalLayoutGroup layout = AddRow(header, 8f);
         layout.childForceExpandHeight = true;
 
-        nameInput = CreateSingleLineInput("NameInput", header.transform, "스킬 이름");
-        Layout(nameInput.gameObject, flexW: 1f);
+        TextMeshProUGUI title = CreateText("HeaderTitleText", header.transform, "Skills", 18, TextWhite, TextAlignmentOptions.MidlineLeft);
+        Layout(title.gameObject, flexW: 1f);
 
-        Button newBtn = CreateButton("NewButton", header.transform, "＋", AccentBlue, 22);
-        Layout(newBtn.gameObject, prefW: 36f, minW: 36f);
-        newBtn.onClick.AddListener(OnNewClicked);
+        indexLabel = CreateText("IndexLabel", header.transform, "0 / 0", 14, TextMuted, TextAlignmentOptions.MidlineRight);
+        Layout(indexLabel.gameObject, prefW: 88f, minW: 88f);
 
         Button close = CreateButton("CloseButton", header.transform, "×", HeaderBg, 24);
-        Layout(close.gameObject, prefW: 36f, minW: 36f);
+        Layout(close.gameObject, prefW: 32f, minW: 32f);
         close.onClick.AddListener(Hide);
+    }
+
+    private void BuildHiddenNameInput(Transform parent)
+    {
+        if (nameInput != null)
+        {
+            return;
+        }
+
+        nameInput = CreateSingleLineInput("NameInput", parent, "Skill name");
+        nameInput.gameObject.SetActive(false);
+        nameInput.onValueChanged.AddListener(OnNameDraftChanged);
+        LayoutElement layout = GetOrAdd<LayoutElement>(nameInput.gameObject);
+        layout.ignoreLayout = true;
     }
 
     private void BuildSelectorRow(Transform parent)
     {
         GameObject row = CreateUIObject("SelectorRow", parent);
-        Layout(row, minH: 40f, prefH: 40f);
-        HorizontalLayoutGroup layout = AddRow(row, 8f);
+        Layout(row, minH: 34f, prefH: 34f);
+        HorizontalLayoutGroup layout = AddRow(row, 6f);
         layout.childForceExpandHeight = true;
+
+        previousSkillButton = CreateButton("PreviousSkillButton", row.transform, "<", PanelBg2, 18);
+        Layout(previousSkillButton.gameObject, prefW: 32f, minW: 32f);
+        previousSkillButton.onClick.AddListener(OnPreviousSkillClicked);
 
         skillDropdown = CreateDropdown("SkillDropdown", row.transform);
         Layout(skillDropdown.gameObject, flexW: 1f);
+        EnsureNameInput(row.transform);
+
+        nextSkillButton = CreateButton("NextSkillButton", row.transform, ">", PanelBg2, 18);
+        Layout(nextSkillButton.gameObject, prefW: 32f, minW: 32f);
+        nextSkillButton.onClick.AddListener(OnNextSkillClicked);
+
+        categoryFilterDropdown = CreateDropdown("CategoryFilterDropdown", row.transform);
+        Layout(categoryFilterDropdown.gameObject, prefW: 112f, minW: 112f);
+        categoryFilterDropdown.onValueChanged.AddListener(OnCategoryFilterValueChanged);
+
+        newButton = CreateButton("NewButton", row.transform, "+", AccentBlue, 22);
+        Layout(newButton.gameObject, prefW: 32f, minW: 32f);
+        newButton.onClick.AddListener(OnNewClicked);
+
+        aiButton = CreateButton("AIButton", row.transform, "AI", AccentBlueHi, 14);
+        Layout(aiButton.gameObject, prefW: 36f, minW: 36f);
+        aiButton.onClick.AddListener(OnRecommendClicked);
 
         Button refresh = CreateButton("RefreshButton", row.transform, "⟳", PanelBg2, 18);
-        Layout(refresh.gameObject, prefW: 40f, minW: 40f);
+        Layout(refresh.gameObject, prefW: 32f, minW: 32f);
         refresh.onClick.AddListener(OnRefreshClicked);
 
         languageDropdown = CreateDropdown("LanguageDropdown", row.transform);
-        Layout(languageDropdown.gameObject, prefW: 120f, minW: 120f);
+        Layout(languageDropdown.gameObject, prefW: 104f, minW: 104f);
         languageDropdown.onValueChanged.AddListener(OnLanguageValueChanged);
     }
 
     private void BuildTagArea(Transform parent)
     {
         GameObject area = CreatePanel("TagArea", parent, PanelBg);
-        Layout(area, minH: 52f, prefH: 52f);
+        Layout(area, minH: 40f, prefH: 40f);
 
         ScrollRect scroll = area.AddComponent<ScrollRect>();
         scroll.horizontal = true;
@@ -664,24 +1567,31 @@ public class SkillView : MonoBehaviour
     private void BuildCrudRow(Transform parent)
     {
         GameObject row = CreateUIObject("CrudRow", parent);
-        Layout(row, minH: 40f, prefH: 40f);
+        Layout(row, minH: 36f, prefH: 36f);
         HorizontalLayoutGroup layout = AddRow(row, 8f);
         layout.childForceExpandHeight = true;
-        layout.childAlignment = TextAnchor.MiddleRight;
+        layout.childAlignment = TextAnchor.MiddleLeft;
+
+        // on/off 스위치 (좌측 정렬). 모든 source(레지스트리 포함)에서 동작.
+        TextMeshProUGUI enabledLabel = CreateText("EnabledLabel", row.transform, "활성", 14, TextMuted, TextAlignmentOptions.MidlineLeft);
+        Layout(enabledLabel.gameObject, prefW: 34f, minW: 34f);
+        enabledToggle = CreateSlideToggle("EnabledToggle", row.transform);
+        Layout(enabledToggle.gameObject, prefW: 52f, minW: 52f, prefH: 26f, minH: 26f);
+        enabledToggle.ValueChanged += OnEnabledToggleChanged;
 
         GameObject spacer = CreateUIObject("Spacer", row.transform);
         Layout(spacer, flexW: 1f);
 
         deleteButton = CreateButton("DeleteButton", row.transform, "삭제", DangerRed, 16);
-        Layout(deleteButton.gameObject, prefW: 100f, minW: 80f);
+        Layout(deleteButton.gameObject, prefW: 88f, minW: 72f);
         deleteButton.onClick.AddListener(OnDeleteClicked);
 
         saveButton = CreateButton("SaveButton", row.transform, "저장", AccentBlue, 16);
-        Layout(saveButton.gameObject, prefW: 100f, minW: 80f);
+        Layout(saveButton.gameObject, prefW: 88f, minW: 72f);
         saveButton.onClick.AddListener(OnSaveClicked);
 
         reloadButton = CreateButton("ReloadButton", row.transform, "되돌리기", PanelBg2, 16);
-        Layout(reloadButton.gameObject, prefW: 100f, minW: 80f);
+        Layout(reloadButton.gameObject, prefW: 88f, minW: 72f);
         reloadButton.onClick.AddListener(OnReloadClicked);
     }
 
@@ -717,28 +1627,117 @@ public class SkillView : MonoBehaviour
         contentInput.targetGraphic = area.GetComponent<Image>();
     }
 
+    // 전체 리스트 = 본문 영역을 1:1로 덮는 오버레이. ignoreLayout이라 헤더/창에 영향 없음.
+    // 헤더는 상단에서 54px(높이) 차지 → 상단 오프셋 54. 좌우/하단 12(본문 패딩과 동일).
+    private void BuildListViewOverlay()
+    {
+        GameObject area = CreatePanel("ListView", transform, RootBg);
+        RectTransform rect = area.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 0f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.offsetMin = new Vector2(12f, 12f);
+        rect.offsetMax = new Vector2(-12f, -54f);
+
+        LayoutElement ignore = GetOrAdd<LayoutElement>(area);
+        ignore.ignoreLayout = true;
+
+        ScrollRect scroll = area.AddComponent<ScrollRect>();
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 24f;
+
+        GameObject viewport = CreateUIObject("Viewport", area.transform);
+        SetStretch(viewport, new Vector4(10f, 10f, 18f, 10f));
+        viewport.AddComponent<RectMask2D>();
+
+        GameObject content = CreateUIObject("ListContent", viewport.transform);
+        RectTransform contentRect = content.GetComponent<RectTransform>();
+        contentRect.anchorMin = new Vector2(0f, 1f);
+        contentRect.anchorMax = new Vector2(1f, 1f);
+        contentRect.pivot = new Vector2(0.5f, 1f);
+        contentRect.sizeDelta = Vector2.zero;
+
+        VerticalLayoutGroup listLayout = content.AddComponent<VerticalLayoutGroup>();
+        listLayout.spacing = 6f;
+        listLayout.childControlWidth = true;
+        listLayout.childControlHeight = true;
+        listLayout.childForceExpandWidth = true;
+        listLayout.childForceExpandHeight = false;
+        listLayout.childAlignment = TextAnchor.UpperLeft;
+
+        ContentSizeFitter fitter = content.AddComponent<ContentSizeFitter>();
+        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        Scrollbar scrollbar = CreateVerticalScrollbar("ListScrollbar", area.transform);
+
+        scroll.viewport = viewport.GetComponent<RectTransform>();
+        scroll.content = contentRect;
+        scroll.verticalScrollbar = scrollbar;
+
+        listView = area;
+        listContent = contentRect;
+        area.SetActive(false); // 기본은 상세뷰
+    }
+
+    // 스위치형 토글 생성. 루트(투명 클릭영역) → 트랙(고정 크기, 중앙) → 노브.
+    private SkillSlideToggle CreateSlideToggle(string name, Transform parent)
+    {
+        GameObject root = CreateUIObject(name, parent);
+        Image hit = root.AddComponent<Image>();
+        hit.color = new Color(0f, 0f, 0f, 0f); // 투명하지만 클릭은 받음
+        hit.raycastTarget = true;
+        SkillSlideToggle toggle = root.AddComponent<SkillSlideToggle>();
+
+        GameObject trackGo = CreatePanel("Track", root.transform, EnabledOff);
+        RectTransform trackRect = trackGo.GetComponent<RectTransform>();
+        trackRect.anchorMin = new Vector2(0.5f, 0.5f);
+        trackRect.anchorMax = new Vector2(0.5f, 0.5f);
+        trackRect.pivot = new Vector2(0.5f, 0.5f);
+        trackRect.sizeDelta = new Vector2(46f, 24f);
+        trackRect.anchoredPosition = Vector2.zero;
+        Image trackImage = trackGo.GetComponent<Image>();
+        trackImage.raycastTarget = false;
+
+        GameObject knobGo = CreatePanel("Knob", trackGo.transform, TextWhite);
+        Image knobImage = knobGo.GetComponent<Image>();
+        knobImage.raycastTarget = false;
+        RectTransform knobRect = knobGo.GetComponent<RectTransform>();
+        knobRect.sizeDelta = new Vector2(18f, 18f);
+
+        toggle.Configure(trackImage, knobRect, EnabledOn, EnabledOff);
+        return toggle;
+    }
+
     // ── 팩토리 헬퍼 ───────────────────────────────────────────────────────────
     // source / category 읽기전용 배지 (제거 버튼 없음)
-    private GameObject CreateBadge(Transform parent, string label)
+    private static float GetBadgeWidth(string label)
+    {
+        int length = string.IsNullOrEmpty(label) ? 0 : label.Length;
+        return Mathf.Clamp(24f + length * 7f, 52f, 140f);
+    }
+
+    private GameObject CreateBadge(Transform parent, string label, float x, float width)
     {
         Color bg = TagColors.TryGetValue(label, out Color mapped) ? mapped : TagBg;
 
         GameObject pill = CreatePanel("Tag", parent, bg);
-        HorizontalLayoutGroup layout = pill.AddComponent<HorizontalLayoutGroup>();
-        layout.padding = new RectOffset(12, 12, 4, 4);
-        layout.spacing = 6f;
-        layout.childAlignment = TextAnchor.MiddleCenter;
-        layout.childControlWidth = true;
-        layout.childControlHeight = true;
-        layout.childForceExpandWidth = false;
-        layout.childForceExpandHeight = false;
+        RectTransform rect = pill.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 0.5f);
+        rect.anchorMax = new Vector2(0f, 0.5f);
+        rect.pivot = new Vector2(0f, 0.5f);
+        rect.anchoredPosition = new Vector2(x, 0f);
+        rect.sizeDelta = new Vector2(width, 22f);
 
-        ContentSizeFitter fitter = pill.AddComponent<ContentSizeFitter>();
-        fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-        fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
-        Layout(pill, minH: 30f, prefH: 30f);
-
-        CreateText("Label", pill.transform, label, 14, TextWhite, TextAlignmentOptions.Center);
+        TextMeshProUGUI text = CreateText("Label", pill.transform, label, 12, TextWhite, TextAlignmentOptions.Center);
+        RectTransform textRect = text.GetComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.pivot = new Vector2(0.5f, 0.5f);
+        textRect.anchoredPosition = Vector2.zero;
+        textRect.sizeDelta = new Vector2(-10f, -4f);
         return pill;
     }
 
@@ -871,7 +1870,7 @@ public class SkillView : MonoBehaviour
         rect.anchoredPosition = new Vector2(-6f, 0f);
 
         Scrollbar scrollbar = root.AddComponent<Scrollbar>();
-        scrollbar.direction = Scrollbar.Direction.BottomToTop;
+        scrollbar.direction = Scrollbar.Direction.TopToBottom;
 
         GameObject slidingArea = CreateUIObject("Sliding Area", root.transform);
         SetStretch(slidingArea, new Vector4(1f, 1f, 1f, 1f));
@@ -967,6 +1966,10 @@ public class SkillView : MonoBehaviour
         {
             return font;
         }
+        if (boundFont != null)
+        {
+            return boundFont;
+        }
         return TMP_Settings.defaultFontAsset;
     }
 
@@ -1025,6 +2028,14 @@ public class SkillView : MonoBehaviour
         if (button != null)
         {
             button.interactable = on;
+        }
+    }
+
+    private static void SetActive(GameObject go, bool on)
+    {
+        if (go != null && go.activeSelf != on)
+        {
+            go.SetActive(on);
         }
     }
 
