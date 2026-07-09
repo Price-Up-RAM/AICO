@@ -29,8 +29,8 @@ public class EquipSlotDef
 // 생성은 EquipAuthoringUtil.GetOrCreateDefaultTemplate 경로로 일원화.
 public class EquipSlotTemplate : ScriptableObject
 {
-    // 표준 슬롯 5종 (사용자 확정: chest=앞가슴, back=등, head=헤어핀, overhead=모자/천사링, origin=오오라)
-    public static readonly string[] StandardSlotIds = { "chest", "back", "head", "overhead", "origin" };
+    // 표준 슬롯 4종 (overhead는 폐지 — head 소켓의 placeholder(top/halo)로 흡수됨)
+    public static readonly string[] StandardSlotIds = { "chest", "back", "head", "origin" };
 
     public List<EquipSlotDef> slots = new List<EquipSlotDef>();  // 슬롯 정의 목록
 
@@ -65,7 +65,7 @@ public class EquipSlotTemplate : ScriptableObject
     {
         List<string> aliases = new List<string>();
 
-        if (slotId == "head" || slotId == "overhead")
+        if (slotId == "head")
         {
             aliases.Add("head");
             aliases.Add("頭");
@@ -85,7 +85,7 @@ public class EquipSlotTemplate : ScriptableObject
     // slotId별 기본 Humanoid 본 (없으면 -1)
     public static int DefaultHumanoidBone(string slotId)
     {
-        if (slotId == "head" || slotId == "overhead")
+        if (slotId == "head")
         {
             return (int)HumanBodyBones.Head;
         }

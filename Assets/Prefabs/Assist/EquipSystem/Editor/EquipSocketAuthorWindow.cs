@@ -56,6 +56,11 @@ public class EquipSocketAuthorWindow : EditorWindow
             EditorGUILayout.HelpBox("루트 회전이 identity가 아닙니다 — 템플릿 캡처는 프리팹(Apply 후)에서 하는 것을 권장합니다.", MessageType.Warning);
         }
 
+        if (Application.isPlaying)
+        {
+            EditorGUILayout.HelpBox("플레이 모드입니다 — 지금 만드는 소켓은 플레이 정지 시 전부 사라집니다!\n실험용으로만 쓰고, 실제 저작은 정지 후 에딧 모드에서 하세요.", MessageType.Error);
+        }
+
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("표준 슬롯 (본을 넣으세요)", EditorStyles.boldLabel);
 
@@ -134,9 +139,72 @@ public class EquipSocketAuthorWindow : EditorWindow
         {
             label = rowNotes[slotId];
         }
-        EditorGUILayout.LabelField(label, GUILayout.Width(140));
+        EditorGUILayout.LabelField(label, GUILayout.Width(120));
+
+        // 행 단위 생성 (5개 일괄이 부담스러울 때 하나씩)
+        if (GUILayout.Button("생성", GUILayout.Width(40)))
+        {
+            CreateSockets(slotId);
+        }
+
+        // 지정한 본 이름을 이 슬롯의 별칭으로 학습 (템플릿 에셋에 저장 — 다음 캐릭터 제안 정확도 향상)
+        bool canLearn = slotId != "origin" && boneFields.ContainsKey(slotId) && boneFields[slotId] != null;
+        using (new EditorGUI.DisabledScope(canLearn == false))
+        {
+            if (GUILayout.Button("별칭+", GUILayout.Width(46)))
+            {
+                AddAliasFromBone(slotId);
+            }
+        }
 
         EditorGUILayout.EndHorizontal();
+    }
+
+    // 지정된 본 이름의 토큰을 템플릿 def의 별칭 목록에 추가 (리그 접두어는 제외)
+    private void AddAliasFromBone(string slotId)
+    {
+        Transform bone = boneFields[slotId];
+        EquipSlotTemplate template = EquipAuthoringUtil.GetOrCreateDefaultTemplate();
+
+        EquipSlotDef def = template.Find(slotId);
+        if (def == null)
+        {
+            def = new EquipSlotDef();
+            def.slotId = slotId;
+            def.boneAliases = EquipSlotTemplate.DefaultAliases(slotId);
+            def.humanoidBone = EquipSlotTemplate.DefaultHumanoidBone(slotId);
+            template.slots.Add(def);
+        }
+        if (def.boneAliases == null)
+        {
+            def.boneAliases = new List<string>();
+        }
+
+        // 리그 접두어/무의미 토큰 제외 후 추가
+        List<string> skip = new List<string> { "bip001", "mixamorig", "bone", "l", "r" };
+        int added = 0;
+        foreach (string token in EquipAuthoringUtil.TokenizeBoneName(bone.name))
+        {
+            if (token.Length <= 1)
+            {
+                continue;
+            }
+            if (skip.Contains(token))
+            {
+                continue;
+            }
+            if (def.boneAliases.Contains(token))
+            {
+                continue;
+            }
+            def.boneAliases.Add(token);
+            added = added + 1;
+        }
+
+        EditorUtility.SetDirty(template);
+        AssetDatabase.SaveAssets();
+        rowNotes[slotId] = $"별칭 +{added}";
+        Debug.Log($"[SocketAuthor] '{slotId}' 별칭에 '{bone.name}' 토큰 {added}개 추가 → 템플릿 에셋에 저장됨 (별칭 전체는 템플릿 인스펙터에서 편집 가능).");
     }
 
     // 빈 본 필드를 사다리 해석(NAME→HUMANOID→ALIAS→NEAREST)으로 채움 — 참고용 제안
@@ -198,8 +266,8 @@ public class EquipSocketAuthorWindow : EditorWindow
         Repaint();
     }
 
-    // 본이 지정된 슬롯마다 소켓 생성/이동. 위치/캡슐은 템플릿 def(있으면) 또는 본 원점+기본 비율.
-    private void CreateSockets()
+    // 본이 지정된 슬롯마다 소켓 생성/이동 (onlySlotId 지정 시 그 슬롯만). 위치/캡슐은 템플릿 def(있으면) 또는 본 원점+기본 비율.
+    private void CreateSockets(string onlySlotId = null)
     {
         Transform rootT = target.transform;
         Quaternion rootRot = rootT.rotation;
@@ -215,6 +283,12 @@ public class EquipSocketAuthorWindow : EditorWindow
 
         foreach (string slotId in EquipSlotTemplate.StandardSlotIds)
         {
+            // 행 단위 실행이면 해당 슬롯만
+            if (string.IsNullOrEmpty(onlySlotId) == false && slotId != onlySlotId)
+            {
+                continue;
+            }
+
             // 부착 본 결정 (origin=루트, 그 외=필드값. 비어 있으면 스킵)
             Transform bone = null;
             if (slotId == "origin")
@@ -315,15 +389,18 @@ public class EquipSocketAuthorWindow : EditorWindow
             made = made + 1;
         }
 
-        // 씬/프리팹 스테이지 dirty 처리
-        UnityEditor.SceneManagement.PrefabStage stage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
-        if (stage != null)
+        // 씬/프리팹 스테이지 dirty 처리 (플레이 모드에서는 불가 — 예외 방지)
+        if (Application.isPlaying == false)
         {
-            EditorSceneManager.MarkSceneDirty(stage.scene);
-        }
-        else
-        {
-            EditorSceneManager.MarkSceneDirty(target.scene);
+            UnityEditor.SceneManagement.PrefabStage stage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+            if (stage != null)
+            {
+                EditorSceneManager.MarkSceneDirty(stage.scene);
+            }
+            else
+            {
+                EditorSceneManager.MarkSceneDirty(target.scene);
+            }
         }
 
         Debug.Log($"[SocketAuthor] 소켓 생성/갱신 {made}건. 라이브 미리보기로 조정 후 Apply(씬 인스턴스) 또는 저장(프리팹 모드) 하세요.");

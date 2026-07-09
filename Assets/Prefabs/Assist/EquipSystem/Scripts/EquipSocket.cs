@@ -32,6 +32,25 @@ public class EquipSocket : MonoBehaviour
         }
     }
 
+    // 이 소켓의 placeholder를 id로 탐색 (직계 자식, 없으면 null)
+    public EquipPlaceholder FindPlaceholder(string placeholderId)
+    {
+        if (string.IsNullOrEmpty(placeholderId))
+        {
+            return null;
+        }
+
+        EquipPlaceholder[] placeholders = GetComponentsInChildren<EquipPlaceholder>(true);
+        foreach (EquipPlaceholder ph in placeholders)
+        {
+            if (ph != null && ph.placeholderId == placeholderId)
+            {
+                return ph;
+            }
+        }
+        return null;
+    }
+
     // 캐릭터 계층에서 slotId로 소켓 탐색 (없으면 null)
     public static EquipSocket Find(GameObject character, string slotId)
     {

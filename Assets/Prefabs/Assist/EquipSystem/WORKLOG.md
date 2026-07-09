@@ -9,8 +9,12 @@
   조정하고, 한 번 만든 배치(원본=템플릿)를 다른 캐릭터/의상에 **복사(스탬프)**한다.
 - 본 이름 하드코딩 없음 — 부착 본은 사용자가 지정(드래그)하는 것이 최종. 자동 해석
   (NAME→HUMANOID→ALIAS→물리필터 NEAREST)은 제안/전파용.
-- 표준 슬롯 5종(사용자 확정): `chest`(앞가슴) `back`(등) `head`(헤어핀) `overhead`(모자/천사링) `origin`(오오라).
-  물리 흔들림은 비목표 — 본 추종까지만.
+- **소켓/플레이스홀더 모델 (2026-07-09 확정)**: socket = 부위를 감싸는 "민둥민둥한 캡슐"(부피 조절이
+  튜닝 노브), placeholder = 캡슐 테두리/근처의 부착점(무차원 표면 좌표: axisT/dirLocal/radiusScale).
+  캡슐 크기를 바꾸면 placeholder가 표면을 따라 재배치되어 재활용된다. 악세서리는 placeholder에 부착.
+- 표준 슬롯 4종: `chest`(앞가슴) `back`(등) `head`(볼륨 소켓 — top/side_l/side_r/halo placeholder)
+  `origin`(오오라). ~~overhead~~는 폐지 → head의 `top`/`halo` placeholder로 흡수(레거시 카탈로그는
+  자동 별칭 매핑). 물리 흔들림은 비목표 — 본 추종까지만(MagicaCloth 연동 없음).
 
 ## 메뉴 (딱 2개)
 
@@ -60,6 +64,22 @@ EquipManager.Instance.Unequip(characterGameObject, "head");              // 해�
 | `Editor/EquipAuthoringUtil.cs` / `EquipPhysicsBoneFilter.cs` | 공용 계산 / 물리 본 안전망 |
 | `Editor/EquipSocketEditor.cs` | 소켓 인스펙터 + 라이브 미리보기 |
 | `EquipDemo.unity` / `Resources/EquipCatalog_Demo.asset` | 데모 씬 / 데모 카탈로그 |
+
+## Phase A 구현 (2026-07-09) — placeholder 최소 전환
+
+- 신규: `Scripts/EquipCapsuleMath.cs`(표면 좌표 Encode/Decode/스냅), `Scripts/EquipPlaceholder.cs`
+  (부착점 컴포넌트), `Editor/EquipPlaceholderEditor.cs`(표면 스냅 드래그 + 라이브 미리보기).
+- 수정: `EquipSocket.FindPlaceholder`, `EquipCatalog`(targetPlaceholderId/fitMode/sizeRatio/
+  positionOffsetRadii — additive, 기존 엔트리 무손상), `EquipPlacement.FitToPlaceholder`
+  (RadiusRelative 크기 + BottomAlign 접촉), `EquipManager`(overhead→head/top 별칭, placeholder 단위
+  장착/교체 = 모자+헤어핀+링 동시 장착, 레거시 경로 보존), `EquipSocketEditor`(placeholder 목록/
+  표준 시드/재배치 버튼), 표준 슬롯 4종화 + 스탬프의 비표준 def 스킵.
+- placeholder 사용법: head 소켓 선택 → 인스펙터 [표준 시드] → PH_top 등 선택 → 이동 툴 드래그
+  (표면 스냅 켜져 있으면 캡슐 테두리를 미끄러짐) → 캡슐 크기 바꾸면 [재배치]로 표면 추종.
+- 카탈로그에서 placeholder 겨냥: 엔트리에 `targetPlaceholderId`(예: head + top) + fitMode=
+  RadiusRelative + sizeRatio. 비워두면 기존 레거시 동작.
+- **Phase B(미구현)**: placeholder의 템플릿 캡처/전파(현재 전파는 소켓까지만 — placeholder는 캡슐을
+  맞추면 좌표 재적용으로 따라오는 구조라 Donor 복제/템플릿 def 확장은 다음 단계).
 
 ## 이력 메모
 - 2026-07-09: Phase1+2 구현(멀티에이전트 리뷰 40건 반영, 스모크 77/77 PASS 후 테스트 파일은 정리).

@@ -51,22 +51,96 @@ public class EquipManager : MonoBehaviour
             return;
         }
 
-        EquipSocket socket = EquipSocket.Find(target, entry.targetSlotId);
+        // 레거시 slotId 별칭 (overhead 폐지 → head/top placeholder)
+        string slotId = entry.targetSlotId;
+        string placeholderId = entry.targetPlaceholderId;
+        if (slotId == "overhead")
+        {
+            slotId = "head";
+            if (string.IsNullOrEmpty(placeholderId))
+            {
+                placeholderId = "top";
+            }
+        }
+
+        EquipSocket socket = EquipSocket.Find(target, slotId);
         if (socket == null)
         {
-            Debug.LogWarning($"[EquipManager] 소켓 없음: slotId='{entry.targetSlotId}' on {target.name}");
+            Debug.LogWarning($"[EquipManager] 소켓 없음: slotId='{slotId}' on {target.name}");
             return;
         }
 
-        // 이 소켓의 기존 장착물(표식) 제거
-        ClearEquipped(socket.transform);
+        if (string.IsNullOrEmpty(placeholderId))
+        {
+            // 레거시 경로: 소켓 직부착 (placeholder 하위 장착물은 보존)
+            ClearEquippedSocketOnly(socket);
 
-        // 프리팹 인스턴스화 + 볼륨-핏 배치 (런타임/에디터 공유 로직)
-        GameObject inst = Instantiate(entry.prefab);
-        EquipPlacement.Fit(inst, socket, entry.fitBias, entry.positionOffset, entry.rotationOffset);
+            GameObject inst = Instantiate(entry.prefab);
+            EquipPlacement.Fit(inst, socket, entry.fitBias, entry.positionOffset, entry.rotationOffset);
+            inst.AddComponent<EquipMarker>();
+            return;
+        }
 
-        // 장착물 표식 부착 (해제 시 식별용)
-        inst.AddComponent<EquipMarker>();
+        // placeholder 경로
+        EquipPlaceholder ph = socket.FindPlaceholder(placeholderId);
+        if (ph == null)
+        {
+            // placeholder 미저작 캐릭터 폴백: 소켓 직부착 + 경고
+            Debug.LogWarning($"[EquipManager] placeholder 없음: '{slotId}/{placeholderId}' on {target.name} — 소켓 직부착 폴백");
+            ClearEquippedSocketOnly(socket);
+
+            GameObject fallback = Instantiate(entry.prefab);
+            EquipPlacement.Fit(fallback, socket, entry.fitBias, entry.positionOffset, entry.rotationOffset);
+            fallback.AddComponent<EquipMarker>();
+            return;
+        }
+
+        // placeholder 단위 교체 — 다른 placeholder의 장착물은 유지 (모자+헤어핀+링 동시 장착)
+        ClearEquipped(ph.transform);
+
+        GameObject phInst = Instantiate(entry.prefab);
+        EquipPlacement.FitToPlaceholder(phInst, socket, ph, entry);
+        phInst.AddComponent<EquipMarker>();
+    }
+
+    // 특정 placeholder의 장착물만 해제
+    public void Unequip(GameObject target, string slotId, string placeholderId)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        EquipSocket socket = EquipSocket.Find(target, slotId);
+        if (socket == null)
+        {
+            return;
+        }
+
+        EquipPlaceholder ph = socket.FindPlaceholder(placeholderId);
+        if (ph != null)
+        {
+            ClearEquipped(ph.transform);
+        }
+    }
+
+    // 소켓 직부착 장착물만 해제 (placeholder 하위는 보존)
+    private void ClearEquippedSocketOnly(EquipSocket socket)
+    {
+        EquipMarker[] marks = socket.GetComponentsInChildren<EquipMarker>(true);
+        foreach (EquipMarker mark in marks)
+        {
+            if (mark == null)
+            {
+                continue;
+            }
+
+            if (mark.GetComponentInParent<EquipPlaceholder>() != null)
+            {
+                continue;
+            }
+            Destroy(mark.gameObject);
+        }
     }
 
     // target의 지정 슬롯 장착물 해제

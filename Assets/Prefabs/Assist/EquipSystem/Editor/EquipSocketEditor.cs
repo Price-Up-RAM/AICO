@@ -115,11 +115,89 @@ public class EquipSocketEditor : Editor
             RebuildPreview();
         }
 
+        // ── Placeholder 관리 (소켓=부위 볼륨, placeholder=테두리 부착점) ──
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Placeholders (캡슐 테두리 부착점)", EditorStyles.boldLabel);
+
+        EquipPlaceholder[] placeholders = socket.GetComponentsInChildren<EquipPlaceholder>(true);
+        foreach (EquipPlaceholder ph in placeholders)
+        {
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("· " + ph.placeholderId, GUILayout.Width(100));
+            EditorGUILayout.LabelField($"axisT {ph.axisT:F2}  rs {ph.radiusScale:F2}", GUILayout.Width(140));
+            if (GUILayout.Button("선택", GUILayout.Width(40)))
+            {
+                Selection.activeGameObject = ph.gameObject;
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+
+        EditorGUILayout.BeginHorizontal();
+        if (socket.slotId == "head")
+        {
+            if (GUILayout.Button("표준 시드 (top/side_l/side_r/halo)"))
+            {
+                CreatePlaceholder(socket, "top", 1f, AxisDir(socket), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
+                CreatePlaceholder(socket, "side_l", 0.3f, new Vector3(-1f, 0f, 0f), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
+                CreatePlaceholder(socket, "side_r", 0.3f, new Vector3(1f, 0f, 0f), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
+                CreatePlaceholder(socket, "halo", 1f, AxisDir(socket), 1.6f, EquipPlaceholderOrientation.SocketFrame, EquipContactAnchor.Center);
+            }
+        }
+        if (GUILayout.Button("Placeholder 추가"))
+        {
+            CreatePlaceholder(socket, "new", 1f, AxisDir(socket), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
+        }
+        if (GUILayout.Button("재배치 (캡슐 변경 반영)"))
+        {
+            foreach (EquipPlaceholder ph in placeholders)
+            {
+                Undo.RecordObject(ph.transform, "Reapply Placeholder");
+                ph.ApplyToTransform();
+            }
+        }
+        EditorGUILayout.EndHorizontal();
+
         // 인스펙터에서 값이 바뀌면 미리보기 재핏
         if (GUI.changed && livePreview)
         {
             RebuildPreview();
         }
+    }
+
+    // 캡슐 축 방향 (로컬)
+    private static Vector3 AxisDir(EquipSocket socket)
+    {
+        CapsuleCollider cap = socket.SizingVolume as CapsuleCollider;
+        if (cap != null)
+        {
+            return EquipCapsuleMath.AxisVector(cap);
+        }
+        return Vector3.up;
+    }
+
+    // placeholder 생성 (같은 id가 있으면 스킵)
+    private static void CreatePlaceholder(EquipSocket socket, string id, float axisT, Vector3 dirLocal, float radiusScale, EquipPlaceholderOrientation orientation, EquipContactAnchor anchor)
+    {
+        if (socket.FindPlaceholder(id) != null)
+        {
+            Debug.Log($"[EquipSocket] placeholder '{id}' 이미 존재 — 보존.");
+            return;
+        }
+
+        GameObject go = new GameObject("PH_" + id);
+        Undo.RegisterCreatedObjectUndo(go, "Create Placeholder");
+        go.transform.SetParent(socket.transform, false);
+
+        EquipPlaceholder ph = go.AddComponent<EquipPlaceholder>();
+        ph.placeholderId = id;
+        ph.axisT = axisT;
+        ph.dirLocal = dirLocal.normalized;
+        ph.radiusScale = radiusScale;
+        ph.orientation = orientation;
+        ph.contactAnchor = anchor;
+        ph.ApplyToTransform();
+
+        EditorUtility.SetDirty(go);
     }
 
     // 씬에서 캡슐/Transform을 드래그하는 동안 미리보기를 계속 재핏

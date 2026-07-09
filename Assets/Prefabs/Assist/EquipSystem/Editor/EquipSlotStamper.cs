@@ -267,6 +267,13 @@ public static class EquipSlotStamper
                 continue;
             }
 
+            // 폐지/비표준 슬롯(구 overhead 등) 스킵 — 오래된 템플릿 에셋의 잔존 def 방어
+            if (EquipSlotTemplate.IsStandardSlot(def.slotId) == false)
+            {
+                report.Add(MakeEntry(prefabPath, def.slotId, "SKIP_NONSTANDARD", "", "", "표준 슬롯 아님 (overhead는 head placeholder로 흡수됨)", false));
+                continue;
+            }
+
             // 손보정/수동 소켓 보호 (+순정 스탬프면 재사용 대상 반환)
             EquipSocket reusable;
             EquipStampEntry guard = CheckExistingSocket(rootT, def.slotId, prefabPath, out reusable);
