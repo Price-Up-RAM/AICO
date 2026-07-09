@@ -1,88 +1,69 @@
 # EquipSystem — 완전 독립(Standalone) 악세서리 장착 시스템
 
-기존 `Accessory` 시스템(AccessoryManager/AccessoryData/AccessorySocket 등)과 **코드 의존이 전혀 없는**
-독립 시스템. 소켓(콜라이더 볼륨)에 악세서리를 자동 크기 맞춤(볼륨-핏)으로 붙인다.
+기존 `Accessory` 시스템과 **코드 의존이 전혀 없는** 독립 시스템.
 
----
+## 전제
 
-## 1. 구성 (전부 `Assets/Prefabs/Assist/EquipSystem/` 안)
+- **캐릭터 프리팹에 슬롯은 원래 없다.** 슬롯(소켓)은 저작으로 만든다.
+- 핵심 가치 = 콜라이더 다루듯 쉬운 소켓 저작: **본을 지정하면 소켓이 생기고**, 캡슐 핸들로
+  조정하고, 한 번 만든 배치(원본=템플릿)를 다른 캐릭터/의상에 **복사(스탬프)**한다.
+- 본 이름 하드코딩 없음 — 부착 본은 사용자가 지정(드래그)하는 것이 최종. 자동 해석
+  (NAME→HUMANOID→ALIAS→물리필터 NEAREST)은 제안/전파용.
+- 표준 슬롯 5종(사용자 확정): `chest`(앞가슴) `back`(등) `head`(헤어핀) `overhead`(모자/천사링) `origin`(오오라).
+  물리 흔들림은 비목표 — 본 추종까지만.
+
+## 메뉴 (딱 2개)
+
+| 메뉴 | 용도 |
+|---|---|
+| `Tools/EquipSystem/Socket Author` | **소켓 만들기.** 표준 5슬롯 각각에 본을 드래그 → [소켓 생성/이동]. [본 자동 제안]은 빈 필드를 사다리 해석으로 채워주는 참고. [템플릿 캡처]로 현재 배치를 원본에 저장. |
+| `Tools/EquipSystem/Propagation Window` | **복사(전파).** Donor 모드(같은 스켈레톤 의상, 무손실)/Template 모드(다른 캐릭터, 사다리). 드라이런 기본, 리포트+[열기]. |
+
+(+ 소켓 선택 시 Inspector의 **라이브 미리보기** — 실제 악세서리를 띄워놓고 캡슐/Transform 드래그로 조정)
+
+## 표준 워크플로우
+
+### 1) 만들기 (씬에서 연습 → 커밋)
+1. 씬에 캐릭터 프리팹 인스턴스 드래그.
+2. `Socket Author` 창 → 대상 지정([선택에서]) → 각 슬롯에 본 드래그(또는 [본 자동 제안] 후 확인/수정)
+   → **[소켓 생성/이동]**. origin은 루트 자동.
+3. 각 소켓 선택 → 라이브 미리보기로 위치/캡슐 조정.
+4. 확정: 인스턴스 루트 → **Overrides → Apply All** (연습 폐기는 Revert All).
+5. `Socket Author`의 **[템플릿 캡처]** → 이 배치가 "원본"이 됨.
+
+### 2) 복사 (전파)
+- **같은 캐릭터 의상들**: Propagation 창 Donor 모드 — 완성된 프리팹을 Donor로, 의상 다중선택 → 드라이런 → Stamp.
+- **다른 캐릭터**: Template 모드 — 드라이런 리포트에서 해석 라벨(NAME/HUMANOID/ALIAS/NEAREST) 확인 → Stamp → 경고 슬롯만 [열기]로 조정.
+- **보호**: 손으로 만든/보정한 소켓은 어떤 전파도 덮어쓰지 않음(KEEP_MANUAL/KEEP_TUNED).
+
+### 3) 장착 (런타임)
+```csharp
+EquipManager.Instance.Equip(characterGameObject, "hairpin_placeholder"); // 장착/교체
+EquipManager.Instance.Unequip(characterGameObject, "head");              // 해제
+```
+- 씬에 `EquipManager` 1개 + 캐릭터에 해당 `slotId` 소켓만 있으면 동작. 같은 slotId 재장착=교체.
+- 악세서리는 소켓 캡슐 크기에 uniform 핏 + 카탈로그(`Resources/EquipCatalog_Demo`)의 fitBias/offset 보정.
+- 아이템 추가 = 카탈로그 entries에 한 줄(key/prefab/targetSlotId/fitBias/offset).
+
+## 구성 파일
 
 | 파일 | 역할 |
 |---|---|
-| `Scripts/EquipSocket.cs` | 소켓 컴포넌트(`EquipSocket`) + 장착물 표식(`EquipMarker`). 같은 GameObject의 Collider를 "사이징 볼륨"으로 사용. 필드: `slotId`, `fit`, `pivot`, `placeholderAnchor`. |
-| `Scripts/EquipFitter.cs` | 순수 계산: 볼륨 길이/center, 악세서리 고유 크기 측정, uniform 핏 스케일. |
-| `Scripts/EquipPlacement.cs` | 배치 로직(측정→스케일→회전→위치). **런타임과 에디터 미리보기가 공유** → WYSIWYG. |
-| `Scripts/EquipCatalog.cs` | ScriptableObject 카탈로그. `EquipEntry{key, prefab, targetSlotId, fitBias, positionOffset, rotationOffset}`. |
-| `Scripts/EquipManager.cs` | 싱글톤(지연초기화). `Equip(target,key)` / `Unequip(target,slotId)`. catalog 미지정 시 `Resources.Load("EquipCatalog_Demo")` 폴백. |
-| `Scripts/EquipDemoController.cs` | 데모 트리거. 키 바인딩으로 장착/교체/해제. |
-| `Editor/EquipSocketEditor.cs` | `EquipSocket` 커스텀 인스펙터 + **라이브 미리보기**. |
-| `Editor/EquipSystemTools.cs` | `Tools/EquipSystem/*` 메뉴(소켓 추가/복제 셋업/카탈로그/데모씬 빌드/정리). |
-| `Resources/EquipCatalog_Demo.asset` | 데모 카탈로그(런타임 자동 로드). |
-| `EquipDemo.unity` | 데모 씬. |
+| `Scripts/EquipSocket.cs` | 소켓 컴포넌트(slotId/fit/pivot, 같은 GO의 Collider=사이징 볼륨) + `EquipMarker` |
+| `Scripts/EquipSocketStamp.cs` | 전파 스탬프 마커+스냅샷(손보정 감지 — 캡슐 대비 상대 오차, 스케일 불변) |
+| `Scripts/EquipFitter.cs` / `EquipPlacement.cs` | 볼륨-핏 계산/배치 (런타임=미리보기 공유) |
+| `Scripts/EquipCatalog.cs` / `EquipManager.cs` / `EquipDemoController.cs` | 카탈로그 SO / 장착 매니저 / 데모 |
+| `Editor/EquipSocketAuthorWindow.cs` | **Socket Author 창** |
+| `Editor/EquipPropagationWindow.cs` | **전파 창** |
+| `Editor/EquipSlotStamper.cs` | Capture / Donor 복사 / 사다리 스탬프(`ResolveBone`) / 배치 IO |
+| `Editor/EquipSlotTemplate.cs` | 원본 SO (표준 5종, `Editor/Templates/EquipSlotTemplate_Default.asset`) |
+| `Editor/EquipAuthoringUtil.cs` / `EquipPhysicsBoneFilter.cs` | 공용 계산 / 물리 본 안전망 |
+| `Editor/EquipSocketEditor.cs` | 소켓 인스펙터 + 라이브 미리보기 |
+| `EquipDemo.unity` / `Resources/EquipCatalog_Demo.asset` | 데모 씬 / 데모 카탈로그 |
 
----
-
-## 2. 작동 원리
-
-### 소켓과 본의 관계 (중요)
-- 소켓(예: `Slot_HairPin_R`)은 **캐릭터의 본(머리 등)의 자식 GameObject**다. → **본을 따라 움직인다**(애니메이션 추종).
-- 소켓의 **로컬 위치/회전이 이미 "악세서리가 놓일 자리"로 오프셋**되어 있다(원본 리그에 저작됨).
-  그래서 악세서리를 소켓 로컬 원점에 놓으면 → 그 자리에 앉고 + 본을 따라간다. 본에서 수동 오프셋 불필요.
-- **조절 지점 = 소켓 자신**(본 기준 Transform) 또는 **콜라이더(캡슐) center/size**. → "콜라이더처럼" 배치.
-
-### 볼륨-핏
-- 소켓의 Collider(Capsule 권장)가 "목표 크기 볼륨". 악세서리는 이 볼륨 길이에 맞춰 **균일(uniform) 스케일**.
-- 캡슐 크기 = 캐릭터 전체 높이 비례로 자동 계산(스케일이 캐릭터마다 달라도 대응).
-- 아이템별 미세보정: 카탈로그 `fitBias`(크기), `rotationOffset`/`positionOffset`(자세/위치).
-
-### 장착 흐름
-`EquipManager.Equip(target, key)` → 카탈로그에서 key→(prefab, slot, 오프셋) → `EquipSocket.Find(target, slot)`
-→ `EquipPlacement.Fit`로 볼륨-핏 배치 → `EquipMarker` 부착(해제 시 식별).
-
----
-
-## 3. 사용법
-
-### A. 데모 씬으로 확인
-1. `Assets/Prefabs/Assist/EquipSystem/EquipDemo.unity` 열기 → **Play**.
-2. `3` chipao / `4` idolfrontribbon / `5` pareo (head1 슬롯에서 교체) · `6` hairpin · `J` head1 해제.
-
-### B. 소켓 새로 배치 (콜라이더처럼)
-1. 캐릭터 프리팹 더블클릭(프리팹 모드).
-2. 소켓으로 쓸 본(또는 본 하위 빈 GameObject) 선택 → 메뉴 **`Tools/EquipSystem/Add EquipSocket To Selection`**
-   → `EquipSocket` + CapsuleCollider 자동 부착(캐릭터 크기 비례).
-3. Inspector에서 `slotId` 지정.
-4. Inspector의 **`라이브 미리보기` 체크** + Catalog/Accessory Key 선택 → 실제 악세서리가 소켓에 뜬다.
-5. **CapsuleCollider 핸들 / 소켓 Transform을 드래그** → 악세서리가 즉시 재핏(크기·위치·자세). Play 불필요.
-6. 프리팹 저장.
-
-### C. 악세서리 추가
-`Resources/EquipCatalog_Demo.asset` 선택 → `entries`에 한 줄 추가:
-`key`(식별자) · `prefab`(악세서리 프리팹) · `targetSlotId`(붙일 슬롯) · `fitBias`(크기 미세) · `rotation/positionOffset`.
-
-### D. 코드에서 호출
-```csharp
-EquipManager.Instance.Equip(characterGameObject, "hairpin_placeholder");
-EquipManager.Instance.Unequip(characterGameObject, "head1");
-```
-씬에 `EquipManager` 하나 + 캐릭터에 해당 `slotId`의 `EquipSocket`만 있으면 된다.
-
-### E. 메뉴 요약 (`Tools/EquipSystem/`)
-- `Setup All` — 소켓+카탈로그+데모씬 일괄 생성.
-- `Add EquipSocket To Selection` — 선택 본에 소켓 원클릭.
-- `Cleanup Legacy Accessory Components On POC` — POC 프리팹의 옛 Accessory 컴포넌트 제거.
-
----
-
-## 4. 독립성 / discard 안전성
-
-- EquipSystem **코드는 Accessory 시스템을 전혀 참조하지 않음** → 기존 Accessory 변경(AccessoryManager/
-  AccessoryData/Assets/Scripts/Accessory/* 등)을 discard해도 컴파일/동작 영향 없음.
-- 데모 캐릭터(arona)는 씬에 **언팩 베이크**됨(외부 프리팹 참조 0) → POC 프리팹이 사라져도 데모는 동작.
-- 카탈로그가 참조하는 악세서리 프리팹(`arona_a_chipao/idolfrontribbon/pareo`, `hairpin_placeholder`)은
-  **모두 tracked·미변경 자산** → discard 후에도 유지.
-- POC 프리팹의 옛 `AccessorySocket`은 제거 완료 → discard로 스크립트 삭제돼도 missing script 없음.
-
-### 외부(assist 밖) 의존 — 전부 유지되는 자산
-- 악세서리 프리팹: `Assets/Model/Prefab/arona_a_*.prefab`, `hairpin_placeholder.prefab` (tracked).
-- 소켓이 부착된 캐릭터 프리팹: `Assets/Prefabs/Char_toon/*_POC.prefab` (소켓은 콜라이더처럼 캐릭터에 붙는 게 정상).
+## 이력 메모
+- 2026-07-09: Phase1+2 구현(멀티에이전트 리뷰 40건 반영, 스모크 77/77 PASS 후 테스트 파일은 정리).
+  이후 사용자 피드백으로 도구 표면 대청소: 메뉴 2개(Socket Author/Propagation)로 축소,
+  POC 셋업/클립보드/골든 하드코딩(Bip001)/스모크/데모빌더 메뉴·파일 삭제.
+- 독립성: EquipSystem 코드는 기존 Accessory/CharManager 등을 참조하지 않음. 악세서리 프리팹
+  (`Assets/Model/Prefab/*`)만 자산으로 공유.

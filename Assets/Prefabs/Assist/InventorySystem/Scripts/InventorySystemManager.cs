@@ -1,0 +1,765 @@
+using System.Collections.Generic;
+using System.IO;
+using UnityEngine;
+
+// InventorySystem 매니저 (완전 독립 standalone).
+// 아이템을 {key,count} 스토어(MAIN 공용 풀 + 캐릭터별 스토어)로 관리하고 JSON으로 영속화.
+// 장착/해제는 전부 EquipSystem(EquipManager)에 위임 — 단방향 의존.
+// 스토어는 "소유"만 추적하며, 장착 상태의 진실은 EquipSystem에 있고
+// 여기서는 표시용 런타임 미러(저장 안 함)만 유지한다.
+public class InventorySystemManager : MonoBehaviour
+{
+    public const string MainOwnerId = "MAIN";  // 공용(MAIN) 스토어의 ownerId
+
+    private static InventorySystemManager instance;  // 싱글톤 인스턴스
+    public static InventorySystemManager Instance
+    {
+        get
+        {
+            if (instance == null)
+            {
+                // 인스턴스가 없으면 찾아서 할당
+                instance = FindObjectOfType<InventorySystemManager>();
+            }
+
+            return instance;
+        }
+    }
+
+    [SerializeField] private InventoryCatalog catalog;      // 아이템 메타 카탈로그. 인스펙터 지정 우선.
+    [SerializeField] private EquipCatalog equipCatalog;     // 장착 가능 여부/슬롯 판정용 EquipSystem 카탈로그.
+
+    // 뷰의 메타 조회용 getter
+    public InventoryCatalog Catalog
+    {
+        get
+        {
+            return catalog;
+        }
+    }
+
+    public string ActiveCharcode { get; private set; }      // 현재 활성 캐릭터 charcode
+    public GameObject ActiveTarget { get; private set; }    // 현재 활성 캐릭터 GameObject (장착 대상)
+
+    private InvStore mainStore;                                             // MAIN 스토어 (지연 로드)
+    private Dictionary<string, InvStore> charStores = new Dictionary<string, InvStore>();  // charcode→스토어 캐시
+
+    // 장착 미러: charcode → (slotId → key). 런타임 표시 전용, 저장 안 함.
+    private Dictionary<string, Dictionary<string, string>> equipMirror = new Dictionary<string, Dictionary<string, string>>();
+
+    // 카탈로그 미지정 시 Resources에서 자동 로드 (인스펙터 지정이 우선)
+    private void Awake()
+    {
+        if (catalog == null)
+        {
+            catalog = Resources.Load<InventoryCatalog>("InventoryCatalog_Demo");
+        }
+
+        if (equipCatalog == null)
+        {
+            equipCatalog = Resources.Load<EquipCatalog>("EquipCatalog_Demo");
+        }
+    }
+
+    // 저장 디렉토리 경로 (persistentDataPath/InventorySystem)
+    private string GetSaveDir()
+    {
+        return Path.Combine(Application.persistentDataPath, "InventorySystem");
+    }
+
+    // 스토어 저장 파일 경로 (MAIN=main.json, 캐릭터=char_{charcode}.json)
+    private string GetStorePath(string ownerId)
+    {
+        if (ownerId == MainOwnerId)
+        {
+            return Path.Combine(GetSaveDir(), "main.json");
+        }
+
+        return Path.Combine(GetSaveDir(), $"char_{ownerId}.json");
+    }
+
+    // 파일에서 스토어 로드 (파일 없거나 파싱 실패 시 신규 생성)
+    private InvStore LoadStore(string ownerId)
+    {
+        string path = GetStorePath(ownerId);
+
+        if (File.Exists(path))
+        {
+            try
+            {
+                string json = File.ReadAllText(path);
+                InvStore loaded = JsonUtility.FromJson<InvStore>(json);
+                if (loaded != null)
+                {
+                    // 파일 이름 기준 ownerId를 신뢰 (파일 내용 불일치 보정)
+                    loaded.ownerId = ownerId;
+                    if (loaded.stacks == null)
+                    {
+                        loaded.stacks = new List<InvItemStack>();
+                    }
+
+                    // 칸 미배정(-1)/중복 보정 (slot 필드가 없던 구버전 세이브 대응)
+                    loaded.NormalizeSlots();
+
+                    return loaded;
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[InventorySystemManager] 스토어 로드 실패({ownerId}): {e.Message}");
+            }
+        }
+
+        InvStore store = new InvStore();
+        store.ownerId = ownerId;
+        return store;
+    }
+
+    // MAIN 스토어 조회 (지연 로드)
+    public InvStore GetMainStore()
+    {
+        if (mainStore == null)
+        {
+            mainStore = LoadStore(MainOwnerId);
+        }
+
+        return mainStore;
+    }
+
+    // 캐릭터 스토어 조회 (지연 로드: 파일 있으면 로드, 없으면 신규)
+    public InvStore GetCharStore(string charcode)
+    {
+        if (string.IsNullOrEmpty(charcode))
+        {
+            return null;
+        }
+
+        if (charStores.TryGetValue(charcode, out InvStore cached))
+        {
+            return cached;
+        }
+
+        InvStore store = LoadStore(charcode);
+        charStores[charcode] = store;
+        return store;
+    }
+
+    // 활성 캐릭터의 스토어 조회 (활성 캐릭터 없으면 null)
+    public InvStore GetActiveCharStore()
+    {
+        if (string.IsNullOrEmpty(ActiveCharcode))
+        {
+            return null;
+        }
+
+        return GetCharStore(ActiveCharcode);
+    }
+
+    // 활성 소유자(캐릭터) 전환 — 미래 앱 배선 시 외부(CharManager 등)가 부를 단일 진입점
+    public void SetActiveOwner(string charcode, GameObject target)
+    {
+        if (string.IsNullOrEmpty(charcode))
+        {
+            Debug.LogWarning("[InventorySystemManager] SetActiveOwner: charcode가 비어 있습니다.");
+            return;
+        }
+
+        if (target == null)
+        {
+            Debug.LogWarning("[InventorySystemManager] SetActiveOwner: target이 null입니다.");
+            return;
+        }
+
+        // 전환 전 현재 상태 저장
+        SaveAll();
+
+        ActiveCharcode = charcode;
+        ActiveTarget = target;
+
+        // 스토어 로드 보장
+        GetCharStore(charcode);
+
+        InventoryEvents.OnActiveOwnerChanged?.Invoke(charcode);
+    }
+
+    // 인벤토리 카탈로그에 등록된 키인지
+    public bool IsKnownKey(string key)
+    {
+        if (catalog == null)
+        {
+            return false;
+        }
+
+        return catalog.Contains(key);
+    }
+
+    // 장착 가능한 키인지 (EquipCatalog에 존재하는지)
+    public bool IsEquippable(string key)
+    {
+        return equipCatalog != null && equipCatalog.Contains(key);
+    }
+
+    // 스토어에 아이템 추가 공통 처리 (카탈로그 검증 + maxStack 클램프 + 저장 + 이벤트)
+    private bool AddToStore(InvStore store, string key, int amount)
+    {
+        if (store == null)
+        {
+            return false;
+        }
+
+        if (amount <= 0)
+        {
+            return false;
+        }
+
+        if (IsKnownKey(key) == false)
+        {
+            Debug.LogWarning($"[InventorySystemManager] 카탈로그에 없는 키: {key}");
+            return false;
+        }
+
+        // maxStack 클램프: 초과분은 버림
+        InventoryEntry meta = catalog.Get(key);
+        int maxStack = meta != null ? meta.maxStack : 99;
+        int current = store.CountOf(key);
+        int addable = Mathf.Min(amount, maxStack - current);
+        if (addable <= 0)
+        {
+            Debug.LogWarning($"[InventorySystemManager] 최대 스택 도달: {key} ({current}/{maxStack})");
+            return false;
+        }
+
+        store.Add(key, addable);
+        SaveStore(store);
+        InventoryEvents.OnStoreChanged?.Invoke(store.ownerId);
+        return true;
+    }
+
+    // MAIN 스토어에 아이템 추가
+    public bool AddToMain(string key, int amount)
+    {
+        return AddToStore(GetMainStore(), key, amount);
+    }
+
+    // 캐릭터 스토어에 아이템 추가
+    public bool AddToChar(string charcode, string key, int amount)
+    {
+        InvStore store = GetCharStore(charcode);
+        if (store == null)
+        {
+            Debug.LogWarning("[InventorySystemManager] AddToChar: charcode가 비어 있습니다.");
+            return false;
+        }
+
+        return AddToStore(store, key, amount);
+    }
+
+    // MAIN → 캐릭터 이동 (MAIN.Remove 성공 시에만 char.Add — 원자적)
+    public bool MoveMainToChar(string charcode, string key, int amount)
+    {
+        InvStore charStore = GetCharStore(charcode);
+        if (charStore == null)
+        {
+            Debug.LogWarning("[InventorySystemManager] MoveMainToChar: charcode가 비어 있습니다.");
+            return false;
+        }
+
+        // 목적지 maxStack 불변식 유지: 여유량 부족이면 Remove 전에 거부 (원자성 유지)
+        if (HasStackRoom(charStore, key, amount) == false)
+        {
+            return false;
+        }
+
+        InvStore main = GetMainStore();
+        if (main.Remove(key, amount) == false)
+        {
+            return false;
+        }
+
+        charStore.Add(key, amount);
+
+        SaveStore(main);
+        SaveStore(charStore);
+        InventoryEvents.OnStoreChanged?.Invoke(MainOwnerId);
+        InventoryEvents.OnStoreChanged?.Invoke(charcode);
+        return true;
+    }
+
+    // 캐릭터 → MAIN 반환. 이동 후 보유량이 0이 되었고 그 키가 장착 미러에 있으면 장착 해제부터 수행.
+    public bool MoveCharToMain(string charcode, string key, int amount)
+    {
+        InvStore charStore = GetCharStore(charcode);
+        if (charStore == null)
+        {
+            Debug.LogWarning("[InventorySystemManager] MoveCharToMain: charcode가 비어 있습니다.");
+            return false;
+        }
+
+        // 목적지(MAIN) maxStack 불변식 유지: 여유량 부족이면 Remove 전에 거부 (원자성 유지)
+        InvStore main = GetMainStore();
+        if (HasStackRoom(main, key, amount) == false)
+        {
+            return false;
+        }
+
+        if (charStore.Remove(key, amount) == false)
+        {
+            return false;
+        }
+
+        // 보유량이 0이 되었는데 아직 장착 중이면 해제 (소유하지 않은 아이템을 입고 있을 수 없음)
+        if (charStore.CountOf(key) == 0)
+        {
+            UnequipIfMirrored(charcode, key);
+        }
+
+        main.Add(key, amount);
+
+        SaveStore(charStore);
+        SaveStore(main);
+        InventoryEvents.OnStoreChanged?.Invoke(charcode);
+        InventoryEvents.OnStoreChanged?.Invoke(MainOwnerId);
+        return true;
+    }
+
+    // ownerId로 스토어 조회 (MAIN 또는 charcode)
+    private InvStore GetStore(string ownerId)
+    {
+        if (string.IsNullOrEmpty(ownerId))
+        {
+            return null;
+        }
+
+        if (ownerId == MainOwnerId)
+        {
+            return GetMainStore();
+        }
+
+        return GetCharStore(ownerId);
+    }
+
+    // 키의 최대 스택 수 (카탈로그 메타 없으면 99)
+    private int GetMaxStack(string key)
+    {
+        InventoryEntry meta = catalog != null ? catalog.Get(key) : null;
+        return meta != null ? meta.maxStack : 99;
+    }
+
+    // 스택 칸 이동 (드래그 앤 드롭용). 같은 스토어 = 자리 이동/스왑/병합, 다른 스토어 = 통째 이동.
+    // toSlot < 0 이면 목적지의 빈 칸에 자동 배치.
+    public bool MoveStack(string fromOwnerId, int fromSlot, string toOwnerId, int toSlot)
+    {
+        InvStore fromStore = GetStore(fromOwnerId);
+        InvStore toStore = GetStore(toOwnerId);
+        if (fromStore == null || toStore == null)
+        {
+            return false;
+        }
+
+        InvItemStack moving = fromStore.FindBySlot(fromSlot);
+        if (moving == null)
+        {
+            return false;
+        }
+
+        // ── 같은 스토어: 자리 이동 / 스왑 / 병합 ──
+        if (fromOwnerId == toOwnerId)
+        {
+            if (toSlot < 0 || toSlot == fromSlot)
+            {
+                return false;
+            }
+
+            InvItemStack occupant = fromStore.FindBySlot(toSlot);
+            if (occupant == null)
+            {
+                moving.slot = toSlot;
+            }
+            else if (occupant.key == moving.key)
+            {
+                // 같은 키 → 병합 (maxStack 초과분은 원래 칸에 잔류, 여유 없으면 스왑)
+                int room = GetMaxStack(moving.key) - occupant.count;
+                if (room <= 0)
+                {
+                    occupant.slot = fromSlot;
+                    moving.slot = toSlot;
+                }
+                else
+                {
+                    int merged = Mathf.Min(room, moving.count);
+                    occupant.count += merged;
+                    moving.count -= merged;
+                    if (moving.count == 0)
+                    {
+                        fromStore.stacks.Remove(moving);
+                    }
+                }
+            }
+            else
+            {
+                // 다른 키 → 자리 스왑
+                occupant.slot = fromSlot;
+                moving.slot = toSlot;
+            }
+
+            SaveStore(fromStore);
+            InventoryEvents.OnStoreChanged?.Invoke(fromStore.ownerId);
+            return true;
+        }
+
+        // ── 다른 스토어: 통째 이동 (같은 키 칸이면 병합, 다른 키가 차지한 칸이면 거부) ──
+        if (toSlot < 0)
+        {
+            toSlot = toStore.FirstFreeSlot();
+        }
+
+        InvItemStack target = toStore.FindBySlot(toSlot);
+        if (target == null)
+        {
+            fromStore.stacks.Remove(moving);
+            moving.slot = toSlot;
+            toStore.stacks.Add(moving);
+        }
+        else if (target.key == moving.key)
+        {
+            int room = GetMaxStack(moving.key) - target.count;
+            if (room <= 0)
+            {
+                Debug.LogWarning($"[InventorySystemManager] 이동 거부(최대 스택 도달): {moving.key} → {toStore.ownerId} 칸 {toSlot}");
+                return false;
+            }
+
+            int merged = Mathf.Min(room, moving.count);
+            target.count += merged;
+            moving.count -= merged;
+            if (moving.count == 0)
+            {
+                fromStore.stacks.Remove(moving);
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"[InventorySystemManager] 이동 거부(칸이 차 있음): {toStore.ownerId} 칸 {toSlot} = {target.key}");
+            return false;
+        }
+
+        // 캐릭터 스토어에서 빠져나가 보유량이 0이 된 장착 아이템은 해제
+        if (fromOwnerId != MainOwnerId && fromStore.CountOf(moving.key) == 0)
+        {
+            UnequipIfMirrored(fromOwnerId, moving.key);
+        }
+
+        SaveStore(fromStore);
+        SaveStore(toStore);
+        InventoryEvents.OnStoreChanged?.Invoke(fromStore.ownerId);
+        InventoryEvents.OnStoreChanged?.Invoke(toStore.ownerId);
+        return true;
+    }
+
+    // 목적지 스토어에 amount만큼 넣을 여유가 있는지 (이동 경로에서도 maxStack 불변식 유지)
+    private bool HasStackRoom(InvStore store, string key, int amount)
+    {
+        if (store == null || amount <= 0)
+        {
+            return false;
+        }
+
+        InventoryEntry meta = catalog != null ? catalog.Get(key) : null;
+        int maxStack = meta != null ? meta.maxStack : 99;
+        int current = store.CountOf(key);
+        if (current + amount > maxStack)
+        {
+            Debug.LogWarning($"[InventorySystemManager] 이동 거부(최대 스택 초과): {key} → {store.ownerId} ({current}+{amount}/{maxStack})");
+            return false;
+        }
+
+        return true;
+    }
+
+    // 미러에 해당 키가 장착 중으로 기록되어 있으면 Unequip + 미러 제거
+    private void UnequipIfMirrored(string charcode, string key)
+    {
+        if (equipMirror.TryGetValue(charcode, out Dictionary<string, string> slots) == false)
+        {
+            return;
+        }
+
+        // 이 키가 장착된 슬롯 수집 (열거 중 수정 방지)
+        List<string> slotIds = new List<string>();
+        foreach (KeyValuePair<string, string> pair in slots)
+        {
+            if (pair.Value == key)
+            {
+                slotIds.Add(pair.Key);
+            }
+        }
+
+        foreach (string slotId in slotIds)
+        {
+            // 활성 캐릭터일 때만 실제 Unequip 가능 (target 필요). 미러는 항상 정리.
+            if (charcode == ActiveCharcode && ActiveTarget != null && EquipManager.Instance != null)
+            {
+                EquipManager.Instance.Unequip(ActiveTarget, slotId);
+            }
+
+            slots.Remove(slotId);
+        }
+    }
+
+    // 활성 캐릭터에 키 장착 (멱등 — 이미 장착 중이면 그대로 유지). 같은 슬롯의 다른 장착물은 교체.
+    public bool EquipKey(string key)
+    {
+        if (ActiveTarget == null)
+        {
+            Debug.LogWarning("[InventorySystemManager] EquipKey: 활성 캐릭터가 없습니다.");
+            return false;
+        }
+
+        if (equipCatalog == null)
+        {
+            Debug.LogWarning("[InventorySystemManager] EquipKey: EquipCatalog가 지정되지 않았습니다.");
+            return false;
+        }
+
+        if (EquipManager.Instance == null)
+        {
+            Debug.LogWarning("[InventorySystemManager] EquipKey: EquipManager가 없습니다.");
+            return false;
+        }
+
+        EquipEntry entry = equipCatalog.Get(key);
+        if (entry == null)
+        {
+            Debug.LogWarning($"[InventorySystemManager] EquipKey: 장착 불가 키: {key}");
+            return false;
+        }
+
+        // 사전 검증: EquipManager.Equip은 실패해도 조용히 반환(void)하므로,
+        // 동일 기준(프리팹/소켓)을 미리 확인해 실패 시 미러를 오염시키지 않는다.
+        if (entry.prefab == null)
+        {
+            Debug.LogWarning($"[InventorySystemManager] EquipKey: 프리팹이 비어 있는 키: {key}");
+            return false;
+        }
+
+        string slotId = entry.targetSlotId;
+        if (EquipSocket.Find(ActiveTarget, slotId) == null)
+        {
+            Debug.LogWarning($"[InventorySystemManager] EquipKey: 소켓 없음: slotId='{slotId}' on {ActiveTarget.name}");
+            return false;
+        }
+
+        Dictionary<string, string> slots = GetActiveMirror();
+
+        if (slots.TryGetValue(slotId, out string equippedKey) && equippedKey == key)
+        {
+            return true; // 이미 장착 중 (멱등)
+        }
+
+        // 장착 (같은 슬롯 기존 장착물은 EquipManager가 교체)
+        EquipManager.Instance.Equip(ActiveTarget, key);
+        slots[slotId] = key;
+
+        InventoryEvents.OnStoreChanged?.Invoke(ActiveCharcode);
+        return true;
+    }
+
+    // 활성 캐릭터에 대해 키 장착/해제 토글 (장착 위임은 전부 EquipManager)
+    public bool ToggleEquip(string key)
+    {
+        if (ActiveTarget == null)
+        {
+            Debug.LogWarning("[InventorySystemManager] ToggleEquip: 활성 캐릭터가 없습니다.");
+            return false;
+        }
+
+        if (equipCatalog == null)
+        {
+            Debug.LogWarning("[InventorySystemManager] ToggleEquip: EquipCatalog가 지정되지 않았습니다.");
+            return false;
+        }
+
+        EquipEntry entry = equipCatalog.Get(key);
+        if (entry == null)
+        {
+            Debug.LogWarning($"[InventorySystemManager] ToggleEquip: 장착 불가 키: {key}");
+            return false;
+        }
+
+        Dictionary<string, string> slots = GetActiveMirror();
+
+        if (slots.TryGetValue(entry.targetSlotId, out string equippedKey) && equippedKey == key)
+        {
+            // 이미 이 키가 장착 중 → 해제
+            if (EquipManager.Instance == null)
+            {
+                Debug.LogWarning("[InventorySystemManager] ToggleEquip: EquipManager가 없습니다.");
+                return false;
+            }
+
+            EquipManager.Instance.Unequip(ActiveTarget, entry.targetSlotId);
+            slots.Remove(entry.targetSlotId);
+            InventoryEvents.OnStoreChanged?.Invoke(ActiveCharcode);
+            return true;
+        }
+
+        return EquipKey(key);
+    }
+
+    // 활성 캐릭터의 장착 미러 확보
+    private Dictionary<string, string> GetActiveMirror()
+    {
+        if (equipMirror.TryGetValue(ActiveCharcode, out Dictionary<string, string> slots) == false)
+        {
+            slots = new Dictionary<string, string>();
+            equipMirror[ActiveCharcode] = slots;
+        }
+
+        return slots;
+    }
+
+    // 스토어 정렬: 아이템 종류(category) → 아이템명(displayName) 순. 정렬 결과는 저장된다.
+    public bool SortStore(string ownerId)
+    {
+        if (string.IsNullOrEmpty(ownerId))
+        {
+            return false;
+        }
+
+        InvStore store = ownerId == MainOwnerId ? GetMainStore() : GetCharStore(ownerId);
+        if (store == null)
+        {
+            return false;
+        }
+
+        store.stacks.Sort(CompareStacks);
+
+        // 정렬 순서대로 칸을 앞에서부터 재배치 (1페이지부터 채움)
+        for (int i = 0; i < store.stacks.Count; i++)
+        {
+            if (store.stacks[i] != null)
+            {
+                store.stacks[i].slot = i;
+            }
+        }
+
+        SaveStore(store);
+        InventoryEvents.OnStoreChanged?.Invoke(store.ownerId);
+        return true;
+    }
+
+    // 정렬 비교: 종류(category) → 이름(displayName, 없으면 key) → key. null 스택은 뒤로.
+    private int CompareStacks(InvItemStack a, InvItemStack b)
+    {
+        if (a == null && b == null)
+        {
+            return 0;
+        }
+
+        if (a == null)
+        {
+            return 1;
+        }
+
+        if (b == null)
+        {
+            return -1;
+        }
+
+        InventoryEntry metaA = catalog != null ? catalog.Get(a.key) : null;
+        InventoryEntry metaB = catalog != null ? catalog.Get(b.key) : null;
+
+        string categoryA = metaA != null && string.IsNullOrEmpty(metaA.category) == false ? metaA.category : "";
+        string categoryB = metaB != null && string.IsNullOrEmpty(metaB.category) == false ? metaB.category : "";
+        int compare = string.Compare(categoryA, categoryB, System.StringComparison.Ordinal);
+        if (compare != 0)
+        {
+            return compare;
+        }
+
+        string nameA = metaA != null && string.IsNullOrEmpty(metaA.displayName) == false ? metaA.displayName : a.key;
+        string nameB = metaB != null && string.IsNullOrEmpty(metaB.displayName) == false ? metaB.displayName : b.key;
+        compare = string.Compare(nameA, nameB, System.StringComparison.Ordinal);
+        if (compare != 0)
+        {
+            return compare;
+        }
+
+        return string.Compare(a.key, b.key, System.StringComparison.Ordinal);
+    }
+
+    // 활성 캐릭터에 해당 키가 장착 중인지 (표시용 미러 조회)
+    public bool IsEquippedOnActive(string key)
+    {
+        if (string.IsNullOrEmpty(ActiveCharcode))
+        {
+            return false;
+        }
+
+        if (equipMirror.TryGetValue(ActiveCharcode, out Dictionary<string, string> slots) == false)
+        {
+            return false;
+        }
+
+        foreach (KeyValuePair<string, string> pair in slots)
+        {
+            if (pair.Value == key)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // 스토어 1개를 JSON 파일로 저장
+    public void SaveStore(InvStore store)
+    {
+        if (store == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrEmpty(store.ownerId))
+        {
+            Debug.LogWarning("[InventorySystemManager] SaveStore: ownerId가 비어 있습니다.");
+            return;
+        }
+
+        try
+        {
+            string dir = GetSaveDir();
+            if (Directory.Exists(dir) == false)
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            string json = JsonUtility.ToJson(store, true);
+            File.WriteAllText(GetStorePath(store.ownerId), json);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[InventorySystemManager] 스토어 저장 실패({store.ownerId}): {e.Message}");
+        }
+    }
+
+    // 로드된 모든 스토어 저장
+    public void SaveAll()
+    {
+        if (mainStore != null)
+        {
+            SaveStore(mainStore);
+        }
+
+        foreach (KeyValuePair<string, InvStore> pair in charStores)
+        {
+            SaveStore(pair.Value);
+        }
+    }
+
+    // 종료 시 전체 저장
+    private void OnApplicationQuit()
+    {
+        SaveAll();
+    }
+}
