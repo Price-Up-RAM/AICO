@@ -27,6 +27,7 @@ public class JukeboxView : MonoBehaviour
 
     [Header("Wiring")]
     [SerializeField] private GameObject environmentPrefab;
+    [SerializeField] private GameObject downloaderPrefab; // JukeboxDownloader (헤더 Download 버튼으로 토글)
 
     [Header("Mode Icons (등록 시 아이콘 표시, 미등록 시 텍스트 폴백)")]
     [SerializeField] private Sprite shuffleSequentialSprite; // 순차재생
@@ -65,6 +66,7 @@ public class JukeboxView : MonoBehaviour
     private RectTransform listContent;
 
     private JukeboxEnvironmentView envInstance;
+    private GameObject downloaderInstance;
 
     private void Awake()
     {
@@ -212,6 +214,32 @@ public class JukeboxView : MonoBehaviour
         }
         if (envInstance.gameObject.activeSelf) envInstance.Hide();
         else envInstance.Show();
+    }
+
+    // 헤더 Download 버튼: JukeboxDownloader를 별도 창으로 토글 (SFX/ToggleEnvironment와 동일 패턴).
+    // SFX 창이 오른쪽에 열리므로 다운로더는 왼쪽에 배치해 겹치지 않게 한다.
+    public void ToggleDownloader()
+    {
+        if (downloaderInstance == null)
+        {
+            if (downloaderPrefab == null)
+            {
+                Debug.LogWarning("[Jukebox] downloaderPrefab 미설정");
+                return;
+            }
+            Transform parent = transform.parent != null ? transform.parent : transform;
+            downloaderInstance = Instantiate(downloaderPrefab, parent);
+            RectTransform rt = downloaderInstance.GetComponent<RectTransform>();
+            if (rt != null)
+            {
+                rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.anchoredPosition = new Vector2(-(panelSize.x * 0.5f + 230f), 0f);
+            }
+            downloaderInstance.SetActive(true);
+            return;
+        }
+        downloaderInstance.SetActive(!downloaderInstance.activeSelf);
     }
 
     // ── MRJukebox 연동 헬퍼 ─────────────────────────────────────────────────────
@@ -484,6 +512,7 @@ public class JukeboxView : MonoBehaviour
 
         BindButton("CloseButton", Hide);
         BindButton("EnvButton", ToggleEnvironment);
+        BindButton("DownloadButton", ToggleDownloader);
         BindButton("CollapseButton", ToggleList);
         BindButton("PlayButton", OnPlay);
         BindButton("PauseButton", OnPause);
@@ -574,6 +603,11 @@ public class JukeboxView : MonoBehaviour
     public void EditorSetEnvironmentPrefab(GameObject prefab)
     {
         environmentPrefab = prefab;
+    }
+
+    public void EditorSetDownloaderPrefab(GameObject prefab)
+    {
+        downloaderPrefab = prefab;
     }
 #endif
 
