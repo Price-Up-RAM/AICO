@@ -43,6 +43,32 @@
 - 검색   : `GET /youtube/search?q=&limit=&sort=views&recent=1&max_duration=`
 - 다운로드 : `POST /youtube/download` `{ "url": "..." }` → `{ "job_id": ... }`
 - 진행률  : `GET /youtube/progress/<job_id>` 폴링 → status(downloading/converting/completed/error)
+- 파일 수신 : `GET /youtube/file/<job_id>` → 완료된 mp3 본문 (completed 전이면 409,
+  DOWNLOAD_DIR 밖으로 해석되거나 없는 파일이면 404)
+
+## 음원 수집 (persistentDataPath/Jukebox/download)
+
+- 서버는 mp3를 **서버 실행 폴더의 `downloads/<job_id>/`** 에 저장한다(job별 하위 폴더 —
+  같은 곡을 동시에/다시 받아도 완성본이 제자리에서 덮어써지지 않아, 변환 중인 잘린 파일이
+  서빙되는 경합이 없다). 서버가 원격(ngrok/loca.lt)일 수 있어 클라이언트는 경로 복사 대신
+  `GET /youtube/file/<job_id>`로 받는다.
+- 진행률 폴링이 `completed`가 되면 버튼 라벨 "저장…" → 파일 수신 →
+  **`Application.persistentDataPath/Jukebox/download/`** 에 저장 → "완료".
+  - StreamingAssets가 아닌 이유: 설치본에서 읽기 전용일 수 있고, 앱 업데이트에 지워지며,
+    에디터에선 다운로드한 mp3가 빌드에 통째로 들어가 버린다.
+- 파일명: 검색 결과의 **유니코드 제목** + `[videoId]`(충돌 방지) `.mp3`. 서버 파일명은
+  restrictfilenames 때문에 한글이 `_`로 깨져 쓰지 않는다. 전송 중에는 `<이름>.<job_id>.part`로
+  받고(동시 다운로드끼리도 충돌 없음) 성공 시에만 rename하므로 잘린 mp3가 남지 않는다.
+- 저장 성공 시 씬의 `JukeboxView.AddDownloadedTrack()`을 호출해 재시작 없이
+  주크박스 **download 카테고리**에 곡이 나타난다(카테고리는 태그에서 동적 생성).
+  그 외에도 카테고리 드롭다운에서 **download 또는 ALL을 선택하는 순간** 폴더를
+  재스캔해 동기화하고, 패널 재오픈(`OnEnable`)과 앱 시작(`LoadCustom`) 시에도
+  스캔한다(모두 트랙명 기준 중복 방지 — 폴더에 직접 넣은 mp3도 잡힌다).
+- 주크박스의 "bgm" 카테고리는 **ALL**로 대체됐다: 태그와 무관하게 전체 곡
+  (기본+custom+download)을 보여주는 합성 카테고리로, 항상 맨 앞·기본 선택이다.
+- 다운로더 창을 다운로드 도중 닫으면(SetActive(false)) 코루틴이 중단된다 —
+  `OnDisable`이 진행 중이던 행을 "실패"로 되돌려 재시도 가능하게 남긴다.
+  서버 쪽 job은 계속 완료되므로 다시 받으면 된다.
 
 ## 필터 → 쿼리 매핑
 
@@ -94,4 +120,7 @@
 ## 검증 상태
 
 - 2026-07-09 batchmode 베이크: 컴파일 에러 0, 프리팹 420×520 재생성, SUIT-Bold 적용(TMP_Text 13개) 확인.
-- Play 모드 실기(검색/다운로드/썸네일 로드)는 미검증 — 사용자 확인 필요.
+- 2026-07-10 음원 수집 추가: 워크플로 기반 적대적 리뷰(13 에이전트)로 발견·확정한 5개 이슈
+  (숨김 패널 미반영 / 동시 다운로드 .part 충돌 / 목록 중복 등록 경합 / 창 닫힘 시 버튼 고착 /
+  서버 출력 경로 공유 경합)를 모두 수정. batchmode 컴파일 통과.
+- Play 모드 실기(검색/다운로드/수집/주크박스 download 카테고리 재생)는 미검증 — 사용자 확인 필요.

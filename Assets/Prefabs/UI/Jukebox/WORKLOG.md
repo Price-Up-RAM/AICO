@@ -18,6 +18,13 @@
 - **볼륨 슬라이더**(마스터) — BGM/SFX에 곱연산
 - **환경음(SFX) 팝업** — 헤더 "환경음" 버튼 → `JukeboxEnvironmentView` 인스턴스화. SFX별 on/off·볼륨·min/max 간격(초), 랜덤 시각 one-shot 재생
 - **StreamingAssets 로드**(`Jukebox/BGM|SFX/<key>.ogg`), 없으면 회색 비활성
+- **다운로드 곡 자동 등록** — 다운로더가 저장한 `persistentDataPath/Jukebox/download/*.mp3`를
+  시작 시 스캔해 **download 카테고리**로 추가. 다운로드 직후에는 `AddDownloadedTrack()`,
+  카테고리를 download/ALL로 고를 때도 폴더와 재동기화 (상세:
+  `../JukeboxDownloader/JUKEBOX_DOWNLOADER_Design.md`)
+- **ALL 카테고리** — 기본 트랙의 "bgm" 태그 카테고리를 대체하는 합성 카테고리(항상 맨 앞,
+  기본 선택). 태그와 무관하게 전체 곡(기본+custom+download)을 보여준다.
+  **download 카테고리는 곡이 0개여도 항상 드롭다운에 노출**된다(선택 시 폴더 재스캔 진입점).
 - **설정 공유 저장**(`persistentDataPath/jukebox_settings.json`, 쓰기 직전 reload-머지)
 - **정적 프리팹 + 이중 모드**(BindExisting). 드롭다운은 SkillView에서 검증된 TMP_Dropdown 구조 재사용
 - 슬라이더는 Unity 표준 앵커 구조로 재작성(이전 Fill 음수 폭/빨간 X 해결)

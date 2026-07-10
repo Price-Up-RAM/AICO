@@ -172,6 +172,8 @@ public class JukeboxView : MonoBehaviour
     // 드롭다운/목록을 지정 태그 카테고리로 전환.
     private void SelectCategory(string tag)
     {
+        // 기본 트랙의 첫 태그 "bgm"은 드롭다운에서 "ALL"로 대체되어 있다.
+        if (tag == JukeboxCatalog.BgmTag) tag = JukeboxCatalog.AllTag;
         int ti = tags.IndexOf(tag);
         if (ti < 0) return;
         currentTagIndex = ti;
@@ -265,16 +267,26 @@ public class JukeboxView : MonoBehaviour
         tags.Clear();
         if (mr != null)
         {
+            // "ALL"은 태그와 무관하게 전체 곡을 보여주는 합성 카테고리. 기본 트랙의
+            // "bgm" 태그가 하던 자리를 대체하므로 항상 맨 앞(기본 선택)에 둔다.
+            tags.Add(JukeboxCatalog.AllTag);
             foreach (JukeboxTrack t in mr.Tracks)
             {
                 if (t.tags == null) continue;
                 foreach (string tag in t.tags)
                 {
-                    if (!string.IsNullOrEmpty(tag) && !tags.Contains(tag))
+                    if (string.IsNullOrEmpty(tag) || tag == JukeboxCatalog.BgmTag) continue;
+                    if (!tags.Contains(tag))
                     {
                         tags.Add(tag);
                     }
                 }
+            }
+            // download는 곡이 0개여도 항상 노출한다 — 선택하는 순간 폴더를 재스캔하므로
+            // 비어 있어도 진입점이 있어야 한다.
+            if (!tags.Contains(JukeboxCatalog.DownloadTag))
+            {
+                tags.Add(JukeboxCatalog.DownloadTag);
             }
         }
 
@@ -294,13 +306,28 @@ public class JukeboxView : MonoBehaviour
     private void OnCategoryChanged(int index)
     {
         currentTagIndex = index;
-        RebuildList(CurrentTag());
+        string tag = CurrentTag();
+        RebuildList(tag);
+
+        // download 곡은 폴더가 진실이므로, 보려는 시점에 폴더와 동기화한다
+        // (ALL도 download 곡을 포함하므로 함께 갱신; 새 곡이 있을 때만 목록이 다시 그려진다).
+        if (tag == JukeboxCatalog.DownloadTag || tag == JukeboxCatalog.AllTag)
+        {
+            StartCoroutine(LoadExternalDir(JukeboxCatalog.DownloadDir, JukeboxCatalog.DownloadTag));
+        }
     }
 
     private List<int> TrackIndicesForTag(string tag)
     {
         List<int> result = new List<int>();
         if (mr == null || string.IsNullOrEmpty(tag)) return result;
+
+        // "ALL" = 전체 곡 (태그 무관)
+        if (tag == JukeboxCatalog.AllTag)
+        {
+            for (int i = 0; i < mr.Tracks.Count; i++) result.Add(i);
+            return result;
+        }
         IReadOnlyList<JukeboxTrack> list = mr.Tracks;
         for (int i = 0; i < list.Count; i++)
         {
@@ -450,43 +477,122 @@ public class JukeboxView : MonoBehaviour
         }
     }
 
-    // ── custom 로드 (StreamingAssets/bgm) ───────────────────────────────────────
+    // ── 외부 오디오 로드 (custom: StreamingAssets/bgm, download: persistentDataPath) ──
+
+    // 클립 로드가 비동기라 "목록 확인 → AddTrack" 사이에 같은 파일이 또 들어올 수 있다.
+    // 로드 중인 트랙명을 기억해 그 틈의 중복 등록을 막는다 (키: tag|trackName).
+    private readonly HashSet<string> loadingExternalNames = new HashSet<string>();
+    private bool externalScanStarted; // Start의 최초 스캔 이후에만 OnEnable 재스캔
+
+    private void OnEnable()
+    {
+        // 비활성화는 이 오브젝트의 코루틴을 모두 죽이므로, 이 시점의 in-flight 키는 전부
+        // 중단된 로드의 잔재다. 비우지 않으면 해당 곡이 재스캔에서 영구히 건너뛰어진다.
+        loadingExternalNames.Clear();
+
+        // 패널이 닫힌 사이 다운로더가 저장한 곡을 다시 열 때 반영한다 (Start는 1회만 돈다).
+        if (externalScanStarted)
+        {
+            StartCoroutine(LoadExternalDir(JukeboxCatalog.DownloadDir, JukeboxCatalog.DownloadTag));
+        }
+    }
+
     private IEnumerator LoadCustom()
     {
         if (mr == null) yield break;
-        string dir = Path.Combine(Application.streamingAssetsPath, JukeboxCatalog.CustomFolder);
-        if (!Directory.Exists(dir)) yield break;
+        externalScanStarted = true;
+        yield return LoadExternalDir(Path.Combine(Application.streamingAssetsPath, JukeboxCatalog.CustomFolder), JukeboxCatalog.CustomTag);
+        yield return LoadExternalDir(JukeboxCatalog.DownloadDir, JukeboxCatalog.DownloadTag);
+    }
+
+    private IEnumerator LoadExternalDir(string dir, string tag)
+    {
+        if (mr == null || !Directory.Exists(dir)) yield break;
 
         bool added = false;
         foreach (string full in Directory.GetFiles(dir))
         {
-            string ext = Path.GetExtension(full).ToLowerInvariant();
-            AudioType type;
-            if (ext == ".wav") type = AudioType.WAV;
-            else if (ext == ".mp3") type = AudioType.MPEG;
-            else if (ext == ".ogg") type = AudioType.OGGVORBIS;
-            else continue;
-
-            string url = new Uri(full).AbsoluteUri;
-            using (UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip(url, type))
-            {
-                yield return req.SendWebRequest();
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    AudioClip clip = DownloadHandlerAudioClip.GetContent(req);
-                    if (clip != null)
-                    {
-                        mr.AddTrack(clip, Path.GetFileNameWithoutExtension(full), JukeboxCatalog.CustomTag);
-                        added = true;
-                    }
-                }
-                else
-                {
-                    Debug.LogWarning($"[Jukebox] custom 로드 실패: {full} ({req.error})");
-                }
-            }
+            string trackName = Path.GetFileNameWithoutExtension(full);
+            if (HasTrack(trackName, tag)) continue; // 재스캔 시 이미 등록된 곡은 건너뜀
+            string key = tag + "|" + trackName;
+            if (!loadingExternalNames.Add(key)) continue;
+            yield return LoadExternalFile(full, tag, ok => added |= ok);
+            loadingExternalNames.Remove(key);
         }
 
+        if (added)
+        {
+            RefreshCategories();
+            RebuildList(CurrentTag());
+        }
+    }
+
+    private bool HasTrack(string trackName, string tag)
+    {
+        if (mr == null) return false;
+        IReadOnlyList<JukeboxTrack> list = mr.Tracks;
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (list[i].trackName == trackName &&
+                list[i].tags != null && list[i].tags.Contains(tag))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private IEnumerator LoadExternalFile(string full, string tag, Action<bool> done)
+    {
+        string ext = Path.GetExtension(full).ToLowerInvariant();
+        AudioType type;
+        if (ext == ".wav") type = AudioType.WAV;
+        else if (ext == ".mp3") type = AudioType.MPEG;
+        else if (ext == ".ogg") type = AudioType.OGGVORBIS;
+        else { done?.Invoke(false); yield break; }
+
+        string url = new Uri(full).AbsoluteUri;
+        using (UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip(url, type))
+        {
+            yield return req.SendWebRequest();
+            if (req.result == UnityWebRequest.Result.Success)
+            {
+                AudioClip clip = DownloadHandlerAudioClip.GetContent(req);
+                if (clip != null)
+                {
+                    mr.AddTrack(clip, Path.GetFileNameWithoutExtension(full), tag);
+                    done?.Invoke(true);
+                    yield break;
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[Jukebox] 외부 오디오 로드 실패: {full} ({req.error})");
+            }
+        }
+        done?.Invoke(false);
+    }
+
+    /// 다운로더가 방금 저장한 파일 1개를 재시작 없이 목록에 반영한다.
+    /// 같은 파일을 다시 받은 경우(트랙명 중복)나 이미 로드 중인 경우는 추가하지 않는다.
+    /// 패널이 닫혀(비활성) 있으면 코루틴을 못 돌리므로 OnEnable 재스캔에 맡긴다.
+    public void AddDownloadedTrack(string fullPath)
+    {
+        if (mr == null || !gameObject.activeInHierarchy) return;
+        if (string.IsNullOrEmpty(fullPath) || !File.Exists(fullPath)) return;
+
+        string trackName = Path.GetFileNameWithoutExtension(fullPath);
+        if (HasTrack(trackName, JukeboxCatalog.DownloadTag)) return;
+        string key = JukeboxCatalog.DownloadTag + "|" + trackName;
+        if (!loadingExternalNames.Add(key)) return;
+        StartCoroutine(AddDownloadedTrackCoroutine(fullPath, key));
+    }
+
+    private IEnumerator AddDownloadedTrackCoroutine(string fullPath, string key)
+    {
+        bool added = false;
+        yield return LoadExternalFile(fullPath, JukeboxCatalog.DownloadTag, ok => added = ok);
+        loadingExternalNames.Remove(key);
         if (added)
         {
             RefreshCategories();

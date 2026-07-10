@@ -50,6 +50,17 @@ public static class JukeboxCatalog
     public const string CustomFolder = "bgm";
     public const string CustomTag = "custom";
 
+    // 기본 재생목록 트랙의 첫 태그(씬 인스톨러가 부여). UI에서는 이 카테고리를
+    // AllTag("ALL")로 치환해 전체 곡(기본+custom+download)을 보여준다.
+    public const string BgmTag = "bgm";
+    public const string AllTag = "ALL";
+
+    // 다운로더가 받은 곡의 모음 폴더/카테고리. persistentDataPath 하위라 설치본에서도
+    // 쓰기 가능하고, 앱 업데이트에 지워지지 않으며, 빌드(StreamingAssets)에 섞이지 않는다.
+    public const string DownloadTag = "download";
+    public static string DownloadDir =>
+        System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, "Jukebox", "download");
+
     // 묶음 규칙: category(5·6번째 인자)를 넣으면 그걸로 묶고, 비우면(3-인자) id 이름 끝 숫자를 떼서 추론.
     //  - 이름 규칙이 명확한 항목은 3-인자로 두면 자동으로 묶인다(thunder1~4 → "thunder"/"Thunder").
     //  - 이름만으론 애매하거나 다른 이름을 한 묶음으로 합치고 싶을 때만 category 를 명시한다(아래 Cafe 예시).
