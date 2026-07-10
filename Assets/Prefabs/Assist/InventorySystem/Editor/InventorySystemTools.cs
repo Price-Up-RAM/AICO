@@ -58,7 +58,7 @@ public static class InventorySystemTools
             AssetDatabase.CreateAsset(cat, CatalogPath);
         }
 
-        // EquipCatalog_Demo와 동일한 key 문자열 공간을 사용한다
+        // EquipCatalog와 동일한 key 문자열 공간을 사용한다
         string[] keys = { "arona_a_chipao", "arona_a_idolfrontribbon", "arona_a_pareo", "hairpin_placeholder" };
         string[] names = { "치파오", "아이돌 프론트리본", "파레오", "헤어핀" };
         string[] descs = {

@@ -43,12 +43,23 @@ public class EquipSocket : MonoBehaviour
         EquipPlaceholder[] placeholders = GetComponentsInChildren<EquipPlaceholder>(true);
         foreach (EquipPlaceholder ph in placeholders)
         {
-            if (ph != null && ph.placeholderId == placeholderId)
+            if (ph != null && NormalizePlaceholderId(ph.placeholderId) == NormalizePlaceholderId(placeholderId))
             {
                 return ph;
             }
         }
         return null;
+    }
+
+    // 부착점 id 별칭: 구 규약 "spot" = 신 규약 "placeholder" (기존에 구운 프리팹 데이터 호환).
+    // placeholderId를 직접 비교하는 모든 코드는 이 정규화를 거쳐야 한다 (전파 매칭 포함).
+    public static string NormalizePlaceholderId(string placeholderId)
+    {
+        if (placeholderId == "spot")
+        {
+            return "placeholder";
+        }
+        return placeholderId;
     }
 
     // 캐릭터 계층에서 slotId로 소켓 탐색 (없으면 null)

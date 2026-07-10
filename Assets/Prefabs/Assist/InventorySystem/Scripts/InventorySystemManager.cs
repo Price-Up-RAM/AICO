@@ -57,7 +57,8 @@ public class InventorySystemManager : MonoBehaviour
 
         if (equipCatalog == null)
         {
-            equipCatalog = Resources.Load<EquipCatalog>("EquipCatalog_Demo");
+            // EquipSystem 카탈로그 (구명 EquipCatalog_Demo에서 리네임됨)
+            equipCatalog = Resources.Load<EquipCatalog>("EquipCatalog");
         }
     }
 
@@ -542,10 +543,14 @@ public class InventorySystemManager : MonoBehaviour
             return false;
         }
 
-        string slotId = entry.targetSlotId;
-        if (EquipSocket.Find(ActiveTarget, slotId) == null)
+        // 실장착(EquipManager)과 동일한 해석 사다리로 사전 검증: ①key 동명 소켓 ②targetSlotId ③fallback
+        // (직조회하면 key 이름 소켓/폴백으로 장착 가능한 아이템을 오탐 거부하고, 미러 키가 실제 슬롯과 어긋난다)
+        string slotId;
+        int priority;
+        if (EquipSlotResolver.Resolve(ActiveTarget, entry, out slotId, out priority) == null)
         {
-            Debug.LogWarning($"[InventorySystemManager] EquipKey: 소켓 없음: slotId='{slotId}' on {ActiveTarget.name}");
+            string candidates = string.Join("/", EquipSlotResolver.Candidates(entry));
+            Debug.LogWarning($"[InventorySystemManager] EquipKey: 장착 가능한 소켓 없음: '{key}' (후보: {candidates}) on {ActiveTarget.name}");
             return false;
         }
 
@@ -588,7 +593,12 @@ public class InventorySystemManager : MonoBehaviour
 
         Dictionary<string, string> slots = GetActiveMirror();
 
-        if (slots.TryGetValue(entry.targetSlotId, out string equippedKey) && equippedKey == key)
+        // 미러 키도 해석 사다리 결과(실제 장착 슬롯)로 조회 — targetSlotId 직조회는 폴백/키 소켓과 어긋남
+        string resolvedSlotId;
+        int priority;
+        EquipSocket resolved = EquipSlotResolver.Resolve(ActiveTarget, entry, out resolvedSlotId, out priority);
+
+        if (resolved != null && slots.TryGetValue(resolvedSlotId, out string equippedKey) && equippedKey == key)
         {
             // 이미 이 키가 장착 중 → 해제
             if (EquipManager.Instance == null)
@@ -597,8 +607,8 @@ public class InventorySystemManager : MonoBehaviour
                 return false;
             }
 
-            EquipManager.Instance.Unequip(ActiveTarget, entry.targetSlotId);
-            slots.Remove(entry.targetSlotId);
+            EquipManager.Instance.Unequip(ActiveTarget, resolvedSlotId);
+            slots.Remove(resolvedSlotId);
             InventoryEvents.OnStoreChanged?.Invoke(ActiveCharcode);
             return true;
         }

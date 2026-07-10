@@ -26,7 +26,7 @@ public class EquipManager : MonoBehaviour
     {
         if (catalog == null)
         {
-            catalog = Resources.Load<EquipCatalog>("EquipCatalog_Demo");
+            catalog = Resources.Load<EquipCatalog>("EquipCatalog");
         }
     }
 
@@ -51,33 +51,55 @@ public class EquipManager : MonoBehaviour
             return;
         }
 
-        // 레거시 slotId 별칭 (overhead 폐지 → head/top placeholder)
-        string slotId = entry.targetSlotId;
-        string placeholderId = entry.targetPlaceholderId;
-        if (slotId == "overhead")
-        {
-            slotId = "head";
-            if (string.IsNullOrEmpty(placeholderId))
-            {
-                placeholderId = "top";
-            }
-        }
-
-        EquipSocket socket = EquipSocket.Find(target, slotId);
+        // 소켓 해석 사다리: ① key와 같은 이름 ② targetSlotId ③ fallbackSlotIds 순서대로 ④ 장착 불가
+        string slotId;
+        int priority;
+        EquipSocket socket = EquipSlotResolver.Resolve(target, entry, out slotId, out priority);
         if (socket == null)
         {
-            Debug.LogWarning($"[EquipManager] 소켓 없음: slotId='{slotId}' on {target.name}");
+            string candidates = string.Join("/", EquipSlotResolver.Candidates(entry));
+            Debug.LogWarning($"[EquipManager] 장착 불가: '{key}' — 후보 소켓({candidates}) 모두 없음 on {target.name}");
             return;
+        }
+
+        // placeholder 별칭 (overhead 레거시): targetSlotId가 overhead였고 head로 해석됐으면 top placeholder
+        string placeholderId = entry.targetPlaceholderId;
+        if (entry.targetSlotId == "overhead" && slotId == "head" && string.IsNullOrEmpty(placeholderId))
+        {
+            placeholderId = "top";
         }
 
         if (string.IsNullOrEmpty(placeholderId))
         {
+            // 신모델 소켓(캡슐 없음): "placeholder" 부착점으로 자동 라우팅(구명 "spot"도 별칭 호환), 없으면 즉시 거부 (사용자 확정 정책)
+            if (socket.SizingVolume == null)
+            {
+                EquipPlaceholder spot = socket.FindPlaceholder("placeholder");
+                if (spot == null)
+                {
+                    Debug.LogWarning($"[EquipManager] '{slotId}' 소켓에 placeholder(부착점) 없음 — 장착 거부 (구 캐릭터는 신모델 재저작 필요).");
+                    return;
+                }
+
+                ClearEquipped(spot.transform);
+                GameObject spotInst = Instantiate(entry.prefab);
+                EquipPlacement.FitToPlaceholder(spotInst, socket, spot, entry);
+                if (spotInst != null)
+                {
+                    spotInst.AddComponent<EquipMarker>();
+                }
+                return;
+            }
+
             // 레거시 경로: 소켓 직부착 (placeholder 하위 장착물은 보존)
             ClearEquippedSocketOnly(socket);
 
             GameObject inst = Instantiate(entry.prefab);
             EquipPlacement.Fit(inst, socket, entry.fitBias, entry.positionOffset, entry.rotationOffset);
-            inst.AddComponent<EquipMarker>();
+            if (inst != null)
+            {
+                inst.AddComponent<EquipMarker>();
+            }
             return;
         }
 
@@ -91,7 +113,10 @@ public class EquipManager : MonoBehaviour
 
             GameObject fallback = Instantiate(entry.prefab);
             EquipPlacement.Fit(fallback, socket, entry.fitBias, entry.positionOffset, entry.rotationOffset);
-            fallback.AddComponent<EquipMarker>();
+            if (fallback != null)
+            {
+                fallback.AddComponent<EquipMarker>();
+            }
             return;
         }
 
@@ -100,7 +125,10 @@ public class EquipManager : MonoBehaviour
 
         GameObject phInst = Instantiate(entry.prefab);
         EquipPlacement.FitToPlaceholder(phInst, socket, ph, entry);
-        phInst.AddComponent<EquipMarker>();
+        if (phInst != null)
+        {
+            phInst.AddComponent<EquipMarker>();
+        }
     }
 
     // 특정 placeholder의 장착물만 해제

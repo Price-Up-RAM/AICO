@@ -57,24 +57,100 @@ public class EquipSocketEditor : Editor
         keyList = keys.ToArray();
     }
 
+    // slotId 리네임 동기화: GO명(Socket_ 규칙) + 카탈로그의 옛 slotId 참조를 새 이름으로 —
+    // "리네임하면 카탈로그도 손으로 고쳐야 하는" 끊김 사고 방지
+    private void SyncSlotIdRename(EquipSocket socket, string oldSlotId, string newSlotId)
+    {
+        if (string.IsNullOrEmpty(newSlotId))
+        {
+            return;
+        }
+
+        // GO명: 기존 규칙(Socket_...)을 따르던 경우에만 자동 추종 (손으로 지은 이름은 존중)
+        if (socket.gameObject.name.StartsWith("Socket_"))
+        {
+            Undo.RecordObject(socket.gameObject, "Rename Socket GO");
+            string suffix = newSlotId;
+            if (suffix.StartsWith("socket_"))
+            {
+                suffix = suffix.Substring("socket_".Length);
+            }
+            socket.gameObject.name = "Socket_" + suffix;
+        }
+
+        // 카탈로그: 옛 slotId를 가리키던 엔트리 전부 새 이름으로
+        if (catalog != null && string.IsNullOrEmpty(oldSlotId) == false)
+        {
+            int moved = 0;
+            foreach (EquipEntry entry in catalog.Entries)
+            {
+                if (entry != null && entry.targetSlotId == oldSlotId)
+                {
+                    Undo.RecordObject(catalog, "Relink Catalog Entry (Rename)");
+                    entry.targetSlotId = newSlotId;
+                    moved = moved + 1;
+                }
+            }
+            if (moved > 0)
+            {
+                EditorUtility.SetDirty(catalog);
+                Debug.Log($"[EquipSocket] slotId 리네임 동기화: '{oldSlotId}' → '{newSlotId}' (GO명 + 카탈로그 {moved}개 엔트리)");
+            }
+        }
+    }
+
+    // 이 소켓이 신모델(refDist 베이크 placeholder 보유)인지
+    private static bool HasRefDistPlaceholder(EquipSocket socket)
+    {
+        EquipPlaceholder[] placeholders = socket.GetComponentsInChildren<EquipPlaceholder>(true);
+        foreach (EquipPlaceholder ph in placeholders)
+        {
+            if (ph != null && ph.bakedRefDistLocal > 1e-12f)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public override void OnInspectorGUI()
     {
-        // 기본 필드 (slotId/fit/pivot/placeholderAnchor)
-        DrawDefaultInspector();
-
         EquipSocket socket = (EquipSocket)target;
+
+        // 기본 필드 (slotId/fit/pivot/placeholderAnchor) — slotId 변경 감지해 GO명/카탈로그 동기화
+        string prevSlotId = socket.slotId;
+        EditorGUI.BeginChangeCheck();
+        DrawDefaultInspector();
+        if (EditorGUI.EndChangeCheck() && socket.slotId != prevSlotId)
+        {
+            SyncSlotIdRename(socket, prevSlotId, socket.slotId);
+        }
+        bool newModel = socket.GetComponent<Collider>() == null && HasRefDistPlaceholder(socket);
+
+        // 미리네임 경고: socket_N은 임시 이름 — slotId가 카탈로그/전파의 열쇠
+        if (string.IsNullOrEmpty(socket.slotId) == false && socket.slotId.StartsWith("socket_"))
+        {
+            EditorGUILayout.HelpBox($"아직 임시 이름입니다 ('{socket.slotId}'). slotId는 카탈로그·전파가 이 자리를 찾는 열쇠 — 의미 있는 이름(head, ribbon 등)으로 바꾸세요.", MessageType.Warning);
+        }
 
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("라이브 미리보기 (저장 안 됨)", EditorStyles.boldLabel);
 
-        // 콜라이더 없으면 추가 버튼 안내
+        // 콜라이더 안내: 신모델(refDist)이면 캡슐 불필요, 아니면 추가 버튼
         if (socket.GetComponent<Collider>() == null)
         {
-            EditorGUILayout.HelpBox("사이징 볼륨용 콜라이더가 없습니다. CapsuleCollider를 추가하세요.", MessageType.Warning);
-            if (GUILayout.Button("CapsuleCollider 추가 (Trigger)"))
+            if (newModel)
             {
-                CapsuleCollider cap = Undo.AddComponent<CapsuleCollider>(socket.gameObject);
-                cap.isTrigger = true;
+                EditorGUILayout.HelpBox("신모델 소켓 (refDist 기반) — 캡슐 불필요. 미리보기/조정은 부착점(placeholder) 인스펙터에서 하세요.", MessageType.Info);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox("사이징 볼륨용 콜라이더가 없습니다. CapsuleCollider를 추가하세요.", MessageType.Warning);
+                if (GUILayout.Button("CapsuleCollider 추가 (Trigger)"))
+                {
+                    CapsuleCollider cap = Undo.AddComponent<CapsuleCollider>(socket.gameObject);
+                    cap.isTrigger = true;
+                }
             }
         }
 
@@ -132,30 +208,34 @@ public class EquipSocketEditor : Editor
             EditorGUILayout.EndHorizontal();
         }
 
-        EditorGUILayout.BeginHorizontal();
-        if (socket.slotId == "head")
+        // 캡슐 좌표 기반 버튼들 — 신모델(캡슐 없음)에서는 비활성 (배치는 클릭/글라이드로)
+        using (new EditorGUI.DisabledScope(socket.GetComponent<Collider>() == null))
         {
-            if (GUILayout.Button("표준 시드 (top/side_l/side_r/halo)"))
+            EditorGUILayout.BeginHorizontal();
+            if (socket.slotId == "head")
             {
-                CreatePlaceholder(socket, "top", 1f, AxisDir(socket), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
-                CreatePlaceholder(socket, "side_l", 0.3f, new Vector3(-1f, 0f, 0f), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
-                CreatePlaceholder(socket, "side_r", 0.3f, new Vector3(1f, 0f, 0f), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
-                CreatePlaceholder(socket, "halo", 1f, AxisDir(socket), 1.6f, EquipPlaceholderOrientation.SocketFrame, EquipContactAnchor.Center);
+                if (GUILayout.Button("표준 시드 (top/side_l/side_r/halo)"))
+                {
+                    CreatePlaceholder(socket, "top", 1f, AxisDir(socket), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
+                    CreatePlaceholder(socket, "side_l", 0.3f, new Vector3(-1f, 0f, 0f), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
+                    CreatePlaceholder(socket, "side_r", 0.3f, new Vector3(1f, 0f, 0f), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
+                    CreatePlaceholder(socket, "halo", 1f, AxisDir(socket), 1.6f, EquipPlaceholderOrientation.SocketFrame, EquipContactAnchor.Center);
+                }
             }
-        }
-        if (GUILayout.Button("Placeholder 추가"))
-        {
-            CreatePlaceholder(socket, "new", 1f, AxisDir(socket), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
-        }
-        if (GUILayout.Button("재배치 (캡슐 변경 반영)"))
-        {
-            foreach (EquipPlaceholder ph in placeholders)
+            if (GUILayout.Button("Placeholder 추가"))
             {
-                Undo.RecordObject(ph.transform, "Reapply Placeholder");
-                ph.ApplyToTransform();
+                CreatePlaceholder(socket, "new", 1f, AxisDir(socket), 1f, EquipPlaceholderOrientation.SurfaceAligned, EquipContactAnchor.BottomAlign);
             }
+            if (GUILayout.Button("재배치 (캡슐 변경 반영)"))
+            {
+                foreach (EquipPlaceholder ph in placeholders)
+                {
+                    Undo.RecordObject(ph.transform, "Reapply Placeholder");
+                    ph.ApplyToTransform();
+                }
+            }
+            EditorGUILayout.EndHorizontal();
         }
-        EditorGUILayout.EndHorizontal();
 
         // 인스펙터에서 값이 바뀌면 미리보기 재핏
         if (GUI.changed && livePreview)

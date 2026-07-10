@@ -230,6 +230,7 @@ public static class EquipSlotStamper
 
                 CopyCapsule(donorSocket.gameObject, socketGo, factor);
                 CopySocketFields(donorSocket, socketGo, report, prefabPath);
+                ClonePlaceholders(donorSocket, socketGo, factor);  // 신모델 부착점(placeholder 등)도 전파
                 WriteStamp(socketGo, sourceName, "DONOR");
             }
 
@@ -689,6 +690,51 @@ public static class EquipSlotStamper
             }
         }
         return nearest;
+    }
+
+    // 도너 소켓의 EquipPlaceholder 자식들을 대상 소켓에 복제 (같은 스켈레톤 — 본-로컬 값 ×factor)
+    private static void ClonePlaceholders(EquipSocket donorSocket, GameObject targetSocketGo, float factor)
+    {
+        EquipPlaceholder[] donorPhs = donorSocket.GetComponentsInChildren<EquipPlaceholder>(true);
+        foreach (EquipPlaceholder src in donorPhs)
+        {
+            if (src == null || string.IsNullOrEmpty(src.placeholderId))
+            {
+                continue;
+            }
+
+            // 같은 id 재사용 또는 생성
+            EquipPlaceholder dst = null;
+            EquipPlaceholder[] targetPhs = targetSocketGo.GetComponentsInChildren<EquipPlaceholder>(true);
+            foreach (EquipPlaceholder t in targetPhs)
+            {
+                if (t != null && EquipSocket.NormalizePlaceholderId(t.placeholderId) == EquipSocket.NormalizePlaceholderId(src.placeholderId))
+                {
+                    dst = t;
+                    break;
+                }
+            }
+
+            if (dst == null)
+            {
+                GameObject dstGo = new GameObject(src.gameObject.name);
+                dstGo.transform.SetParent(targetSocketGo.transform, false);
+                dst = dstGo.AddComponent<EquipPlaceholder>();
+            }
+
+            dst.transform.localPosition = src.transform.localPosition * factor;
+            dst.transform.localRotation = src.transform.localRotation;
+            dst.transform.localScale = src.transform.localScale;
+
+            dst.placeholderId = src.placeholderId;
+            dst.axisT = src.axisT;
+            dst.dirLocal = src.dirLocal;
+            dst.radiusScale = src.radiusScale;
+            dst.orientation = src.orientation;
+            dst.rotationOffsetEuler = src.rotationOffsetEuler;
+            dst.contactAnchor = src.contactAnchor;
+            dst.bakedRefDistLocal = src.bakedRefDistLocal * factor;
+        }
     }
 
     // 캡슐 콜라이더 값 복사 (도너 → 대상). factor = lossy 편차 환산 계수 (같은 스켈레톤이면 1)

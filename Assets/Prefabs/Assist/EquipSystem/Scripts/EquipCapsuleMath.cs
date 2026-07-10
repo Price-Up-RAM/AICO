@@ -4,17 +4,7 @@ using UnityEngine;
 // 캡슐 로컬 좌표 사이의 변환. 캡슐 부피를 조절하면 Decode 결과가 따라 움직인다(placeholder 재활용의 핵심).
 public static class EquipCapsuleMath
 {
-    // Transform lossyScale 절대값 평균 (0 방지) — 런타임 공용
-    public static float LossyAvg(Transform t)
-    {
-        Vector3 ls = t.lossyScale;
-        float avg = (Mathf.Abs(ls.x) + Mathf.Abs(ls.y) + Mathf.Abs(ls.z)) / 3f;
-        if (avg <= 1e-8f)
-        {
-            return 1f;
-        }
-        return avg;
-    }
+    // LossyAvg는 캡슐 무관 공용 수학이라 EquipMath로 이주함 (P4 캡슐 철거 대비)
 
     // 캡슐 축 단위벡터 (로컬)
     public static Vector3 AxisVector(CapsuleCollider cap)

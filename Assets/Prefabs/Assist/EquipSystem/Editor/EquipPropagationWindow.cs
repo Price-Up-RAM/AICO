@@ -51,6 +51,11 @@ public class EquipPropagationWindow : EditorWindow
         {
             EditorGUILayout.HelpBox("다른 캐릭터에 템플릿을 스탬프합니다. 본 해석: 정확이름 → Humanoid → 별칭 → 최근접(물리 본 제외).", MessageType.Info);
             template = (EquipSlotTemplate)EditorGUILayout.ObjectField("Slot Template", template, typeof(EquipSlotTemplate), false);
+
+            if (template != null && template.slots.Count == 0)
+            {
+                EditorGUILayout.HelpBox("템플릿에 슬롯이 0개 — 실행해도 아무것도 스탬프되지 않습니다. (캡처 UI는 P3에서 이 창에 재배치 예정)", MessageType.Warning);
+            }
         }
 
         EditorGUILayout.Space();

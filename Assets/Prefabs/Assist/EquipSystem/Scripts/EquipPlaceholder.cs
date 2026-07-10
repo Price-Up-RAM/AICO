@@ -10,8 +10,9 @@ public enum EquipPlaceholderOrientation
 // 악세서리 바닥 접촉 규약
 public enum EquipContactAnchor
 {
-    BottomAlign,  // 악세서리 바운드의 바닥(-up 접면)을 placeholder 점에 정렬 — 파묻힘 방지 기본
+    BottomAlign,  // 악세서리 바운드의 바닥(-up 접면)을 placeholder 점에 정렬 — 파묻힘 방지
     Center,       // 바운드 중심을 placeholder 점에 정렬
+    Pivot,        // 모델 원점(0,0,0)을 placeholder 점에 정렬 — 피벗 기준으로 저작된 악세서리(레거시 equip 감각) 기본
 }
 
 // placeholder = 소켓 캡슐 테두리(또는 근처)의 부착점. 악세서리는 여기에 붙는다.
@@ -22,10 +23,14 @@ public class EquipPlaceholder : MonoBehaviour
 {
     public string placeholderId;  // "top", "side_l", "side_r", "halo" 등
 
-    // 무차원 표면 좌표 (원본)
+    // 무차원 표면 좌표 (캡슐 기반 — 캡슐 있는 소켓에서만 사용)
     public float axisT;                         // 캡슐 축 위 위치 [-1..1]
     public Vector3 dirLocal = Vector3.up;       // 소켓 로컬, 축 최근접점→점 방향
     public float radiusScale = 1f;              // 1=표면, >1=부유(천사링), 0=축 위
+
+    // 신모델(클릭=소켓) 크기 기준: 본(소켓)→메시 히트점 거리의 부모-로컬 베이크.
+    // 부모-로컬이라 캐릭터/본이 커지면 lossyScale을 타고 악세서리 크기가 자동으로 같이 큰다. (0=미베이크)
+    public float bakedRefDistLocal;
 
     public EquipPlaceholderOrientation orientation = EquipPlaceholderOrientation.SurfaceAligned;
     public Vector3 rotationOffsetEuler;         // 규약 기준 회전 보정

@@ -75,8 +75,54 @@ public static class EquipAuthoringUtil
 
         return null;
     }
-    // 바운드 측정에서 제외할 오브젝트 이름 패턴 (헤일로 등 캐릭터 키를 오염시키는 부속물)
-    private static readonly string[] BoundsExcludePatterns = { "halo" };
+    // 바운드/레이캐스트에서 제외할 오브젝트 이름 패턴 (헤일로 등 캐릭터 표면이 아닌 부속물)
+    public static readonly string[] ExcludeNamePatterns = { "halo", "ハロ", "光輪", "天使の輪" };
+
+    // 이름이 제외 패턴에 걸리는지 (공용)
+    public static bool IsExcludedName(string goName)
+    {
+        string lower = goName.ToLowerInvariant();
+        foreach (string pattern in ExcludeNamePatterns)
+        {
+            if (lower.Contains(pattern.ToLowerInvariant()))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 대상이 속한 캐릭터 루트 결정: Animator 우선, 없으면 렌더러 보유 조상 중
+    // "이웃 캐릭터(Animator 2개 이상)를 삼키기 직전"의 마지막 조상 (공용 부모 씬 방어)
+    public static Transform ResolveCharRoot(Transform t)
+    {
+        if (t == null)
+        {
+            return null;
+        }
+
+        Animator anim = t.GetComponentInParent<Animator>();
+        if (anim != null)
+        {
+            return anim.transform;
+        }
+
+        Transform best = t;
+        Transform cur = t.parent;
+        while (cur != null)
+        {
+            if (cur.GetComponentsInChildren<Animator>(true).Length >= 2)
+            {
+                break;
+            }
+            if (cur.GetComponentInChildren<Renderer>(false) != null)
+            {
+                best = cur;
+            }
+            cur = cur.parent;
+        }
+        return best;
+    }
 
     // 캐릭터 전체 렌더러 바운드 (월드). 활성 렌더러 한정 + 제외 패턴 적용.
     public static bool MeasureBounds(GameObject root, out Bounds bounds)
@@ -145,18 +191,10 @@ public static class EquipAuthoringUtil
         return has;
     }
 
-    // 이름이 바운드 제외 패턴에 걸리는지
+    // 이름이 바운드 제외 패턴에 걸리는지 (공용 IsExcludedName에 위임)
     private static bool IsBoundsExcluded(string goName)
     {
-        string lower = goName.ToLowerInvariant();
-        foreach (string pattern in BoundsExcludePatterns)
-        {
-            if (lower.Contains(pattern))
-            {
-                return true;
-            }
-        }
-        return false;
+        return IsExcludedName(goName);
     }
 
     // 캐릭터 키(월드 높이). 실패 시 0.
@@ -357,13 +395,8 @@ public static class EquipAuthoringUtil
     // Transform의 lossyScale 절대값 평균 (0 방지)
     public static float LossyAvg(Transform t)
     {
-        Vector3 ls = t.lossyScale;
-        float avg = (Mathf.Abs(ls.x) + Mathf.Abs(ls.y) + Mathf.Abs(ls.z)) / 3f;
-        if (avg <= 1e-8f)
-        {
-            return 1f;
-        }
-        return avg;
+        // 단일 구현으로 위임 (EquipMath — 캡슐 무관 공용 수학)
+        return EquipMath.LossyAvg(t);
     }
 
     // 소켓의 캡슐 월드 길이 (콜라이더 로컬 치수 × lossy 평균)

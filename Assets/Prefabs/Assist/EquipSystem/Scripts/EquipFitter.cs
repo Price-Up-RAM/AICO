@@ -51,8 +51,17 @@ public static class EquipFitter
     // 원점/identity/scale1 상태 인스턴스의 렌더러 바운드 측정 (고유 크기). Renderer 없으면 false.
     public static bool MeasureNatural(GameObject inst, out float longest, out Vector3 center)
     {
+        Vector3 extents;
+        return MeasureNaturalFull(inst, out longest, out center, out extents);
+    }
+
+    // 고유 크기 + 중심 + 반치수(extents)까지 측정 — 배치 보정을 결정적으로 계산하기 위한 확장판.
+    // (Renderer.bounds는 이동 직후 같은 프레임에 stale할 수 있어, 이 값을 TRS로 환산해 쓰는 것이 안전)
+    public static bool MeasureNaturalFull(GameObject inst, out float longest, out Vector3 center, out Vector3 extents)
+    {
         longest = 0f;
         center = Vector3.zero;
+        extents = Vector3.zero;
 
         if (inst == null)
         {
@@ -94,6 +103,7 @@ public static class EquipFitter
 
         longest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
         center = bounds.center;
+        extents = bounds.extents;
         return true;
     }
 

@@ -22,53 +22,96 @@ public static class EquipPlacement
 
         float natural;
         Vector3 accCenter;
-        bool measured = EquipFitter.MeasureNatural(inst, out natural, out accCenter);
+        Vector3 accExtents;
+        bool measured = EquipFitter.MeasureNaturalFull(inst, out natural, out accCenter, out accExtents);
 
-        // 2) 크기: RadiusRelative = 캡슐 월드지름 × sizeRatio (레거시 ContainUniform은 볼륨 길이)
+        // 2) 크기 기준 사다리: refDist(신모델, 부모-로컬 베이크 — 캐릭터가 커지면 같이 큼) → 캡슐 → 둘 다 없으면 거부
         float rWorld = 0f;
-        if (cap != null)
+        if (placeholder.bakedRefDistLocal > 1e-12f)
         {
-            rWorld = cap.radius * EquipCapsuleMath.LossyAvg(socket.transform);
+            rWorld = placeholder.bakedRefDistLocal * EquipMath.LossyAvg(socket.transform);
+        }
+        else
+        {
+            if (cap != null)
+            {
+                rWorld = cap.radius * EquipMath.LossyAvg(socket.transform);
+            }
         }
 
         float scale = 1f;
         if (measured)
         {
+            // 월드 목표 크기 계산 후, 부모(placeholder) lossyScale로 나눠 로컬 스케일로 환산
+            // (나누지 않으면 루트 20000 캐릭터에서 2만 배 크기로 폭발)
+            float parentLossy = EquipMath.LossyAvg(placeholder.transform);
+            float worldTarget = 0f;
+
             if (entry.fitMode == EquipEntryFit.RadiusRelative && rWorld > 1e-9f)
             {
-                scale = EquipFitter.ComputeFitScale(2f * rWorld * entry.sizeRatio, natural);
+                worldTarget = 2f * rWorld * entry.sizeRatio;
             }
             else
             {
                 if (cap != null)
                 {
-                    float volumeLength = EquipFitter.GetVolumeLength(cap) * EquipCapsuleMath.LossyAvg(socket.transform);
-                    scale = EquipFitter.ComputeFitScale(volumeLength, natural);
+                    worldTarget = EquipFitter.GetVolumeLength(cap) * EquipMath.LossyAvg(socket.transform);
                 }
+                else
+                {
+                    if (rWorld > 1e-9f)
+                    {
+                        // ContainUniform 엔트리 + 캡슐 없는 신모델 소켓 → refDist 기반 자동 폴백
+                        worldTarget = 2f * rWorld * entry.sizeRatio;
+                    }
+                }
+            }
+
+            if (worldTarget > 1e-9f)
+            {
+                scale = EquipFitter.ComputeFitScale(worldTarget, natural) / parentLossy;
+            }
+            else
+            {
+                // 크기 기준 전무(캡슐/refDist 모두 부재) → 폭발 방지 거부
+                Debug.LogWarning($"[EquipPlacement] '{socket.slotId}/{placeholder.placeholderId}' 크기 기준 없음(캡슐·refDist 부재) — 장착 거부.");
+                DestroySafe(inst);
+                return;
             }
         }
         scale = scale * entry.fitBias;
 
-        // 3) placeholder 하위 부착 + 회전
+        // 3) placeholder 하위 부착 + 회전/스케일
         inst.transform.SetParent(placeholder.transform, false);
         inst.transform.localRotation = Quaternion.Euler(entry.rotationOffset);
         inst.transform.localScale = Vector3.one * scale;
-        inst.transform.position = placeholder.transform.position;
 
-        // 4) 접촉 규약: BottomAlign = 바운드 바닥(-up 접면)을 placeholder 점에 정렬 (파묻힘 방지)
-        if (placeholder.contactAnchor == EquipContactAnchor.BottomAlign && measured)
+        // 4) 접촉 규약 — 결정적 계산.
+        // Pivot = 모델 원점(0,0,0)을 placeholder 점에 그대로 (피벗 기준 저작 악세서리, 레거시 equip 감각).
+        // Center/BottomAlign = identity에서 측정한 center/extents를 현재 회전·스케일로 환산해 바운드 정렬
+        // (Renderer.bounds는 이동 직후 같은 프레임에 stale할 수 있으므로 읽지 않는다).
+        if (measured && placeholder.contactAnchor != EquipContactAnchor.Pivot)
         {
-            Vector3 up = placeholder.transform.up;
+            float worldScale = scale * EquipMath.LossyAvg(placeholder.transform);
+            Quaternion worldRot = inst.transform.rotation;
 
-            // 배치 후 월드 바운드로 바닥 정렬량 계산
-            Bounds b;
-            if (TryGetWorldBounds(inst, out b))
+            Vector3 worldCenterOffset = worldRot * (accCenter * worldScale);
+            inst.transform.position = placeholder.transform.position - worldCenterOffset;
+
+            // BottomAlign = 회전된 AABB의 up 방향 반치수만큼 올림 (파묻힘 방지)
+            if (placeholder.contactAnchor == EquipContactAnchor.BottomAlign)
             {
-                float extentAlongUp = b.extents.x * Mathf.Abs(up.x) + b.extents.y * Mathf.Abs(up.y) + b.extents.z * Mathf.Abs(up.z);
-                float minAlongUp = Vector3.Dot(b.center, up) - extentAlongUp;
-                float shift = Vector3.Dot(placeholder.transform.position, up) - minAlongUp;
-                inst.transform.position = inst.transform.position + up * shift;
+                Vector3 up = placeholder.transform.up;
+                float extentAlongUp =
+                    Mathf.Abs(Vector3.Dot(up, worldRot * Vector3.right)) * accExtents.x +
+                    Mathf.Abs(Vector3.Dot(up, worldRot * Vector3.up)) * accExtents.y +
+                    Mathf.Abs(Vector3.Dot(up, worldRot * Vector3.forward)) * accExtents.z;
+                inst.transform.position = inst.transform.position + up * (extentAlongUp * worldScale);
             }
+        }
+        else
+        {
+            inst.transform.position = placeholder.transform.position;
         }
 
         // 5) 아이템 고유 오프셋 (캡슐 radius 배수 단위 → 월드 환산, placeholder 프레임)
@@ -79,6 +122,24 @@ public static class EquipPlacement
                 placeholder.transform.up * (entry.positionOffsetRadii.y * rWorld) +
                 placeholder.transform.forward * (entry.positionOffsetRadii.z * rWorld);
             inst.transform.position = inst.transform.position + offsetWorld;
+        }
+    }
+
+    // 장착 거부 시 인스턴스 파괴 (플레이=지연, 에딧=즉시)
+    private static void DestroySafe(GameObject go)
+    {
+        if (go == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Object.Destroy(go);
+        }
+        else
+        {
+            Object.DestroyImmediate(go);
         }
     }
 
@@ -109,11 +170,19 @@ public static class EquipPlacement
         return has;
     }
 
-    // inst를 socket 하위에 볼륨-핏 + 오프셋 적용해 배치한다.
+    // inst를 socket 하위에 볼륨-핏 + 오프셋 적용해 배치한다 (레거시 직부착 — 캡슐 필수).
     public static void Fit(GameObject inst, EquipSocket socket, float fitBias, Vector3 positionOffset, Vector3 rotationOffset)
     {
         if (inst == null || socket == null)
         {
+            return;
+        }
+
+        // 캡슐 없는 소켓의 직부착은 크기 기준이 없어 극단 스케일에서 폭발 — 거부 (placeholder 경로 사용)
+        if (socket.SizingVolume == null)
+        {
+            Debug.LogWarning($"[EquipPlacement] '{socket.slotId}' 소켓 직부착은 캡슐이 필요합니다 — 장착 거부 (신모델 소켓은 placeholder 경로 사용).");
+            DestroySafe(inst);
             return;
         }
 

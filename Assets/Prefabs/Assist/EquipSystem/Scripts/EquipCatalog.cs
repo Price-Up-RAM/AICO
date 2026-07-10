@@ -15,7 +15,8 @@ public class EquipEntry
 {
     public string key;                  // 악세서리 식별 키 (예: "hairpin_placeholder")
     public GameObject prefab;           // 부착할 프리팹
-    public string targetSlotId;         // 어느 슬롯에 붙는가 (예: "head")
+    public string targetSlotId;         // 어느 슬롯에 붙는가 (예: "hairpin") — 해석 사다리 2순위 (1순위는 key와 같은 이름의 소켓)
+    public List<string> fallbackSlotIds = new List<string>();  // 3순위 폴백: 위가 없을 때 순서대로 시도할 범용 이름들 (예: head, chest, origin)
     public string targetPlaceholderId;  // 어느 placeholder에 붙는가 (예: "top"). 비면 레거시 소켓 직부착 경로
     public EquipEntryFit fitMode = EquipEntryFit.ContainUniform;  // 크기 결정 방식
     public float sizeRatio = 1f;        // RadiusRelative: 최장변 = 캡슐 월드지름 × 이 값

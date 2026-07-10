@@ -68,7 +68,7 @@
 ### A. 데모 씬으로 확인
 1. `Assets/Prefabs/Assist/InventorySystem/InventoryDemo.unity` 열기 → **Play**.
    (캔버스는 SampleScene과 동일 스케일러: ScaleWithScreenSize 2560x1440, match 0.5)
-2. `1~4`: MAIN에 아이템 지급 (chipao / idolfrontribbon / pareo / hairpin — EquipCatalog_Demo와 동일 키).
+2. `1~4`: MAIN에 아이템 지급 (chipao / idolfrontribbon / pareo / hairpin — EquipCatalog와 동일 키).
 3. **두 창 분리**: 왼쪽 = MAIN 창(8x6=48칸), 오른쪽 = CHAR 창. `I`: 두 창 동시 토글. 창의 빈 영역(헤더/여백)을 잡고 드래그하면 창 이동.
 4. **아이템 드래그 앤 드롭**:
    - 같은 창의 다른 칸에 드롭: **위치 이동** (찬 칸이면 스왑, 같은 아이템이면 병합).
