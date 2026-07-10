@@ -53,6 +53,18 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
         }
     }
 
+    public string Key
+    {
+        get
+        {
+            return key;
+        }
+    }
+
+    // 외부 드롭 프로토콜: 외부 드롭 존(IDropHandler)이 드롭을 처리했으면 true로 세워
+    // 소스 셀의 HandleSlotDrop(이동/장착)을 건너뛰게 한다 (OnDrop이 OnEndDrag보다 먼저 실행됨)
+    public static bool DropConsumed;
+
     // 셀 데이터 주입. key가 null/빈 문자열이면 빈 칸 (meta null 허용 — 그때는 key를 이름으로 표시)
     public void Setup(InventoryView owner, int slotIndex, string key, int count, InventoryEntry meta, bool equipped)
     {
@@ -156,6 +168,7 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
             return;
         }
 
+        DropConsumed = false;
         InventoryTooltip.Hide();
         CreateGhost(eventData);
     }
@@ -183,11 +196,26 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
             return;
         }
 
-        // 고스트는 raycastTarget=false라 포인터 아래의 실제 UI가 잡힌다
-        GameObject hovered = eventData.pointerCurrentRaycast.gameObject;
-        InventorySlotView targetCell = hovered != null ? hovered.GetComponentInParent<InventorySlotView>() : null;
-        InventoryView targetView = hovered != null ? hovered.GetComponentInParent<InventoryView>() : null;
-        owner.HandleSlotDrop(slotIndex, key, targetCell, targetView, eventData.position);
+        // 외부 드롭 존이 이미 소비한 드롭이면 자체 처리 생략
+        if (!DropConsumed)
+        {
+            // 고스트는 raycastTarget=false라 포인터 아래의 실제 UI가 잡힌다
+            GameObject hovered = eventData.pointerCurrentRaycast.gameObject;
+            InventorySlotView targetCell = hovered != null ? hovered.GetComponentInParent<InventorySlotView>() : null;
+            InventoryView targetView = hovered != null ? hovered.GetComponentInParent<InventoryView>() : null;
+            owner.HandleSlotDrop(slotIndex, key, targetCell, targetView, eventData.position);
+        }
+    }
+
+    // 드래그 도중 셀이 비활성화되면(외부 드롭 처리로 그리드가 즉시 재구축되는 경우 등)
+    // OnEndDrag가 오지 않으므로, 고스트는 셀 수명에 맞춰 여기서 정리한다
+    private void OnDisable()
+    {
+        if (dragGhost != null)
+        {
+            Destroy(dragGhost.gameObject);
+            dragGhost = null;
+        }
     }
 
     // 드래그 고스트 생성 (최상위 캔버스 아래, 레이캐스트 통과)

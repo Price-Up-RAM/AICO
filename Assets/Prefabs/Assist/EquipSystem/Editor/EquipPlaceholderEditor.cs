@@ -49,20 +49,64 @@ public class EquipPlaceholderEditor : Editor
     {
         EquipPlaceholder ph = (EquipPlaceholder)target;
 
-        DrawDefaultInspector();
+        // 신모델 판정: 소켓에 캡슐(사이징 볼륨)이 없으면 캡슐 좌표계 자체가 무의미
+        EquipSocket owner = ph.OwnerSocket;
+        bool newModel = owner != null && owner.SizingVolume == null;
+
+        if (newModel)
+        {
+            // 신모델: 살아있는 필드 3개만 노출 (캡슐 좌표/회전 규약 필드는 no-op이라 숨김)
+            EditorGUILayout.HelpBox("신모델 부착점: 위치·회전 = 이 Transform 그대로, 크기 = Baked Ref Dist × 2 × Size Ratio(카탈로그).\n메시 모드에서 구체 핸들 드래그 = 표면 글라이드 — 놓는 순간 크기 기준(refDist)이 재측정됩니다. Free 이동은 재측정하지 않습니다.", MessageType.Info);
+            serializedObject.Update();
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("placeholderId"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("bakedRefDistLocal"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("contactAnchor"));
+            serializedObject.ApplyModifiedProperties();
+        }
+        else
+        {
+            DrawDefaultInspector();
+        }
 
         EditorGUILayout.Space();
 
-        // 스냅 모드 (메시 캐시 불가 시 캡슐로 자동 강등 안내)
+        // 스냅 모드 — 신모델은 Mesh/Free 2지선다 (Capsule은 신모델에서 Free와 동일해 무의미)
         Transform charRoot = EquipAuthoringUtil.ResolveCharRoot(ph.transform);
-        EquipSnapMode wanted = (EquipSnapMode)EditorGUILayout.EnumPopup("스냅 모드", snapMode);
-        snapMode = wanted;
+        if (newModel)
+        {
+            string[] options = new string[] { "Mesh (표면 글라이드)", "Free (자유 이동 — 띄우기용)" };
+            int idx = 0;
+            if (snapMode == EquipSnapMode.Free)
+            {
+                idx = 1;
+            }
+            int newIdx = EditorGUILayout.Popup("스냅 모드", idx, options);
+            if (newIdx == 1)
+            {
+                snapMode = EquipSnapMode.Free;
+            }
+            else
+            {
+                snapMode = EquipSnapMode.Mesh;
+            }
+        }
+        else
+        {
+            snapMode = (EquipSnapMode)EditorGUILayout.EnumPopup("스냅 모드", snapMode);
+        }
 
         if (snapMode == EquipSnapMode.Mesh)
         {
             if (charRoot == null || EquipMeshRaycaster.Instance.HasCache(charRoot) == false)
             {
-                EditorGUILayout.HelpBox("메시를 찾지 못해 캡슐 모드로 동작합니다.", MessageType.Warning);
+                if (newModel)
+                {
+                    EditorGUILayout.HelpBox("메시를 찾지 못해 자유 이동으로 동작합니다 — [메시 캐시 갱신]을 시도하세요.", MessageType.Warning);
+                }
+                else
+                {
+                    EditorGUILayout.HelpBox("메시를 찾지 못해 캡슐 모드로 동작합니다.", MessageType.Warning);
+                }
             }
             else
             {
@@ -71,19 +115,23 @@ public class EquipPlaceholderEditor : Editor
         }
 
         EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("표면에 스냅 (캡슐 radiusScale=1)"))
+        if (newModel == false)
         {
-            Undo.RecordObject(ph.transform, "Snap Placeholder");
-            Undo.RecordObject(ph, "Snap Placeholder");
-            ph.CaptureFromTransform();
-            ph.radiusScale = 1f;
-            ph.ApplyToTransform();
-            EditorUtility.SetDirty(ph);
-        }
-        if (GUILayout.Button("좌표→Transform 재적용"))
-        {
-            Undo.RecordObject(ph.transform, "Apply Placeholder");
-            ph.ApplyToTransform();
+            // 캡슐 좌표 기반 버튼 — 신모델에서는 no-op(사후 캡슐 추가 시 stale 좌표 순간이동 위험도 있어 숨김)
+            if (GUILayout.Button("표면에 스냅 (캡슐 radiusScale=1)"))
+            {
+                Undo.RecordObject(ph.transform, "Snap Placeholder");
+                Undo.RecordObject(ph, "Snap Placeholder");
+                ph.CaptureFromTransform();
+                ph.radiusScale = 1f;
+                ph.ApplyToTransform();
+                EditorUtility.SetDirty(ph);
+            }
+            if (GUILayout.Button("좌표→Transform 재적용"))
+            {
+                Undo.RecordObject(ph.transform, "Apply Placeholder");
+                ph.ApplyToTransform();
+            }
         }
         if (GUILayout.Button("메시 캐시 갱신"))
         {
@@ -91,8 +139,9 @@ public class EquipPlaceholderEditor : Editor
         }
         EditorGUILayout.EndHorizontal();
 
-        // 값 직접 편집 시 Transform 동기화 (캡슐 좌표 기반)
-        if (GUI.changed && snapMode != EquipSnapMode.Mesh)
+        // 값 직접 편집 시 Transform 동기화 (캡슐 좌표 기반 — 레거시 전용.
+        // 신모델에서 남겨두면 사후 캡슐 추가 시 stale 좌표로 순간이동하는 사고 경로가 된다)
+        if (newModel == false && GUI.changed && snapMode != EquipSnapMode.Mesh)
         {
             ph.ApplyToTransform();
         }

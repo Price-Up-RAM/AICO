@@ -26,6 +26,17 @@
 - 배치 시 소켓에 **`EquipPlacementRecord`**(악세서리 key + sizeRatio + 고스트 최종 소켓-로컬 TRS)가 기록됨 — 재현/전파 검수/조정 시작값용.
 - 배치/베이크 직후 베이크 폴드아웃에 **방금 만든 부착점이 자동 매핑** — 본/이름만 바꿔 "다른 본으로 다시 굽기" 가능. 위치 소스에 소켓을 주면 자동으로 그 부착점(placeholder) 위치로 대체.
 
+## 워크벤치 씬 (EquipDemo.unity — 저작 보조 작업대)
+
+`Tools → EquipSystem → Build Workbench Scene (EquipDemo)`로 재생성 가능. 캐릭터 프리팹을 씬에 끌어놓고 Play:
+- **장착 매트릭스**: 로스터×카탈로그 그리드, 셀 색=해석 사다리 순위(①초록 ②청록 ③노랑 ④빨강=불가), 셀 클릭=실장착, 행 라벨 클릭=후보 사다리 로그
+- **점유 현황**: 선택 캐릭터의 소켓별 장착물 + [해제]
+- **도구**: 스모크 회귀(전 로스터×전 엔트리, FAIL 우선 리포트 — 기존 코디 해제됨), 전부 장착/해제/랜덤 코디, 스케일 ×10/×0.1/복원(코디 유지 재장착 검증)
+- **마커**(`M`): 소켓 ●/부착점 ◆(refDist 표기) 화면 오버레이
+- **카메라**: 우클릭 궤도/휠 줌/휠클릭 팬(스케일 1~120000 비례), `F` 프레이밍, `T` 턴테이블
+- 키: `Tab`/`[`/`]` 캐릭터 전환, `R` 재스캔, 숫자키=엔트리 장착, `J` 전부 해제, `H` 도움말
+- 구성 파일: `Scripts/EquipWorkbenchController.cs`(코어+IMGUI)/`EquipWorkbenchCamera.cs`/`EquipWorkbenchTools.cs`(스모크·코디·스케일)/`EquipWorkbenchMarkers.cs`, `Editor/EquipWorkbenchSceneBuilder.cs`
+
 ## 표준 워크플로우
 
 1. 씬(또는 프리팹 모드)에 캐릭터 → **Socket Maker** 열기(대상 자동 인식).

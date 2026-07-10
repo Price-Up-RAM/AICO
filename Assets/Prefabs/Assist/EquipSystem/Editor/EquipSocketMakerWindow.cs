@@ -19,6 +19,7 @@ public class EquipSocketMakerWindow : EditorWindow
     private void OnDisable()
     {
         StopPick();
+        ClearTestEquip();
     }
 
     private void OnGUI()
@@ -198,11 +199,81 @@ public class EquipSocketMakerWindow : EditorWindow
                     }
                 }
 
+                EditorGUILayout.BeginHorizontal();
                 Color prevRow = GUI.color;
                 GUI.color = rowColor;
                 EditorGUILayout.LabelField(entry.key, state);
                 GUI.color = prevRow;
+                if (linked != null)
+                {
+                    // 플레이 없이 장착 확인 — 실장착과 동일 함수(FitToPlaceholder/Fit)로 배치 (저장 안 됨)
+                    if (GUILayout.Button("테스트", GUILayout.Width(48)))
+                    {
+                        TestEquip(entry, linked);
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
             }
+
+            if (testInstance != null)
+            {
+                if (GUILayout.Button("테스트 장착 지우기"))
+                {
+                    ClearTestEquip();
+                }
+            }
+        }
+    }
+
+    // ── 장착 테스트 (에딧 모드, 저장 안 됨) ──
+    private GameObject testInstance;
+
+    private void TestEquip(EquipEntry entry, EquipSocket socket)
+    {
+        ClearTestEquip();
+
+        if (entry.prefab == null)
+        {
+            Debug.LogWarning($"[SocketMaker] 테스트 불가: '{entry.key}' 프리팹이 비어 있습니다.");
+            return;
+        }
+
+        testInstance = (GameObject)Instantiate(entry.prefab);
+        testInstance.name = "__EquipPreview__Test_" + entry.key;  // 레이캐스터 제외 규약
+        testInstance.hideFlags = HideFlags.DontSave;
+
+        // 실장착과 동일 라우팅: placeholder(별칭 포함) → 레거시 직부착
+        EquipPlaceholder ph = socket.FindPlaceholder("placeholder");
+        if (ph == null && string.IsNullOrEmpty(entry.targetPlaceholderId) == false)
+        {
+            ph = socket.FindPlaceholder(entry.targetPlaceholderId);
+        }
+
+        if (ph != null)
+        {
+            EquipPlacement.FitToPlaceholder(testInstance, socket, ph, entry);
+        }
+        else
+        {
+            EquipPlacement.Fit(testInstance, socket, entry.fitBias, entry.positionOffset, entry.rotationOffset);
+        }
+
+        // 거부 경로(크기 기준 부재 등)에서는 인스턴스가 파괴됨
+        if (testInstance == null)
+        {
+            Debug.LogWarning("[SocketMaker] 테스트 장착이 거부되었습니다 — 콘솔 경고를 확인하세요.");
+            return;
+        }
+
+        Debug.Log($"[SocketMaker] 테스트 장착: '{entry.key}' → '{socket.slotId}' (저장 안 됨 — 창의 [테스트 장착 지우기]로 제거).");
+    }
+
+    private void ClearTestEquip()
+    {
+        if (testInstance != null)
+        {
+            DestroyImmediate(testInstance);
+            testInstance = null;
         }
     }
 
@@ -594,17 +665,50 @@ public class EquipSocketMakerWindow : EditorWindow
         EquipEntry linkEntry = GetPickEntry();
         if (pickActive && linkCatalogOnPlace && linkEntry != null)
         {
-            // 의미 있는 이름의 기존 연결을 덮기 전 확인 — 다른 캐릭터를 향한 링크를 조용히 끊는 사고 방지
-            // (socket_N 임시 이름이면 확인 없이 덮음)
+            // 이 아이템이 이미 의미 있는 자리 이름에 연결돼 있으면(카탈로그 전역 등록 — 이 캐릭터의 소켓 여부와 무관),
+            // 표준 경로 = 방금 만든 소켓의 이름을 그 자리 이름으로 맞추는 것. 덮어쓰기는 다른 캐릭터의 연결을 끊는다.
             bool doLink = true;
             if (string.IsNullOrEmpty(linkEntry.targetSlotId) == false
                 && linkEntry.targetSlotId != slotId
                 && linkEntry.targetSlotId.StartsWith("socket_") == false)
             {
-                doLink = EditorUtility.DisplayDialog(
-                    "카탈로그 연결 덮어쓰기",
-                    $"'{linkEntry.key}'는 이미 '{linkEntry.targetSlotId}'에 연결되어 있습니다.\n'{slotId}'로 바꾸면 기존 연결(다른 캐릭터 포함)이 끊깁니다.",
-                    "덮어쓰기", "기존 연결 유지");
+                int choice = EditorUtility.DisplayDialogComplex(
+                    "카탈로그 연결",
+                    $"'{linkEntry.key}'는 카탈로그(전역 장부)에서 '{linkEntry.targetSlotId}' 자리에 등록되어 있습니다.\n" +
+                    $"이 캐릭터에 이미 소켓이 있다는 뜻이 아니라, 아이템의 자리 이름이 그렇다는 뜻입니다.\n\n" +
+                    $"권장: 방금 만든 소켓 이름을 '{linkEntry.targetSlotId}'로 지어 기존 등록을 그대로 쓰기.\n" +
+                    $"덮어쓰기: 등록을 '{slotId}'로 바꿈 — 다른 캐릭터의 같은 자리 연결이 끊깁니다.",
+                    $"'{linkEntry.targetSlotId}'로 이름 짓기 (권장)",
+                    "연결 안 함",
+                    $"'{slotId}'로 덮어쓰기");
+
+                if (choice == 0)
+                {
+                    // 소켓 이름을 기존 자리 이름으로 — 카탈로그는 무변경 (이미 그 이름을 가리키므로 연결 완성)
+                    EquipSocket dup = EquipAuthoringUtil.FindSocketBySlotId(charRoot, linkEntry.targetSlotId);
+                    if (dup != null && dup != socket)
+                    {
+                        Debug.LogWarning($"[SocketMaker] 이 캐릭터에 이미 '{linkEntry.targetSlotId}' 소켓이 있어 이름을 재사용할 수 없습니다 — 연결 없이 생성합니다.");
+                        doLink = false;
+                    }
+                    else
+                    {
+                        Undo.RecordObject(socket, "Rename Socket (Standard Name)");
+                        Undo.RecordObject(socketGo, "Rename Socket (Standard Name)");
+                        socket.slotId = linkEntry.targetSlotId;
+                        socketGo.name = SocketGoName(linkEntry.targetSlotId);
+                        slotId = linkEntry.targetSlotId;
+                        doLink = false;
+                        Debug.Log($"[SocketMaker] 소켓 이름을 기존 자리 이름 '{slotId}'로 지정 — 카탈로그 무변경으로 연결 완성.");
+                    }
+                }
+                else
+                {
+                    if (choice == 1)
+                    {
+                        doLink = false;
+                    }
+                }
             }
 
             if (doLink)
@@ -638,10 +742,30 @@ public class EquipSocketMakerWindow : EditorWindow
         }
 
         // 베이크 폴드아웃 자동 매핑: 방금 만든 부착점(placeholder)을 위치 소스로 —
-        // 폴드아웃에서 본/이름만 바꿔 곧바로 "다른 본으로 다시 굽기"가 가능해진다
+        // 폴드아웃에서 본/이름만 바꿔 곧바로 "다른 본/이름으로 이사"가 가능해진다
         bakeSource = ph.gameObject;
         bakeBone = bone;
-        bakeSlotId = slotId;
+        if (slotId.StartsWith("socket_"))
+        {
+            // 임시 이름이면 추천명 프리필: 고스트 엔트리의 2번째 추천명(targetSlotId, 의미 있는 이름일 때) → 1번째(key)
+            bakeSlotId = "";
+            EquipEntry recEntry = GetPickEntry();
+            if (pickActive && recEntry != null)
+            {
+                if (string.IsNullOrEmpty(recEntry.targetSlotId) == false && recEntry.targetSlotId.StartsWith("socket_") == false)
+                {
+                    bakeSlotId = recEntry.targetSlotId;
+                }
+                else
+                {
+                    bakeSlotId = recEntry.key;
+                }
+            }
+        }
+        else
+        {
+            bakeSlotId = slotId;
+        }
 
         MarkTargetDirty();
 
@@ -877,7 +1001,7 @@ public class EquipSocketMakerWindow : EditorWindow
     private bool showLinks = true;  // 카탈로그 연결 현황 폴드아웃
     private GameObject bakeSource;
     private Transform bakeBone;
-    private string bakeSlotId = "socket_bake";
+    private string bakeSlotId = "";  // 비어 있으면 베이크 버튼 비활성 — 진짜 이름 입력 유도
 
     // 배치된 오브젝트의 현재 위치/회전을 소켓/placeholder로 굽는다 (소스 무변경).
     // 용도: (a) 손으로 배치한 오브젝트 → 소켓 (b) 이미 만든 소켓의 부착점을 다른 본/이름으로 다시 굽기
@@ -975,6 +1099,29 @@ public class EquipSocketMakerWindow : EditorWindow
                 dstRec.ghostLocalPosition = socket.transform.InverseTransformPoint(worldPos);
                 dstRec.ghostLocalEuler = (Quaternion.Inverse(socket.transform.rotation) * worldRot).eulerAngles;
                 dstRec.ghostLocalScale = worldScale / EquipAuthoringUtil.LossyAvg(socket.transform);
+            }
+
+            // (c) 원본 소켓 정리 — 베이크는 "이사"이므로 소켓 2개가 남으면 안 된다.
+            // 임시 이름(socket_*)은 자동 삭제, 의미 있는 이름은 확인 후 삭제.
+            bool deleteSrc = srcSocket.slotId.StartsWith("socket_");
+            if (deleteSrc == false)
+            {
+                deleteSrc = EditorUtility.DisplayDialog(
+                    "원본 소켓 삭제",
+                    $"'{srcSocket.slotId}' 소켓의 부착점·연결을 '{bakeSlotId}'로 옮겼습니다.\n원본 소켓을 삭제할까요?",
+                    "삭제", "유지");
+            }
+            if (deleteSrc)
+            {
+                if (PrefabUtility.IsPartOfPrefabInstance(srcSocket.gameObject))
+                {
+                    Debug.LogWarning($"[SocketMaker] 원본 소켓 '{srcSocket.name}'은 프리팹에 구워져 있어 여기서 삭제 불가 — 프리팹 모드에서 지우세요.");
+                }
+                else
+                {
+                    Debug.Log($"[SocketMaker] 원본 소켓 '{srcSocket.name}' 삭제 (이사 완료).");
+                    Undo.DestroyObjectImmediate(srcSocket.gameObject);
+                }
             }
         }
 

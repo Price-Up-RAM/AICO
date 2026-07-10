@@ -134,18 +134,25 @@ public class EquipSocketEditor : Editor
         }
 
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("라이브 미리보기 (저장 안 됨)", EditorStyles.boldLabel);
 
         // 콜라이더 안내: 신모델(refDist)이면 캡슐 불필요, 아니면 추가 버튼
         if (socket.GetComponent<Collider>() == null)
         {
             if (newModel)
             {
-                EditorGUILayout.HelpBox("신모델 소켓 (refDist 기반) — 캡슐 불필요. 미리보기/조정은 부착점(placeholder) 인스펙터에서 하세요.", MessageType.Info);
+                EditorGUILayout.HelpBox("신모델 소켓 (refDist 기반) — 캡슐 불필요. 미리보기/조정은 부착점(placeholder) 인스펙터에서, 장착 테스트는 Socket Maker 현황판의 [테스트] 버튼으로.", MessageType.Info);
+                EquipPlaceholder firstPh = socket.FindPlaceholder("placeholder");
+                if (firstPh != null)
+                {
+                    if (GUILayout.Button("부착점 선택 (미리보기/조정)"))
+                    {
+                        Selection.activeGameObject = firstPh.gameObject;
+                    }
+                }
             }
             else
             {
-                EditorGUILayout.HelpBox("사이징 볼륨용 콜라이더가 없습니다. CapsuleCollider를 추가하세요.", MessageType.Warning);
+                EditorGUILayout.HelpBox("콜라이더도 부착점도 없습니다 — Socket Maker에서 고스트 클릭 배치로 소켓을 만드는 것을 권장합니다. (레거시 캡슐 방식을 쓰려면 아래 버튼)", MessageType.Warning);
                 if (GUILayout.Button("CapsuleCollider 추가 (Trigger)"))
                 {
                     CapsuleCollider cap = Undo.AddComponent<CapsuleCollider>(socket.gameObject);
@@ -154,53 +161,68 @@ public class EquipSocketEditor : Editor
             }
         }
 
-        // 카탈로그 + 키 선택
-        EquipCatalog newCatalog = (EquipCatalog)EditorGUILayout.ObjectField("Catalog", catalog, typeof(EquipCatalog), false);
-        if (newCatalog != catalog)
+        // 라이브 미리보기 = 캡슐 볼륨-핏(레거시 직부착) 시각화 도구 — 캡슐 있는 소켓에서만 의미 있음.
+        // 신모델 소켓은 Fit이 즉시 거부(인스턴스 파괴)하므로 UI 자체를 숨긴다.
+        if (socket.GetComponent<Collider>() != null)
         {
-            catalog = newCatalog;
-            BuildKeyList();
-        }
+            EditorGUILayout.LabelField("라이브 미리보기 (캡슐 볼륨-핏, 저장 안 됨)", EditorStyles.boldLabel);
 
-        if (keyList != null && keyList.Length > 0)
-        {
-            keyIndex = EditorGUILayout.Popup("Accessory Key", keyIndex, keyList);
-        }
-        else
-        {
-            EditorGUILayout.HelpBox("카탈로그가 없거나 키가 비어 있습니다.", MessageType.Info);
-        }
-
-        // 미리보기 토글
-        bool newLive = EditorGUILayout.Toggle("라이브 미리보기", livePreview);
-        if (newLive != livePreview)
-        {
-            livePreview = newLive;
-            if (livePreview)
+            // 카탈로그 + 키 선택
+            EquipCatalog newCatalog = (EquipCatalog)EditorGUILayout.ObjectField("Catalog", catalog, typeof(EquipCatalog), false);
+            if (newCatalog != catalog)
             {
-                RebuildPreview();
+                catalog = newCatalog;
+                BuildKeyList();
+            }
+
+            if (keyList != null && keyList.Length > 0)
+            {
+                keyIndex = EditorGUILayout.Popup("Accessory Key", keyIndex, keyList);
             }
             else
             {
-                DestroyPreview();
+                EditorGUILayout.HelpBox("카탈로그가 없거나 키가 비어 있습니다.", MessageType.Info);
+            }
+
+            // 미리보기 토글
+            bool newLive = EditorGUILayout.Toggle("라이브 미리보기", livePreview);
+            if (newLive != livePreview)
+            {
+                livePreview = newLive;
+                if (livePreview)
+                {
+                    RebuildPreview();
+                }
+                else
+                {
+                    DestroyPreview();
+                }
+            }
+
+            if (GUILayout.Button("미리보기 갱신"))
+            {
+                RebuildPreview();
             }
         }
 
-        if (GUILayout.Button("미리보기 갱신"))
-        {
-            RebuildPreview();
-        }
-
-        // ── Placeholder 관리 (소켓=부위 볼륨, placeholder=테두리 부착점) ──
+        // ── Placeholder 관리 (소켓=부위, placeholder=부착점) ──
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Placeholders (캡슐 테두리 부착점)", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Placeholders (부착점)", EditorStyles.boldLabel);
 
+        bool hasCapsule = socket.GetComponent<Collider>() != null;
         EquipPlaceholder[] placeholders = socket.GetComponentsInChildren<EquipPlaceholder>(true);
         foreach (EquipPlaceholder ph in placeholders)
         {
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField("· " + ph.placeholderId, GUILayout.Width(100));
-            EditorGUILayout.LabelField($"axisT {ph.axisT:F2}  rs {ph.radiusScale:F2}", GUILayout.Width(140));
+            if (hasCapsule)
+            {
+                EditorGUILayout.LabelField($"axisT {ph.axisT:F2}  rs {ph.radiusScale:F2}", GUILayout.Width(140));
+            }
+            else
+            {
+                EditorGUILayout.LabelField($"refDist {ph.bakedRefDistLocal:F4}", GUILayout.Width(140));
+            }
             if (GUILayout.Button("선택", GUILayout.Width(40)))
             {
                 Selection.activeGameObject = ph.gameObject;
@@ -208,8 +230,8 @@ public class EquipSocketEditor : Editor
             EditorGUILayout.EndHorizontal();
         }
 
-        // 캡슐 좌표 기반 버튼들 — 신모델(캡슐 없음)에서는 비활성 (배치는 클릭/글라이드로)
-        using (new EditorGUI.DisabledScope(socket.GetComponent<Collider>() == null))
+        // 캡슐 좌표 기반 버튼들 — 캡슐 소켓 전용 (신모델은 배치가 클릭/글라이드라 버튼 자체가 무의미 → 숨김)
+        if (hasCapsule)
         {
             EditorGUILayout.BeginHorizontal();
             if (socket.slotId == "head")
@@ -289,6 +311,11 @@ public class EquipSocketEditor : Editor
         }
 
         EquipSocket socket = (EquipSocket)target;
+        if (socket.SizingVolume == null)
+        {
+            return;
+        }
+
         EquipEntry entry = GetSelectedEntry();
         if (entry == null)
         {
@@ -316,6 +343,13 @@ public class EquipSocketEditor : Editor
     private void RebuildPreview()
     {
         DestroyPreview();
+
+        // 방어: 캡슐 없는 소켓은 Fit이 인스턴스를 즉시 파괴 — UI를 숨겨도 남은 상태(체크 켠 채 소켓 전환)에서 스팸 방지
+        EquipSocket owner = (EquipSocket)target;
+        if (owner.SizingVolume == null)
+        {
+            return;
+        }
 
         EquipEntry entry = GetSelectedEntry();
         if (entry == null || entry.prefab == null)

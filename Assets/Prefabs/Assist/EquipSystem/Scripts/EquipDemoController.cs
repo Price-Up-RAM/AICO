@@ -22,9 +22,29 @@ public class EquipDemoController : MonoBehaviour
     public string accessoryKey = "hairpin_placeholder";  // 시작/기본 장착 키
     public string slotId = "hairpin";  // (호환용) 기본 슬롯
 
-    // 시작 시 자동 장착
+    private string lastMessage = "";  // 마지막 장착/해제 결과 (OnGUI 표시용)
+
+    // 시작 시: 타겟 자동 탐색(미지정 시 씬에서 EquipSocket 보유 캐릭터) + 자동 장착
     private void Start()
     {
+        if (target == null)
+        {
+            EquipSocket anySocket = FindObjectOfType<EquipSocket>(true);
+            if (anySocket != null)
+            {
+                Animator anim = anySocket.GetComponentInParent<Animator>();
+                if (anim != null)
+                {
+                    target = anim.gameObject;
+                }
+                else
+                {
+                    target = anySocket.transform.root.gameObject;
+                }
+                Debug.Log($"[EquipDemoController] 자동 타겟: {target.name}");
+            }
+        }
+
         if (equipOnStart)
         {
             DoEquip(accessoryKey);
@@ -48,16 +68,34 @@ public class EquipDemoController : MonoBehaviour
         }
     }
 
-    // 장착 실행
+    // 장착 실행 — 실패해도 침묵하지 않고 사유를 남긴다
     private void DoEquip(string key)
     {
         if (target == null)
         {
+            lastMessage = "target 미지정 — 인스펙터에서 캐릭터를 지정하거나, 씬에 EquipSocket 있는 캐릭터가 필요합니다";
+            Debug.LogWarning("[EquipDemoController] " + lastMessage);
             return;
         }
 
-        EquipManager.Instance.Equip(target, key);
-        Debug.Log($"[EquipDemoController] Equip('{key}') on {target.name}");
+        if (EquipManager.Instance == null)
+        {
+            lastMessage = "씬에 EquipManager 없음 — 빈 GameObject에 EquipManager를 추가하세요";
+            Debug.LogWarning("[EquipDemoController] " + lastMessage);
+            return;
+        }
+
+        string reason;
+        bool ok = EquipManager.Instance.Equip(target, key, out reason);
+        if (ok)
+        {
+            lastMessage = $"장착: {key}";
+        }
+        else
+        {
+            lastMessage = $"장착 실패: {key} — {reason}";
+        }
+        Debug.Log($"[EquipDemoController] {lastMessage} on {target.name}");
     }
 
     // 해제 실행
@@ -65,10 +103,50 @@ public class EquipDemoController : MonoBehaviour
     {
         if (target == null)
         {
+            lastMessage = "target 미지정 — 해제 불가";
+            Debug.LogWarning("[EquipDemoController] " + lastMessage);
+            return;
+        }
+
+        if (EquipManager.Instance == null)
+        {
+            lastMessage = "씬에 EquipManager 없음";
+            Debug.LogWarning("[EquipDemoController] " + lastMessage);
             return;
         }
 
         EquipManager.Instance.Unequip(target, slot);
-        Debug.Log($"[EquipDemoController] Unequip('{slot}') on {target.name}");
+        lastMessage = $"해제: {slot}";
+        Debug.Log($"[EquipDemoController] {lastMessage} on {target.name}");
+    }
+
+    // 런타임 상태 오버레이 — 실제 타겟/바인딩/마지막 결과(거부 사유 포함)를 표시.
+    // (씬에 박힌 정적 안내 Text는 런타임 상태가 아니므로 이것이 진실)
+    private void OnGUI()
+    {
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+
+        string targetName = "(없음 — 씬에 소켓 있는 캐릭터 필요)";
+        if (target != null)
+        {
+            targetName = target.name;
+        }
+        sb.AppendLine($"EquipDemo target: {targetName}");
+
+        foreach (EquipBinding binding in bindings)
+        {
+            if (binding != null)
+            {
+                sb.AppendLine($"{binding.key}: {binding.accessoryKey}");
+            }
+        }
+        sb.AppendLine($"{unequipKey}: 해제 ({unequipSlotId})");
+
+        if (string.IsNullOrEmpty(lastMessage) == false)
+        {
+            sb.AppendLine("▶ " + lastMessage);
+        }
+
+        GUI.Label(new Rect(10f, Screen.height - 170f, 700f, 160f), sb.ToString());
     }
 }

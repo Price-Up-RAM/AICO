@@ -33,22 +33,34 @@ public class EquipManager : MonoBehaviour
     // 카탈로그 키로 target 캐릭터의 슬롯에 악세서리 장착 (같은 슬롯 기존 장착물 교체)
     public void Equip(GameObject target, string key)
     {
+        string reason;
+        Equip(target, key, out reason);
+    }
+
+    // 장착 + 실패 사유 반환 — 데모/외부 UI가 사유를 화면에 표시할 수 있게. 성공 시 true, reason = null.
+    public bool Equip(GameObject target, string key, out string reason)
+    {
+        reason = null;
+
         if (target == null)
         {
-            return;
+            reason = "target이 없습니다";
+            return false;
         }
 
         if (catalog == null)
         {
-            Debug.LogWarning("[EquipManager] Catalog가 지정되지 않았습니다.");
-            return;
+            reason = "Catalog가 지정되지 않았습니다";
+            Debug.LogWarning("[EquipManager] " + reason);
+            return false;
         }
 
         EquipEntry entry = catalog.Get(key);
         if (entry == null || entry.prefab == null)
         {
-            Debug.LogWarning($"[EquipManager] 카탈로그에 키 없음/프리팹 없음: {key}");
-            return;
+            reason = $"카탈로그에 키 없음/프리팹 없음: {key}";
+            Debug.LogWarning("[EquipManager] " + reason);
+            return false;
         }
 
         // 소켓 해석 사다리: ① key와 같은 이름 ② targetSlotId ③ fallbackSlotIds 순서대로 ④ 장착 불가
@@ -58,8 +70,9 @@ public class EquipManager : MonoBehaviour
         if (socket == null)
         {
             string candidates = string.Join("/", EquipSlotResolver.Candidates(entry));
-            Debug.LogWarning($"[EquipManager] 장착 불가: '{key}' — 후보 소켓({candidates}) 모두 없음 on {target.name}");
-            return;
+            reason = $"후보 소켓({candidates}) 모두 없음 — 캐릭터에 그 이름의 소켓을 만들어주세요";
+            Debug.LogWarning($"[EquipManager] 장착 불가: '{key}' — {reason} on {target.name}");
+            return false;
         }
 
         // placeholder 별칭 (overhead 레거시): targetSlotId가 overhead였고 head로 해석됐으면 top placeholder
@@ -77,18 +90,22 @@ public class EquipManager : MonoBehaviour
                 EquipPlaceholder spot = socket.FindPlaceholder("placeholder");
                 if (spot == null)
                 {
-                    Debug.LogWarning($"[EquipManager] '{slotId}' 소켓에 placeholder(부착점) 없음 — 장착 거부 (구 캐릭터는 신모델 재저작 필요).");
-                    return;
+                    reason = $"'{slotId}' 소켓에 placeholder(부착점) 없음 — 신모델 재저작 필요";
+                    Debug.LogWarning("[EquipManager] " + reason);
+                    return false;
                 }
 
                 ClearEquipped(spot.transform);
                 GameObject spotInst = Instantiate(entry.prefab);
                 EquipPlacement.FitToPlaceholder(spotInst, socket, spot, entry);
-                if (spotInst != null)
+                if (spotInst == null)
                 {
-                    spotInst.AddComponent<EquipMarker>();
+                    // 배치 함수가 크기 기준 부재 등으로 거부하면 인스턴스를 파괴함
+                    reason = "배치 거부(크기 기준 없음 등) — 콘솔 경고 확인";
+                    return false;
                 }
-                return;
+                spotInst.AddComponent<EquipMarker>();
+                return true;
             }
 
             // 레거시 경로: 소켓 직부착 (placeholder 하위 장착물은 보존)
@@ -96,11 +113,13 @@ public class EquipManager : MonoBehaviour
 
             GameObject inst = Instantiate(entry.prefab);
             EquipPlacement.Fit(inst, socket, entry.fitBias, entry.positionOffset, entry.rotationOffset);
-            if (inst != null)
+            if (inst == null)
             {
-                inst.AddComponent<EquipMarker>();
+                reason = "배치 거부(캡슐 필요 등) — 콘솔 경고 확인";
+                return false;
             }
-            return;
+            inst.AddComponent<EquipMarker>();
+            return true;
         }
 
         // placeholder 경로
@@ -113,11 +132,13 @@ public class EquipManager : MonoBehaviour
 
             GameObject fallback = Instantiate(entry.prefab);
             EquipPlacement.Fit(fallback, socket, entry.fitBias, entry.positionOffset, entry.rotationOffset);
-            if (fallback != null)
+            if (fallback == null)
             {
-                fallback.AddComponent<EquipMarker>();
+                reason = "배치 거부(캡슐 필요 등) — 콘솔 경고 확인";
+                return false;
             }
-            return;
+            fallback.AddComponent<EquipMarker>();
+            return true;
         }
 
         // placeholder 단위 교체 — 다른 placeholder의 장착물은 유지 (모자+헤어핀+링 동시 장착)
@@ -125,10 +146,13 @@ public class EquipManager : MonoBehaviour
 
         GameObject phInst = Instantiate(entry.prefab);
         EquipPlacement.FitToPlaceholder(phInst, socket, ph, entry);
-        if (phInst != null)
+        if (phInst == null)
         {
-            phInst.AddComponent<EquipMarker>();
+            reason = "배치 거부(크기 기준 없음 등) — 콘솔 경고 확인";
+            return false;
         }
+        phInst.AddComponent<EquipMarker>();
+        return true;
     }
 
     // 특정 placeholder의 장착물만 해제

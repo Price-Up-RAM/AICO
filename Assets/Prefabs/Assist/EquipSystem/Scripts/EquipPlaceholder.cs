@@ -21,19 +21,27 @@ public enum EquipContactAnchor
 [DisallowMultipleComponent]
 public class EquipPlaceholder : MonoBehaviour
 {
-    public string placeholderId;  // "top", "side_l", "side_r", "halo" 등
+    [Tooltip("부착점 이름 — 카탈로그/런타임이 이 이름으로 부착점을 찾습니다. 신모델 규약: placeholder (구명 spot 별칭 호환)")]
+    public string placeholderId;  // "placeholder"(신모델 규약), 레거시: "top", "side_l" 등
 
     // 무차원 표면 좌표 (캡슐 기반 — 캡슐 있는 소켓에서만 사용)
+    [Tooltip("캡슐(레거시) 소켓 전용 — 캡슐 축 위 위치 [-1..1]. refDist 신모델에서는 사용되지 않습니다")]
     public float axisT;                         // 캡슐 축 위 위치 [-1..1]
+    [Tooltip("캡슐(레거시) 전용 — 축 최근접점→점 방향 (신모델 미사용)")]
     public Vector3 dirLocal = Vector3.up;       // 소켓 로컬, 축 최근접점→점 방향
+    [Tooltip("캡슐(레거시) 전용 — 1=표면, >1=부유(천사링), 0=축 위 (신모델 미사용)")]
     public float radiusScale = 1f;              // 1=표면, >1=부유(천사링), 0=축 위
 
     // 신모델(클릭=소켓) 크기 기준: 본(소켓)→메시 히트점 거리의 부모-로컬 베이크.
     // 부모-로컬이라 캐릭터/본이 커지면 lossyScale을 타고 악세서리 크기가 자동으로 같이 큰다. (0=미베이크)
+    [Tooltip("크기 기준 거리(본→표면, 부모-로컬). 악세서리 최장변 = 이 값 × 2 × sizeRatio(카탈로그). 메시 글라이드를 놓는 순간 자동 재측정 — 손으로 고쳐도 됩니다. 0이면 장착 거부")]
     public float bakedRefDistLocal;
 
+    [Tooltip("회전 규약(레거시 참고용): SurfaceAligned=표면 노멀 기준 / SocketFrame=소켓 프레임 그대로. 신모델은 이 Transform의 회전이 그대로 쓰입니다")]
     public EquipPlaceholderOrientation orientation = EquipPlaceholderOrientation.SurfaceAligned;
+    [Tooltip("캡슐(레거시) 전용 회전 보정 — 신모델은 부착점 Transform을 직접 돌리거나 카탈로그 rotationOffset을 사용하세요")]
     public Vector3 rotationOffsetEuler;         // 규약 기준 회전 보정
+    [Tooltip("접촉 규약: Pivot=모델 원점을 부착점에(신모델 기본), Center=바운드 중심, BottomAlign=바닥면을 표면에 대고 밀어올림(파묻힘 방지)")]
     public EquipContactAnchor contactAnchor = EquipContactAnchor.BottomAlign;
 
     // 부모 소켓 (placeholder는 소켓 GO의 자식)
