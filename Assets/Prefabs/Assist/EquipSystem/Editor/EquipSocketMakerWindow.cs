@@ -260,8 +260,8 @@ public class EquipSocketMakerWindow : EditorWindow
         {
             if (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter)
             {
+                Event.current.Use();  // 모달이 열리기 전에 소비 — 같은 이벤트의 재배달/이중 처리 봉쇄
                 ApproveCandidate();
-                Event.current.Use();
             }
             else
             {
@@ -310,8 +310,18 @@ public class EquipSocketMakerWindow : EditorWindow
             float refLocal = candidate.hitDist / EquipAuthoringUtil.LossyAvg(candidate.bone);
             EditorGUILayout.LabelField($"예상 refDist: {candidate.hitDist:F2} (월드) / {refLocal:F4} (로컬)");
         }
-        EditorGUILayout.LabelField($"yaw/tilt/lift: {candidate.yaw:F0}° / {candidate.tilt:F0}° / +{candidate.lift * 100f:F0}%");
-        EditorGUILayout.LabelField($"접촉 기준: {pickContactAnchor} · 악세서리: {candidate.accessoryKey}");
+        bool ghostLive = IsReviewGhostLive();
+        if (candidate.hasGhostPose)
+        {
+            EditorGUILayout.LabelField($"회전 ZX {candidate.yaw:F0}° · YZ {candidate.tilt:F0}° · XY {candidate.roll:F0}° · 거리 +{candidate.lift * 100f:F0}%");
+            EditorGUILayout.LabelField($"접촉 기준: {pickContactAnchor} · 악세서리: {candidate.accessoryKey}");
+            EditorGUILayout.LabelField("씬 뷰에서 Ctrl=ZX·Shift=YZ·Ctrl+Shift=XY 회전, Alt+휠=거리, R=전부 리셋", EditorStyles.miniLabel);
+        }
+        else
+        {
+            EditorGUILayout.LabelField($"회전 미적용 — 고스트 없음(표면 기준으로 커밋) · 거리 +{candidate.lift * 100f:F0}%는 적용");
+            EditorGUILayout.LabelField($"접촉 기준: {pickContactAnchor} · 악세서리: {candidate.accessoryKey}");
+        }
 
         EditorGUILayout.BeginHorizontal();
         using (new EditorGUI.DisabledScope(prefabBlocked))
@@ -328,6 +338,29 @@ public class EquipSocketMakerWindow : EditorWindow
         if (GUILayout.Button("세션 취소"))
         {
             StopPick();
+        }
+        EditorGUILayout.EndHorizontal();
+
+        // 조정 행: 거리(항상 커밋 반영) / 크기(카탈로그 sizeRatio — 고스트 있어야 의미)
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("거리 +5%"))
+        {
+            AdjustReviewLift(0.05f);
+        }
+        if (GUILayout.Button("거리 −5%"))
+        {
+            AdjustReviewLift(-0.05f);
+        }
+        using (new EditorGUI.DisabledScope(ghostLive == false))
+        {
+            if (GUILayout.Button("크기 +0.1"))
+            {
+                AdjustReviewSize(0.1f);
+            }
+            if (GUILayout.Button("크기 −0.1"))
+            {
+                AdjustReviewSize(-0.1f);
+            }
         }
         EditorGUILayout.EndHorizontal();
 
@@ -477,6 +510,7 @@ public class EquipSocketMakerWindow : EditorWindow
         public float lift;                  // 패널 표시용 (커밋은 라이브 필드 — Reviewing 동안 동결이라 동일값)
         public float yaw;
         public float tilt;
+        public float roll;
         public Vector3 ghostWorldPos;       // Record 동결값 — 고스트 파괴 내성
         public Quaternion ghostWorldRot;    //   = displayRot (rotationOffset 합성값)
         public float ghostWorldScale;       //   = pickGhost.localScale.x
@@ -485,6 +519,8 @@ public class EquipSocketMakerWindow : EditorWindow
 
     private PickPhase pickPhase = PickPhase.Off;  // 현재 페이즈 (비직렬화 — 도메인 리로드 시 Off로 리셋, 기존 계약과 동일)
     private PickCandidate candidate;              // 현재 검수 후보
+    private bool sizeAdjustedInReview;            // 검수 중 [크기±] 버튼으로 sizeRatio를 바꿨는지 — 승인 경고 억제 + R 원복 대상
+    private bool approveInProgress;               // 승인(모달 포함) 진행 중 — 키 리핏/이중 라우팅의 재진입 커밋 차단
     private Vector3 lastCandidatePoint;           // Esc 복귀 후 직전 후보 마커 (회색)
     private Vector3 lastCandidateNormal;
     private bool lastCandidateShown;
@@ -549,6 +585,7 @@ public class EquipSocketMakerWindow : EditorWindow
         repickPh = null;
         candidate = default;
         lastCandidateShown = false;
+        sizeAdjustedInReview = false;
         turntableOn = false;
         pickSlotId = NextAutoSlotId();
         hoverDiagCount = 0;
@@ -563,6 +600,8 @@ public class EquipSocketMakerWindow : EditorWindow
         // 세션 정리 콜백: 플레이 진입(도메인 리로드 off 환경 포함)·프리팹 스테이지 닫힘 → 세션 종료
         EditorApplication.playModeStateChanged += OnPickPlayModeChanged;
         UnityEditor.SceneManagement.PrefabStage.prefabStageClosing += OnPickPrefabStageClosing;
+        // 검수 중 Ctrl+Z/Y(예: [크기±]의 카탈로그 원복) 관측 — 고스트·후보 동결값 재동기 (표시=커밋 유지)
+        Undo.undoRedoPerformed += OnPickUndoRedo;
 
         SceneView sv = SceneView.lastActiveSceneView;
         if (sv != null)
@@ -583,6 +622,7 @@ public class EquipSocketMakerWindow : EditorWindow
             EditorApplication.update -= OnPickUpdate;
             EditorApplication.playModeStateChanged -= OnPickPlayModeChanged;
             UnityEditor.SceneManagement.PrefabStage.prefabStageClosing -= OnPickPrefabStageClosing;
+            Undo.undoRedoPerformed -= OnPickUndoRedo;
             // repick 세션이 덮었던 창 설정 원복 — 다음 신규 세션이 이전 재조정 설정을 물려받는 누출 방지
             if (repickMode)
             {
@@ -618,6 +658,23 @@ public class EquipSocketMakerWindow : EditorWindow
     private void OnPickPrefabStageClosing(UnityEditor.SceneManagement.PrefabStage stage)
     {
         StopPick();
+    }
+
+    // 검수 중 Undo/Redo 관측: [크기±]의 카탈로그 편집이 Ctrl+Z로 되돌아오면 고스트 스케일·후보 동결값이
+    // stale로 남아 "검수한 모습 ≠ 커밋값"이 무경고 통과한다 — 재핏+재동결로 재동기
+    private void OnPickUndoRedo()
+    {
+        if (pickPhase != PickPhase.Reviewing || candidate.valid == false)
+        {
+            return;
+        }
+        // 카탈로그가 캡처값으로 되돌아왔으면 세션 변경 플래그 해제 — 이후 외부 편집 괴리 경고 감시 원상 복구
+        EquipEntry entry = ResolveCommitEntry();
+        if (entry != null && Mathf.Abs(entry.sizeRatio - candidate.sizeRatioAtCapture) <= 1e-6f)
+        {
+            sizeAdjustedInReview = false;
+        }
+        RefreshReviewAfterAdjust();
     }
 
     // 픽 모드 중 씬 뷰 상시 리페인트 (~30fps) + 검수 턴테이블 틱 (틱은 스로틀 밖 — 부드러운 궤도)
@@ -684,32 +741,9 @@ public class EquipSocketMakerWindow : EditorWindow
             }
         }
 
-        // 고스트 조작: 휠 = 거리(표면에서 띄우기), Ctrl+휠 = 법선 축 회전, Shift+휠 = 기울임, R = 리셋
-        if (e.type == EventType.ScrollWheel)
+        // 고스트 조작: 휠 = 거리(표면에서 띄우기), Ctrl+휠 = ZX 회전(법선축), Shift+휠 = YZ 회전(기울임), Ctrl+Shift+휠 = XY 회전(롤), R = 리셋
+        if (HandleGhostWheel(e, true))
         {
-            float sign = 1f;
-            if (e.delta.y > 0f)
-            {
-                sign = -1f;
-            }
-
-            if (e.control)
-            {
-                ghostYaw = ghostYaw + sign * 15f;
-            }
-            else
-            {
-                if (e.shift)
-                {
-                    ghostTilt = ghostTilt + sign * 15f;
-                }
-                else
-                {
-                    // 맨휠 = 거리: hitDist의 5% 스텝, 표면 안쪽(음수)은 금지
-                    // (픽 모드 중 카메라 줌은 휠 대신 Alt+우클릭 드래그)
-                    ghostLift = Mathf.Max(0f, ghostLift + sign * 0.05f);
-                }
-            }
             e.Use();
             sceneView.Repaint();
         }
@@ -717,6 +751,7 @@ public class EquipSocketMakerWindow : EditorWindow
         {
             ghostYaw = 0f;
             ghostTilt = 0f;
+            ghostRoll = 0f;
             ghostLift = 0f;
             e.Use();
             sceneView.Repaint();
@@ -724,9 +759,9 @@ public class EquipSocketMakerWindow : EditorWindow
 
         // 안내 배지
         string rotInfo = "";
-        if (ghostYaw != 0f || ghostTilt != 0f)
+        if (ghostYaw != 0f || ghostTilt != 0f || ghostRoll != 0f)
         {
-            rotInfo = $"  회전 {ghostYaw:F0}°/{ghostTilt:F0}°";
+            rotInfo = $"  회전 ZX{ghostYaw:F0}°·YZ{ghostTilt:F0}°·XY{ghostRoll:F0}°";
         }
         if (ghostLift > 0f)
         {
@@ -741,8 +776,8 @@ public class EquipSocketMakerWindow : EditorWindow
             rotInfo = rotInfo + "  [miss — 캐릭터 표면 위로]";
         }
         Handles.BeginGUI();
-        GUILayout.BeginArea(new Rect(10, 10, 480, 24));
-        GUILayout.Label($"클릭 = 후보 [{pickSlotId}] — 클릭=후보 지정(검수), 휠=거리, Ctrl/Shift+휠=회전, Esc=취소{rotInfo}", EditorStyles.helpBox);
+        GUILayout.BeginArea(new Rect(10, 10, 560, 24));
+        GUILayout.Label($"클릭 = 후보 [{pickSlotId}] — 클릭=후보 지정(검수), 휠=거리, Ctrl=ZX·Shift=YZ·Ctrl+Shift=XY 회전, Esc=취소{rotInfo}", EditorStyles.helpBox);
         GUILayout.EndArea();
         Handles.EndGUI();
 
@@ -850,6 +885,8 @@ public class EquipSocketMakerWindow : EditorWindow
         candidate.lift = ghostLift;
         candidate.yaw = ghostYaw;
         candidate.tilt = ghostTilt;
+        candidate.roll = ghostRoll;
+        sizeAdjustedInReview = false;  // 새 후보 = 크기 조정 세션 리셋
         EquipEntry entry = GetPickEntry();
         if (entry != null)
         {
@@ -864,6 +901,108 @@ public class EquipSocketMakerWindow : EditorWindow
             candidate.ghostWorldScale = pickGhost.transform.localScale.x;
             candidate.hasGhostPose = true;
         }
+    }
+
+    // 검수 중 조정용 재캡처: 회전·거리 표시값과 고스트 동결 TRS만 갱신 —
+    // accessoryKey/sizeRatioAtCapture/slotId/bone/hit/hitDist는 클릭 시점 박제를 유지한다
+    // (검수 중 카탈로그 외부 편집으로 pickKeyIndex가 밀려도 커밋 key가 흔들리지 않는 계약 보존)
+    private void RecaptureCandidatePose()
+    {
+        candidate.yaw = ghostYaw;
+        candidate.tilt = ghostTilt;
+        candidate.roll = ghostRoll;
+        candidate.lift = ghostLift;
+        if (pickGhost != null && lastGhostRotValid)
+        {
+            candidate.ghostWorldPos = pickGhost.transform.position;
+            candidate.ghostWorldRot = pickGhost.transform.rotation;
+            candidate.ghostWorldScale = pickGhost.transform.localScale.x;
+            candidate.hasGhostPose = true;
+        }
+    }
+
+    // 검수 중 고스트가 살아 있고 라이브 엔트리가 박제 key와 일치하는지 — 회전/크기 조정의 허용 조건.
+    // (불일치 = 악세서리 미지정이거나 검수 중 카탈로그 외부 편집으로 드리프트 — 조정해도 커밋에 반영 안 됨)
+    private bool IsReviewGhostLive()
+    {
+        EquipEntry entry = GetPickEntry();
+        return entry != null && entry.prefab != null
+            && string.IsNullOrEmpty(candidate.accessoryKey) == false && entry.key == candidate.accessoryKey;
+    }
+
+    // 검수 중 조정(회전/거리/크기) 공통 후처리: 고스트 재핏 + 후보 재동결 + 프레이밍 갱신(거리·크기가 초점/반경을 움직인다)
+    private void RefreshReviewAfterAdjust()
+    {
+        if (IsReviewGhostLive())
+        {
+            UpdateGhost(target.transform, candidate.hit);  // 동결 히트 기준 재핏 — lastGhostRot(커밋 회전)도 갱신
+        }
+        else
+        {
+            // 재핏 불가(고스트 없음/카탈로그 드리프트)여도 거리 조정은 커밋(라이브 ghostLift)에 반영되므로,
+            // 동결 고스트만이라도 같은 양만큼 노멀 방향으로 이동 — 비주얼·Record 동결 TRS·커밋 placeholder 정합 유지
+            float liftDelta = ghostLift - candidate.lift;
+            if (pickGhost != null && Mathf.Abs(liftDelta) > 1e-6f)
+            {
+                pickGhost.transform.position = pickGhost.transform.position + candidate.hit.normal * (liftDelta * candidate.hitDist);
+            }
+        }
+        RecaptureCandidatePose();
+        reviewFocus = candidate.hit.point + candidate.hit.normal * (ghostLift * candidate.hitDist);
+        reviewFrameSize = ComputeReviewFrameSize();
+        Repaint();
+        SceneView.RepaintAll();
+    }
+
+    // 검수 중 거리 조정 (Alt+휠과 동일 스텝의 버튼용). 고스트 유무와 무관 — lift는 커밋에 항상 반영된다.
+    private void AdjustReviewLift(float delta)
+    {
+        ghostLift = Mathf.Max(0f, ghostLift + delta);
+        RefreshReviewAfterAdjust();
+    }
+
+    // 검수 중 크기 조정: 카탈로그 sizeRatio 직편집 (아이템 공용 값 — 창의 sizeRatio 필드와 동일 경로)
+    private void AdjustReviewSize(float delta)
+    {
+        if (IsReviewGhostLive() == false)
+        {
+            return;
+        }
+        EquipEntry entry = ResolveCommitEntry();
+        if (entry == null || pickCatalog == null)
+        {
+            return;
+        }
+        Undo.RecordObject(pickCatalog, "Edit Size Ratio");
+        entry.sizeRatio = Mathf.Max(0.01f, entry.sizeRatio + delta);
+        EditorUtility.SetDirty(pickCatalog);
+        sizeAdjustedInReview = true;  // 의도적 세션 변경 — 승인 시 괴리 경고 억제, R로 원복 가능
+        RefreshReviewAfterAdjust();
+    }
+
+    // 검수 R = 전부 초기화: 회전 3축·거리는 0으로, (세션 중 버튼으로 바꾼) 크기는 클릭 시점 값으로 원복.
+    // 회전 리셋은 재핏 가능(고스트 유효)할 때만 — 재핏 없이 필드만 0이 되면 커밋(stale lastGhostRot)과 표시가 어긋난다
+    private void ResetReviewAdjust()
+    {
+        if (IsReviewGhostLive())
+        {
+            ghostYaw = 0f;
+            ghostTilt = 0f;
+            ghostRoll = 0f;
+        }
+        ghostLift = 0f;
+        if (sizeAdjustedInReview)
+        {
+            EquipEntry entry = ResolveCommitEntry();
+            if (entry != null && pickCatalog != null && candidate.sizeRatioAtCapture > 0f)
+            {
+                Undo.RecordObject(pickCatalog, "Edit Size Ratio");
+                entry.sizeRatio = candidate.sizeRatioAtCapture;
+                EditorUtility.SetDirty(pickCatalog);
+            }
+            sizeAdjustedInReview = false;
+        }
+        RefreshReviewAfterAdjust();
     }
 
     private void EnterReview()
@@ -898,6 +1037,11 @@ public class EquipSocketMakerWindow : EditorWindow
     // 필드 무접촉 = 자동 보존 → 고스트가 그 회전/거리 그대로 커서 추적을 재개한다
     private void BackToPicking()
     {
+        if (pickPhase != PickPhase.Reviewing)
+        {
+            // 세션 종료(Off) 후 뒤늦게 도착한 호출이 "유령 Picking"(씬 구독 없는 Picking 상태)을 만드는 것 방지
+            return;
+        }
         lastCandidatePoint = candidate.hit.point;
         lastCandidateNormal = candidate.hit.normal;
         lastCandidateShown = true;
@@ -940,8 +1084,8 @@ public class EquipSocketMakerWindow : EditorWindow
 
         if (e.type == EventType.KeyDown && (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter))
         {
+            e.Use();  // 모달(연결 다이얼로그)이 열리기 전에 소비 — 같은 이벤트의 재배달/이중 처리 봉쇄
             ApproveCandidate();
-            e.Use();
             return;
         }
         if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
@@ -950,6 +1094,32 @@ public class EquipSocketMakerWindow : EditorWindow
             e.Use();
             return;
         }
+
+        // 검수 중 고스트 계속 조정: 표면 지점만 동결, 회전(Ctrl/Shift/Ctrl+Shift+휠)·거리(Alt+휠)는 갱신.
+        // 맨휠은 HandleGhostWheel이 건드리지 않는다(카메라 줌 통과). 턴테이블 도는 중에도 조정 가능(의도).
+        // 회전은 고스트가 없으면(악세서리 미지정/카탈로그 드리프트) 커밋에 반영되지 않으므로 소비하지 않고
+        // 통과시킨다 (표시-커밋 괴리 방지). 거리(Alt+휠)는 고스트 유무와 무관하게 커밋에 반영되므로 항상 허용.
+        if (e.type == EventType.ScrollWheel)
+        {
+            bool rotationWheel = e.control || e.shift;
+            if (rotationWheel == false || IsReviewGhostLive())
+            {
+                if (HandleGhostWheel(e, false))
+                {
+                    RefreshReviewAfterAdjust();
+                    e.Use();
+                    return;
+                }
+            }
+        }
+        // R = 전부 초기화: 회전 3축 + 거리 + (세션 중 바꾼) 크기 — 조준 단계의 R과 동일 감각
+        if (e.type == EventType.KeyDown && e.keyCode == KeyCode.R)
+        {
+            ResetReviewAdjust();
+            e.Use();
+            return;
+        }
+
         // 턴테이블 자동 해제 보조 감지 — 이벤트는 절대 소비하지 않는다 (자유 내비 유지)
         if (turntableOn && (e.type == EventType.ScrollWheel
             || (e.type == EventType.MouseDrag && (e.button == 1 || e.button == 2 || e.alt))))
@@ -973,7 +1143,7 @@ public class EquipSocketMakerWindow : EditorWindow
         bool camBlocked = sv.in2DMode || sv.isRotationLocked;
 
         Handles.BeginGUI();
-        GUILayout.BeginArea(new Rect(10, 10, 340, 200), GUI.skin.box);
+        GUILayout.BeginArea(new Rect(10, 10, 360, 270), GUI.skin.box);
         GUILayout.Label("검수 중 — Enter=승인 · Esc=재조정 (소켓은 승인 시 생성)", EditorStyles.boldLabel);
 
         string slotLine = $"예정 slotId: {candidate.slotId}";
@@ -1008,8 +1178,19 @@ public class EquipSocketMakerWindow : EditorWindow
         // 소켓은 본 자식·scale 1이라 본 lossy=소켓 lossy — 커밋값(bakedRefDistLocal)과 일치
         float refLocal = candidate.hitDist / EquipAuthoringUtil.LossyAvg(candidate.bone);
         GUILayout.Label($"예상 refDist: {candidate.hitDist:F2} (월드) / {refLocal:F4} (로컬)");
-        GUILayout.Label($"yaw/tilt/lift: {candidate.yaw:F0}° / {candidate.tilt:F0}° / +{candidate.lift * 100f:F0}%");
-        GUILayout.Label($"접촉 기준: {pickContactAnchor} · 악세서리: {candidate.accessoryKey}");
+        bool ghostLive = IsReviewGhostLive();
+        if (candidate.hasGhostPose)
+        {
+            GUILayout.Label($"회전 ZX {candidate.yaw:F0}° · YZ {candidate.tilt:F0}° · XY {candidate.roll:F0}° · 거리 +{candidate.lift * 100f:F0}%");
+            GUILayout.Label($"접촉 기준: {pickContactAnchor} · 악세서리: {candidate.accessoryKey}");
+            GUILayout.Label("Ctrl=ZX · Shift=YZ · Ctrl+Shift=XY 회전 · Alt+휠=거리 · R=전부 리셋 · 맨휠=줌", EditorStyles.miniLabel);
+        }
+        else
+        {
+            // 고스트 없음 = 커밋 회전은 표면 기준 폴백 — 회전 숫자를 보여주면 반영되는 것으로 오해한다
+            GUILayout.Label($"회전 미적용 — 고스트 없음(표면 기준으로 커밋) · 거리 +{candidate.lift * 100f:F0}%는 적용");
+            GUILayout.Label($"접촉 기준: {pickContactAnchor} · 악세서리: {candidate.accessoryKey}");
+        }
 
         GUILayout.BeginHorizontal();
         using (new EditorGUI.DisabledScope(prefabBlocked))
@@ -1026,6 +1207,29 @@ public class EquipSocketMakerWindow : EditorWindow
         if (GUILayout.Button("세션 취소"))
         {
             action = 3;
+        }
+        GUILayout.EndHorizontal();
+
+        // 조정 행: 거리(항상 커밋 반영) / 크기(카탈로그 sizeRatio — 고스트 있어야 의미)
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("거리 +5%"))
+        {
+            action = 5;
+        }
+        if (GUILayout.Button("거리 −5%"))
+        {
+            action = 6;
+        }
+        using (new EditorGUI.DisabledScope(ghostLive == false))
+        {
+            if (GUILayout.Button("크기 +0.1"))
+            {
+                action = 7;
+            }
+            if (GUILayout.Button("크기 −0.1"))
+            {
+                action = 8;
+            }
         }
         GUILayout.EndHorizontal();
 
@@ -1086,6 +1290,22 @@ public class EquipSocketMakerWindow : EditorWindow
         {
             ToggleTurntable();
         }
+        if (action == 5)
+        {
+            AdjustReviewLift(0.05f);
+        }
+        if (action == 6)
+        {
+            AdjustReviewLift(-0.05f);
+        }
+        if (action == 7)
+        {
+            AdjustReviewSize(0.1f);
+        }
+        if (action == 8)
+        {
+            AdjustReviewSize(-0.1f);
+        }
         if (action >= 10)
         {
             SetViewpoint(action - 10);
@@ -1123,12 +1343,38 @@ public class EquipSocketMakerWindow : EditorWindow
     // 승인 = 재검증 → 정확히 1 Undo 그룹으로 커밋 → 세션 종료. 실패 시 Reviewing 잔류.
     private void ApproveCandidate()
     {
+        if (pickPhase != PickPhase.Reviewing)
+        {
+            // 세션 종료 후 도착한 중복 트리거(키 리핏/이중 라우팅) 무시 — 이중 커밋 봉쇄
+            return;
+        }
+        if (approveInProgress)
+        {
+            // 모달(연결 다이얼로그)이 떠 있는 동안의 재진입 차단
+            return;
+        }
         if (candidate.valid == false || candidate.bone == null || target == null)
         {
             Debug.LogWarning("[SocketMaker] 후보가 유효하지 않습니다 — 조준으로 복귀.");
             BackToPicking();
             return;
         }
+
+        // 모달이 떠 있는 동안 재진입 금지 (예외에도 반드시 해제 — 아니면 승인이 영구 잠김)
+        approveInProgress = true;
+        try
+        {
+            ApproveCandidateCore();
+        }
+        finally
+        {
+            approveInProgress = false;
+        }
+    }
+
+    // ApproveCandidate 본체 (가드 통과 후): 커밋 직전 재검증 + 연결 다이얼로그 + 1그룹 커밋
+    private void ApproveCandidateCore()
+    {
         if (repickMode && repickSocket == null)
         {
             Debug.LogWarning("[SocketMaker] 재조정 대상 소켓이 사라져 세션을 종료합니다.");
@@ -1146,6 +1392,8 @@ public class EquipSocketMakerWindow : EditorWindow
         // 커밋 직전 재검증
         string commitSlotId;
         EquipSocket overwrite = null;
+        EquipPlaceholder overwritePh = null;  // 다이얼로그 덮어쓰기 경로의 refDist 변화 로그용 (repickPrevRefDist와 동일 취지)
+        float overwritePrevRefDist = 0f;
         if (repickMode)
         {
             // Reviewing 중 리네임됐어도 그 소켓을 정확히 덮는다 (직접 참조 + live slotId)
@@ -1161,10 +1409,132 @@ public class EquipSocketMakerWindow : EditorWindow
                 commitSlotId = NextAutoSlotId();
                 Debug.Log($"[SocketMaker] '{candidate.slotId}'가 검수 중 생겨 '{commitSlotId}'로 재발급.");
             }
+
+            // 카탈로그 연결 3지선다: 아이템이 이미 의미 있는 자리 이름(head1 등)에 등록된 경우.
+            // 카탈로그는 읽기 전용 — 어떤 선택도 등록(targetSlotId)을 고치지 않고 "소켓 쪽"을 맞춘다.
+            // (등록 변경은 다른 캐릭터의 같은 자리 연결 자산을 끊는 고위험 조작이라 경로 자체를 없앰)
+            if (linkCatalogOnPlace)
+            {
+                EquipEntry dialogEntry = ResolveCommitEntry();
+                if (dialogEntry != null
+                    && string.IsNullOrEmpty(dialogEntry.targetSlotId) == false
+                    && dialogEntry.targetSlotId.StartsWith("socket_") == false)
+                {
+                    // 기존 소켓 조회 + 덮어쓰기 가능 여부 사전 판정 (프리팹 본 이사 가드의 사전화 — repick 선검사와 동일 조건)
+                    bool targetBlocked;
+                    EquipSocket existingTarget = FindDialogSocket(dialogEntry.targetSlotId, out targetBlocked);
+                    bool keyBlocked;
+                    EquipSocket existingKey = FindDialogSocket(dialogEntry.key, out keyBlocked);
+
+                    string header = $"'{dialogEntry.key}'는 카탈로그(전역 장부)에서 '{dialogEntry.targetSlotId}' 자리에 등록되어 있습니다.\n";
+
+                    // 선택지 2의 실체 고지: key 이름 소켓이 이미 있으면 "새 소켓"이 아니라 그 소켓 덮어쓰기다 (미고지 덮어쓰기 방지)
+                    string opt2;
+                    if (existingKey != null)
+                    {
+                        opt2 = $"2. '{dialogEntry.key}' 소켓 덮어쓰기 — 기존 key 소켓의 부착점을 지금 검수한 위치로 갱신";
+                        if (keyBlocked)
+                        {
+                            opt2 = opt2 + " (프리팹 본 이사 불가 — 선택 시 임시 이름으로 진행)";
+                        }
+                    }
+                    else
+                    {
+                        opt2 = $"2. '{dialogEntry.key}' 이름으로 새 소켓 — 이 캐릭터 전용 자리 (해석 사다리 1순위)";
+                    }
+                    string opt3 = $"3. 임시 이름('{commitSlotId}')으로 새 소켓 — 연결 없이, 이름은 나중에";
+                    string footer = $"\n\n카탈로그 등록('{dialogEntry.targetSlotId}')은 어떤 선택에서도 바뀌지 않습니다.";
+
+                    if (existingTarget != null && targetBlocked == false)
+                    {
+                        // Case A: 자리 소켓 존재 — 1 = 그 소켓 덮어쓰기
+                        string warnLadder = "";
+                        if (existingKey != null && existingKey != existingTarget)
+                        {
+                            // key 소켓이 사다리 1순위라 targetSlotId 소켓 갱신은 이 아이템 장착에 안 보인다 — 고지
+                            warnLadder = $"\n주의: 이 캐릭터에 '{dialogEntry.key}' 소켓이 있어 해석 사다리 1순위로 먼저 매칭됩니다 — 선택지 1의 갱신은 이 아이템 장착에는 반영되지 않습니다.";
+                        }
+                        int choice = EditorUtility.DisplayDialogComplex(
+                            "카탈로그 연결",
+                            header +
+                            $"이 캐릭터에 '{dialogEntry.targetSlotId}' 소켓이 존재합니다.\n\n" +
+                            $"1. '{dialogEntry.targetSlotId}' 덮어쓰기 — 기존 소켓의 부착점을 지금 검수한 위치로 갱신\n" +
+                            opt2 + "\n" + opt3 + warnLadder + footer,
+                            "1 수행", "3 수행", "2 수행");
+                        // DisplayDialogComplex 반환: 첫 버튼=0, 둘째(cancel·Esc)=1, 셋째=2
+                        if (choice == 0)
+                        {
+                            commitSlotId = dialogEntry.targetSlotId;
+                            overwrite = existingTarget;  // 기존 소켓 덮어쓰기 (repick과 동일 커밋 경로)
+                        }
+                        if (choice == 2)
+                        {
+                            ApplyDialogKeyOption(dialogEntry, existingKey, keyBlocked, ref commitSlotId, ref overwrite);
+                        }
+                        // choice 1 (Esc 포함) = 3. 임시 이름 유지 — 링크 없음
+                    }
+                    else if (existingTarget != null)
+                    {
+                        // Case A': 자리 소켓이 있으나 프리팹에 구워져 있고 검수한 본과 달라 덮어쓰기가 반드시 실패 —
+                        // 항상 실패하는 선택지 1을 제거한 2지선다 (구 코드의 우아한 강등을 사전 차단 방식으로 계승)
+                        bool doKey = EditorUtility.DisplayDialog(
+                            "카탈로그 연결",
+                            header +
+                            $"이 캐릭터의 '{dialogEntry.targetSlotId}' 소켓은 프리팹에 구워져 있고 지금 검수한 본과 달라 덮어쓸 수 없습니다 (프리팹 모드에서 재조정하세요).\n\n" +
+                            opt2 + "\n" + opt3 + footer,
+                            "2 수행", "3 수행");
+                        if (doKey)
+                        {
+                            ApplyDialogKeyOption(dialogEntry, existingKey, keyBlocked, ref commitSlotId, ref overwrite);
+                        }
+                        // 아니오(Esc 포함) = 3. 임시 이름 유지
+                    }
+                    else
+                    {
+                        // Case B: 자리 소켓 부재 — 1 = 이 소켓을 그 이름으로
+                        int choice = EditorUtility.DisplayDialogComplex(
+                            "카탈로그 연결",
+                            header +
+                            $"이 캐릭터에 '{dialogEntry.targetSlotId}' 소켓이 없습니다.\n\n" +
+                            $"1. 이 소켓을 '{dialogEntry.targetSlotId}'(으)로 만들기 — 기존 등록을 그대로 사용 (권장)\n" +
+                            opt2 + "\n" + opt3 + footer,
+                            "1 수행", "3 수행", "2 수행");
+                        if (choice == 0)
+                        {
+                            commitSlotId = dialogEntry.targetSlotId;
+                        }
+                        if (choice == 2)
+                        {
+                            ApplyDialogKeyOption(dialogEntry, existingKey, keyBlocked, ref commitSlotId, ref overwrite);
+                        }
+                        // choice 1 (Esc 포함) = 3. 임시 이름 유지 — 링크 없음
+                    }
+
+                    // 선택 결과 명시 — 어떤 버튼이 눌려 어떤 이름으로 커밋되는지 콘솔에 남긴다 (오선택/이중 커밋 진단용)
+                    string overwriteName = "없음(새 소켓)";
+                    if (overwrite != null)
+                    {
+                        overwriteName = "'" + overwrite.slotId + "' 소켓";
+                    }
+                    Debug.Log($"[SocketMaker] 연결 다이얼로그 선택 → 커밋 slotId '{commitSlotId}', 덮어쓰기 대상: {overwriteName}");
+
+                    // 덮어쓰기 경로의 refDist 변화 로그용 전값 캡처 (전파 손보정 <1% 구멍 보완 — repick과 동일 취지)
+                    if (overwrite != null)
+                    {
+                        overwritePh = overwrite.FindPlaceholder("placeholder");
+                        if (overwritePh != null)
+                        {
+                            overwritePrevRefDist = overwritePh.bakedRefDistLocal;
+                        }
+                    }
+                }
+            }
         }
-        // sizeRatio 괴리 경고 (검수한 모습 ≠ 기록될 값 — 기록은 장착 시 실제 쓰일 라이브 값 기준)
+        // sizeRatio 괴리 경고 (검수한 모습 ≠ 기록될 값 — 기록은 장착 시 실제 쓰일 라이브 값 기준).
+        // 검수 패널의 [크기±] 버튼으로 바꾼 것은 의도적 변경이라 경고하지 않는다 (sizeAdjustedInReview).
         EquipEntry liveEntry = ResolveCommitEntry();
-        if (liveEntry != null && Mathf.Abs(liveEntry.sizeRatio - candidate.sizeRatioAtCapture) > 1e-6f)
+        if (liveEntry != null && sizeAdjustedInReview == false
+            && Mathf.Abs(liveEntry.sizeRatio - candidate.sizeRatioAtCapture) > 1e-6f)
         {
             Debug.LogWarning($"[SocketMaker] 검수 중 sizeRatio가 바뀌었습니다({candidate.sizeRatioAtCapture:G3}→{liveEntry.sizeRatio:G3}) — 기록은 현재 값 기준.");
         }
@@ -1176,7 +1546,14 @@ public class EquipSocketMakerWindow : EditorWindow
         }
         else
         {
-            Undo.SetCurrentGroupName("소켓 생성 (검수 승인)");
+            if (overwrite != null)
+            {
+                Undo.SetCurrentGroupName("소켓 덮어쓰기 (검수 승인)");
+            }
+            else
+            {
+                Undo.SetCurrentGroupName("소켓 생성 (검수 승인)");
+            }
         }
         int group = Undo.GetCurrentGroup();
         bool ok = CreateSocketAtHit(commitSlotId, candidate.bone, candidate.hit, target.transform, true, overwrite);
@@ -1189,11 +1566,49 @@ public class EquipSocketMakerWindow : EditorWindow
                 // refDist 변화율 가시화 (<1% 변화는 전파 손보정 판정이 못 잡는 기지의 구멍 — 로그로 보완)
                 Debug.Log($"[SocketMaker] 재조정 완료: refDist {repickPrevRefDist:F4} → {repickPh.bakedRefDistLocal:F4}");
             }
+            else
+            {
+                if (overwrite != null && overwritePh != null)
+                {
+                    // 다이얼로그 덮어쓰기도 refDist 재베이크 — repick과 같은 로그로 전파 손보정 구멍 보완
+                    Debug.Log($"[SocketMaker] '{commitSlotId}' 덮어쓰기 완료: refDist {overwritePrevRefDist:F4} → {overwritePh.bakedRefDistLocal:F4}");
+                }
+            }
             StopPick();  // 반드시 커밋 "후" (StopPick = 고스트 파괴)
         }
         else
         {
             Debug.LogWarning("[SocketMaker] 승인 실패 — 검수 상태 유지. [세션 취소]로 나갈 수 있습니다.");
+        }
+    }
+
+    // 승인 다이얼로그용: 이름으로 기존 소켓을 찾고, 덮어쓰기 가능 여부를 사전 판정
+    // (프리팹 인스턴스 소켓 + 검수한 본과 다름 = 커밋의 본 이사 가드에서 반드시 실패 — 선택지에서 미리 제외)
+    private EquipSocket FindDialogSocket(string slotName, out bool blocked)
+    {
+        blocked = false;
+        EquipSocket s = EquipAuthoringUtil.FindSocketBySlotId(target.transform, slotName);
+        if (s != null && s.transform.parent != candidate.bone
+            && PrefabUtility.IsPartOfPrefabInstance(s.gameObject))
+        {
+            blocked = true;
+        }
+        return s;
+    }
+
+    // 다이얼로그 선택지 2(key 이름) 집행: key 소켓이 있으면 그 소켓을 직접 참조로 덮어쓰기(리네임 면역),
+    // 프리팹 차단이면 경고 후 임시 이름 유지, 없으면 key 이름 새 소켓
+    private void ApplyDialogKeyOption(EquipEntry entry, EquipSocket existingKey, bool keyBlocked, ref string commitSlotId, ref EquipSocket overwrite)
+    {
+        if (existingKey != null && keyBlocked)
+        {
+            Debug.LogWarning($"[SocketMaker] '{entry.key}' 소켓은 프리팹에 구워져 있고 검수한 본과 달라 덮어쓸 수 없습니다 — 임시 이름('{commitSlotId}')으로 진행합니다.");
+            return;
+        }
+        commitSlotId = entry.key;
+        if (existingKey != null)
+        {
+            overwrite = existingKey;
         }
     }
 
@@ -1653,58 +2068,18 @@ public class EquipSocketMakerWindow : EditorWindow
         }
         if (fromPick && linkCatalogOnPlace && linkEntry != null && overwriteSocket == null)
         {
-            // 이 아이템이 이미 의미 있는 자리 이름에 연결돼 있으면(카탈로그 전역 등록 — 이 캐릭터의 소켓 여부와 무관),
-            // 표준 경로 = 방금 만든 소켓의 이름을 그 자리 이름으로 맞추는 것. 덮어쓰기는 다른 캐릭터의 연결을 끊는다.
-            bool doLink = true;
-            if (string.IsNullOrEmpty(linkEntry.targetSlotId) == false
-                && linkEntry.targetSlotId != slotId
-                && linkEntry.targetSlotId.StartsWith("socket_") == false)
-            {
-                int choice = EditorUtility.DisplayDialogComplex(
-                    "카탈로그 연결",
-                    $"'{linkEntry.key}'는 카탈로그(전역 장부)에서 '{linkEntry.targetSlotId}' 자리에 등록되어 있습니다.\n" +
-                    $"이 캐릭터에 이미 소켓이 있다는 뜻이 아니라, 아이템의 자리 이름이 그렇다는 뜻입니다.\n\n" +
-                    $"권장: 방금 만든 소켓 이름을 '{linkEntry.targetSlotId}'로 지어 기존 등록을 그대로 쓰기.\n" +
-                    $"덮어쓰기: 등록을 '{slotId}'로 바꿈 — 다른 캐릭터의 같은 자리 연결이 끊깁니다.",
-                    $"'{linkEntry.targetSlotId}'로 이름 짓기 (권장)",
-                    "연결 안 함",
-                    $"'{slotId}'로 덮어쓰기");
-
-                if (choice == 0)
-                {
-                    // 소켓 이름을 기존 자리 이름으로 — 카탈로그는 무변경 (이미 그 이름을 가리키므로 연결 완성)
-                    EquipSocket dup = EquipAuthoringUtil.FindSocketBySlotId(charRoot, linkEntry.targetSlotId);
-                    if (dup != null && dup != socket)
-                    {
-                        Debug.LogWarning($"[SocketMaker] 이 캐릭터에 이미 '{linkEntry.targetSlotId}' 소켓이 있어 이름을 재사용할 수 없습니다 — 연결 없이 생성합니다.");
-                        doLink = false;
-                    }
-                    else
-                    {
-                        Undo.RecordObject(socket, "Rename Socket (Standard Name)");
-                        Undo.RecordObject(socketGo, "Rename Socket (Standard Name)");
-                        socket.slotId = linkEntry.targetSlotId;
-                        socketGo.name = SocketGoName(linkEntry.targetSlotId);
-                        slotId = linkEntry.targetSlotId;
-                        doLink = false;
-                        Debug.Log($"[SocketMaker] 소켓 이름을 기존 자리 이름 '{slotId}'로 지정 — 카탈로그 무변경으로 연결 완성.");
-                    }
-                }
-                else
-                {
-                    if (choice == 1)
-                    {
-                        doLink = false;
-                    }
-                }
-            }
-
-            if (doLink)
+            // 카탈로그 쓰기는 "첫 등록"일 때만: 자리 이름이 비었거나 임시(socket_*)일 때 이 소켓으로 채운다.
+            // 의미 있는 자리 이름(head1 등)은 절대 고치지 않는다 — 다른 캐릭터의 연결 자산(읽기 전용).
+            // 그 경우의 처리(기존 소켓 덮어쓰기/키 이름/임시 이름)는 승인 다이얼로그(ApproveCandidate)가
+            // "소켓 쪽을 맞추는" 선택으로 이미 끝냈고, 여기는 통과만 한다.
+            bool firstRegistration = string.IsNullOrEmpty(linkEntry.targetSlotId)
+                || linkEntry.targetSlotId.StartsWith("socket_");
+            if (firstRegistration && linkEntry.targetSlotId != slotId)
             {
                 Undo.RecordObject(pickCatalog, "Link Catalog Entry");
                 linkEntry.targetSlotId = slotId;
                 EditorUtility.SetDirty(pickCatalog);
-                Debug.Log($"[SocketMaker] 카탈로그 연결: '{linkEntry.key}' → '{slotId}'. (소켓 slotId를 리네임하면 카탈로그의 targetSlotId도 같이 바꿔야 합니다!)");
+                Debug.Log($"[SocketMaker] 카탈로그 첫 등록: '{linkEntry.key}' → '{slotId}'. (소켓 인스펙터에서 리네임하면 카탈로그도 자동 동기화됩니다)");
             }
         }
 
@@ -1758,7 +2133,13 @@ public class EquipSocketMakerWindow : EditorWindow
 
         // 소켓을 선택해 리네임 유도 (인스펙터에 미리네임 경고 배지가 뜸)
         Selection.activeGameObject = socketGo;
-        Debug.Log($"[SocketMaker] '{slotId}' 생성 → 본 '{bone.name}' (refDist≈{hitDist:F2} 월드). 인스펙터에서 slotId에 의미 있는 이름을 지어주세요.");
+        // 신규/기존 재사용을 구분해 콘솔 추적 오도 방지 (덮어쓰기·재조정도 이 함수를 탄다)
+        string commitVerb = "생성";
+        if (created == false)
+        {
+            commitVerb = "갱신";
+        }
+        Debug.Log($"[SocketMaker] '{slotId}' {commitVerb} → 본 '{bone.name}' (refDist≈{hitDist:F2} 월드). 인스펙터에서 slotId에 의미 있는 이름을 지어주세요.");
         return true;
     }
 
@@ -1790,11 +2171,67 @@ public class EquipSocketMakerWindow : EditorWindow
     private Vector3 ghostNaturalCenter;   // identity 측정 바운드 중심 (결정적 배치 보정용)
     private Vector3 ghostNaturalExtents;  // identity 측정 반치수
     private bool ghostMeasured;
-    private float ghostYaw;               // 호버 중 회전: 법선 축 (Ctrl+휠)
-    private float ghostTilt;              // 호버 중 회전: 기울임 (Shift+휠)
-    private float ghostLift;              // 호버 중 거리: 표면 노멀 방향 띄우기, hitDist 배수 (맨휠, 0=표면)
+    // 회전 3축 — 표면 프레임(오른쪽=X, 법선=Y, 접선=Z) 기준. UI 표기는 회전 평면(ZX/YZ/XY)으로 통일.
+    private float ghostYaw;               // ZX 회전 = 법선(Y) 축 (Ctrl+휠)
+    private float ghostTilt;              // YZ 회전 = 기울임, 오른쪽(X) 축 (Shift+휠)
+    private float ghostRoll;              // XY 회전 = 롤, 접선/전방(Z) 축 (Ctrl+Shift+휠) — 3축째, 이걸로 전 방향 커버
+    private float ghostLift;              // 거리: 표면 노멀 방향 띄우기, hitDist 배수 (맨휠, 0=표면)
     private Quaternion lastGhostRot;      // 마지막 고스트 회전 (배치 시 베이크)
     private bool lastGhostRotValid;       // 위 값 유효 여부
+
+    // 고스트 휠 조작 공용 처리 (Picking·Reviewing 공유). 반환 = 값이 바뀌었는지 (호출측이 e.Use/재핏 담당).
+    // 회전 = 표면 프레임 평면 기준: Ctrl+휠=ZX(법선축), Shift+휠=YZ(기울임), Ctrl+Shift+휠=XY(롤).
+    // 방향은 지배 축으로 읽는다 — Shift를 누르면 OS/에디터가 휠 델타를 가로축(delta.x)으로 보내
+    // delta.y만 보면 한쪽으로만 도는 버그가 있다 (Shift+휠 증가 고정 버그의 원인).
+    // allowBareLift=false(검수)면 맨휠은 건드리지 않는다(카메라 줌 통과) — 거리는 Alt+휠로 조정.
+    private bool HandleGhostWheel(Event e, bool allowBareLift)
+    {
+        if (e.type != EventType.ScrollWheel)
+        {
+            return false;
+        }
+        if (e.control == false && e.shift == false && e.alt == false && allowBareLift == false)
+        {
+            return false;  // 검수 중 맨휠 = 카메라 줌 (미소비)
+        }
+
+        float raw = e.delta.y;
+        if (Mathf.Abs(e.delta.x) > Mathf.Abs(raw))
+        {
+            raw = e.delta.x;
+        }
+        float sign = 1f;
+        if (raw > 0f)
+        {
+            sign = -1f;
+        }
+
+        if (e.control && e.shift)
+        {
+            ghostRoll = ghostRoll + sign * 15f;
+        }
+        else
+        {
+            if (e.control)
+            {
+                ghostYaw = ghostYaw + sign * 15f;
+            }
+            else
+            {
+                if (e.shift)
+                {
+                    ghostTilt = ghostTilt + sign * 15f;
+                }
+                else
+                {
+                    // 맨휠 = 거리: hitDist의 5% 스텝, 표면 안쪽(음수)은 금지
+                    // (픽 모드 중 카메라 줌은 휠 대신 Alt+우클릭 드래그)
+                    ghostLift = Mathf.Max(0f, ghostLift + sign * 0.05f);
+                }
+            }
+        }
+        return true;
+    }
     private bool linkCatalogOnPlace = true;  // 배치 시 카탈로그 targetSlotId를 이 소켓으로 연결
     private EquipContactAnchor pickContactAnchor = EquipContactAnchor.Pivot;  // 접촉 기준 (고스트=실장착 동일 적용). 기본 Pivot = 모델 원점을 클릭점에
 
@@ -1903,11 +2340,15 @@ public class EquipSocketMakerWindow : EditorWindow
             tangent = Vector3.Cross(hit.normal, Vector3.forward);
         }
 
-        // 회전 = 표면 기준(base) × 사용자 회전 (Ctrl+휠=법선 축, Shift+휠=기울임).
+        // 회전 = 표면 기준(base) × 사용자 회전 (Ctrl+휠=ZX/법선축 yaw, Shift+휠=YZ/기울임 tilt, Ctrl+Shift+휠=XY/롤 roll).
         // placeholder에는 spunBase만 베이크 — 장착 시 entry.rotationOffset이 다시 곱해지므로(FitToPlaceholder),
         // 고스트 "표시"에는 entry.rotationOffset까지 합성해야 실장착과 동일하게 보인다 (WYSIWYG).
         Quaternion baseRot = Quaternion.LookRotation(tangent.normalized, hit.normal);
-        Quaternion spunBase = Quaternion.AngleAxis(ghostYaw, hit.normal) * Quaternion.AngleAxis(ghostTilt, baseRot * Vector3.right) * baseRot;
+        // 3축 사용자 회전: yaw=법선(Y), tilt=오른쪽(X), roll=접선/전방(Z) — 세 축이면 임의 방향 도달 가능 (2축만으로는 불가)
+        Quaternion spunBase = Quaternion.AngleAxis(ghostYaw, hit.normal)
+            * Quaternion.AngleAxis(ghostTilt, baseRot * Vector3.right)
+            * Quaternion.AngleAxis(ghostRoll, baseRot * Vector3.forward)
+            * baseRot;
         Quaternion displayRot = spunBase * Quaternion.Euler(entry.rotationOffset);
 
         pickGhost.transform.localScale = Vector3.one * scale;

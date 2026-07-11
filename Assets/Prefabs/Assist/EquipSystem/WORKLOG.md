@@ -66,6 +66,44 @@
 - 세션 중 잠금: 대상 캐릭터 행(전 세션), 악세서리 블록(Reviewing∥repick), 베이크(전 세션), [테스트](Reviewing).
   승인 직전 재검증: slotId 충돌 재발급(신규)·프리팹 본 이사 차단(repick)·sizeRatio 괴리 경고.
 
+**1차 사용자 피드백 반영 (2026-07-11)**
+- **회전 3축 완비**: 기존 yaw(Ctrl+휠, 법선축)·tilt(Shift+휠, 표면 오른쪽축) 2축만으로는 전 방향
+  도달 불가 → **롤(Ctrl+Shift+휠, 접선/전방축)** 추가. `spunBase = yaw × tilt × roll × base`.
+- **Shift+휠 한쪽 고정 버그 수정**: Shift를 누르면 OS/에디터가 휠 델타를 가로축(`delta.x`)으로
+  보내는데 `delta.y`만 읽어 방향이 항상 +로 고정되던 문제 — 지배 축(|x|>|y|면 x)으로 읽도록
+  공용 핸들러 `HandleGhostWheel`로 일원화 (Ctrl+Shift 조합도 동일 처리).
+- **검수(Reviewing) 중 회전 계속 조정**: 지점(히트점·lift)은 동결한 채 Ctrl/Shift/Ctrl+Shift+휠로
+  회전 조정 + R=회전 리셋(lift 유지) 가능. 조정 시 동결 히트 기준 재핏(UpdateGhost) + 후보 동결값
+  재캡처(CaptureCandidate)로 커밋·Record 정합 유지. 맨휠은 계속 카메라 줌(미소비), 턴테이블 중에도 조정 가능.
+
+**2차 사용자 피드백 반영 (2026-07-11)**
+- **회전 표기 ZX/YZ/XY로 통일**: yaw/tilt/roll이 직관적이지 않다는 피드백 — 표면 프레임(X=오른쪽,
+  Y=법선, Z=접선)의 회전 평면 표기로 전 UI·문서 교체 (Ctrl+휠=ZX, Shift+휠=YZ, Ctrl+Shift+휠=XY).
+  내부 필드명(ghostYaw/Tilt/Roll)은 유지 — 표기만 변경.
+- **검수 중 거리 조정**: Alt+휠(맨휠은 카메라 줌이라 충돌 회피) + [거리 ±5%] 버튼. 거리는 고스트
+  유무와 무관하게 커밋에 반영되므로 게이트 없이 항상 허용. 조정 시 검수 프레이밍 초점(reviewFocus)도 추종.
+- **검수 중 크기 조정**: [크기 ±0.1] 버튼 = 카탈로그 sizeRatio 직편집(Undo 가능, 아이템 공용 값).
+  세션 중 버튼 변경은 승인 시 "sizeRatio 괴리" 경고를 억제(sizeAdjustedInReview — 의도적 변경).
+- **검수 R = 전부 초기화**: 회전 3축·거리는 0으로, (세션 중 버튼으로 바꾼) 크기는 클릭 시점 값으로 원복.
+  검수 중 Ctrl+Z(크기 원복 등)는 `Undo.undoRedoPerformed` 구독으로 관측해 고스트·후보 동결값을 재동기.
+- 검수 조정 공통 후처리 RefreshReviewAfterAdjust: 재핏 + 후보 재동결(RecaptureCandidatePose —
+  이제 lift 포함) + 프레이밍 갱신. 회전 조정만 고스트 유효(IsReviewGhostLive) 게이트 유지.
+
+**3차 사용자 피드백 반영 (2026-07-11) — 카탈로그 읽기 전용 원칙**
+- **"등록 덮어쓰기" 경로 삭제**: 구 다이얼로그의 "targetSlotId를 socket_N으로 바꾸기" 선택지는
+  다른 캐릭터의 같은 자리 연결을 끊는 고위험 조작 — 경로 자체를 제거. **의미 있는 자리 이름(head1 등)은
+  구조적으로 쓰기 불가** (CreateSocketAtHit의 카탈로그 쓰기 = "첫 등록"(빈 값·socket_*)만 허용).
+- **다이얼로그 재설계 + 승인 시점으로 이동** (소켓 생성 "전"에 결정): 자리 소켓이 캐릭터에
+  존재하면 ①그 소켓 덮어쓰기(기존 소켓 재사용 커밋 — repick과 동일 경로) ②아이템 key 이름으로 새 소켓
+  ③임시 이름 / 부재면 ①그 이름으로 만들기(권장) ②key 이름 ③임시 이름. 버튼은 "1/2/3 수행",
+  Esc=3(임시 이름, 최소 개입). 본문에 "카탈로그 등록은 어떤 선택에서도 바뀌지 않습니다" 명시.
+- 참고: 소켓 리네임 동기화(EquipSocketEditor)와 베이크=이사(BakeFromObject)의 카탈로그 "이관"은
+  기존 유지 — 자리 이름을 바꾸는 게 아니라 사용자가 이름을 바꾼 소켓을 링크가 따라가는 것.
+- **승인 이중 커밋 방어** (임시+키 이름 소켓 2개 생성 리포트 대응): ① Enter 처리 시 모달이 열리기 전에
+  이벤트 소비(씬·창 양쪽) ② `approveInProgress` 재진입 가드(try/finally) ③ ApproveCandidate/BackToPicking에
+  페이즈 가드 — Off 상태에서 뒤늦은 호출이 "유령 Picking"(씬 구독 없는 Picking)을 만드는 구멍 봉쇄
+  ④ 다이얼로그 선택 결과를 콘솔에 명시("연결 다이얼로그 선택 → 커밋 slotId ...") — 재발 시 즉시 진단 가능.
+
 **알려진 한계 (P3 후보)**
 - ① refDist **1% 이하** 변화 재조정은 `IsHandTuned`(EquipSocketStamp)가 placeholder 자체 TRS를 안 봐
   다음 전파에 덮일 수 있음 — 승인 로그의 refDist 변화율로 가시화만. 판정식 확장 또는 전파 검수
