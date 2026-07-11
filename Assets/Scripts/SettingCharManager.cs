@@ -45,6 +45,7 @@ public class SettingCharManager : MonoBehaviour
     public bool isLoaded = false;
 
     public event Action<string> OnCharacterSettingChanged;
+    public event Action OnSettingsLoaded; // LoadSettingChar 완료 통지 — 로드 전 조회를 미룬 UI(카드 테두리 등)의 재적용 트리거
 
     [Serializable]
     public class CharSetting
@@ -57,7 +58,8 @@ public class SettingCharManager : MonoBehaviour
     public class CharCodeSetting
     {
         public float char_size;
-        public int affection = 0;
+        public int affinityPoints = 0;                                    // 인연도 포인트 (0~1000) — 구 affection(0~300) 대체, 마이그레이션 없음
+        public List<int> affinityClaimedLevels = new List<int>();         // 수령 완료한 인연도 레벨 보상
         public string voiceId = "";
     }
 
@@ -133,6 +135,7 @@ public class SettingCharManager : MonoBehaviour
         }
 
         isLoaded = true;
+        OnSettingsLoaded?.Invoke();
     }
 
     private void SaveToFile()
@@ -202,15 +205,19 @@ public class SettingCharManager : MonoBehaviour
     public CharCodeSetting GetCharCodeSetting(string charCode)
     {
         if (string.IsNullOrEmpty(charCode)) return null;
+        // 로드 전 조회 금지 — 빈 settingsCharData 위에 엔트리를 만들며 저장하면 기존 파일이 통째로 덮어써진다
+        if (!isLoaded) return null;
         if (!settingsCharData.char_code_info_dict.ContainsKey(charCode))
         {
+            // 조회만으로는 저장하지 않는다 — 실제 변경(AddAffinityPoints/SetVoice 등)이 SaveToFile을 수행
             settingsCharData.char_code_info_dict[charCode] = new CharCodeSetting();
-            SaveToFile();
         }
         return settingsCharData.char_code_info_dict[charCode];
     }
 
-    public void AddAffection(string charCode, int amount) { var setting = GetCharCodeSetting(charCode); if (setting != null) { setting.affection = Mathf.Clamp(setting.affection + amount, 0, 300); SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); } }
+    public void AddAffinityPoints(string charCode, int amount) { var setting = GetCharCodeSetting(charCode); if (setting != null) { setting.affinityPoints = Mathf.Clamp(setting.affinityPoints + amount, 0, AffinityData.MaxPoints); SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); } }
+    public bool IsAffinityRewardClaimed(string charCode, int level) { var setting = GetCharCodeSetting(charCode); return setting != null && setting.affinityClaimedLevels != null && setting.affinityClaimedLevels.Contains(level); }
+    public bool ClaimAffinityReward(string charCode, int level) { var setting = GetCharCodeSetting(charCode); if (setting == null) return false; if (setting.affinityClaimedLevels == null) setting.affinityClaimedLevels = new List<int>(); if (setting.affinityClaimedLevels.Contains(level)) return false; setting.affinityClaimedLevels.Add(level); SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); return true; }
     public void SetVoice(string charCode, string voiceId) { var setting = GetCharCodeSetting(charCode); if (setting != null) { setting.voiceId = voiceId; SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); } }
 
     public CharSetting GetCharSetting(string charName)

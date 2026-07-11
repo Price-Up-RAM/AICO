@@ -6,9 +6,9 @@ using UnityEngine;
 public class CharacterDetailState
 {
     public string characterId;
-    public int affection = 0;
-    public int maxAffection = 300;
-    public string affectionLabel = "친밀";
+    public int affinityPoints = 0;
+    public int affinityLevel = 0;
+    public string affinityStageName = "낯선 사이";
     public string source = "오리지널";
     public string form = "2D";
     public List<string> statusTags = new List<string>();
@@ -95,17 +95,29 @@ public class CharacterDetailStateManager : MonoBehaviour
         var setting = SettingCharManager.Instance.GetCharCodeSetting(characterId);
         if (setting != null)
         {
-            state.affection = setting.affection;
+            state.affinityPoints = setting.affinityPoints;
             state.voiceId = setting.voiceId;
         }
 
-        // 호감도 라벨 동적 계산
-        state.affectionLabel = state.affection >= 200 ? "매우 친밀" : state.affection >= 100 ? "친밀" : "보통";
+        // 인연도 레벨/단계 명칭 파생 계산
+        state.affinityLevel = AffinityData.LevelFor(state.affinityPoints);
+        state.affinityStageName = AffinityData.StageNameFor(state.affinityLevel);
 
         return state;
     }
 
-    public void AddAffection(string characterId, int amount) { SettingCharManager.Instance.AddAffection(characterId, amount); } // 호감도 증감
+    // 인연도 증감 — 레벨업 시 미션 AF0004(인연도 레벨업) 보고
+    public void AddAffinityPoints(string characterId, int amount)
+    {
+        var setting = SettingCharManager.Instance.GetCharCodeSetting(characterId);
+        int levelBefore = setting != null ? AffinityData.LevelFor(setting.affinityPoints) : 0;
+        SettingCharManager.Instance.AddAffinityPoints(characterId, amount);
+        int levelAfter = setting != null ? AffinityData.LevelFor(setting.affinityPoints) : levelBefore;
+        if (levelAfter > levelBefore && Application.isPlaying && MissionList.Instance != null)
+        {
+            MissionList.Instance.Report("AF0004", levelAfter - levelBefore);
+        }
+    }
     public void SetVoice(string characterId, string voiceId) { SettingCharManager.Instance.SetVoice(characterId, voiceId); } // 음성 설정
 
     public static string BuildCharacterId(ChangeCharInfo charInfo, ChangeCharClothesInfo clothes) 

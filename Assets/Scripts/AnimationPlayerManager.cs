@@ -5,29 +5,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-// AnimationPlayerManager 정보성 Class
-public class PlayerRuntime
-{
-    public Animator animator;                   // 대상 Animator 참조
-    public PlayableGraph graph;                 // 재사용 그래프
-    public AnimationPlayableOutput output;      // Animator 출력 연결
-    public AnimationClipPlayable clipPlayable;  // 클립 재생용 Playable
-    public List<AnimationClip> clipsCache = new List<AnimationClip>();  // 필터링된 클립 캐시
-    public HashSet<AnimationClip> blacklistedClips = new HashSet<AnimationClip>();  // 블랙리스트 클립
-
-    public int controllerInstanceId = 0;        // Controller 변경 감지용 (clipsCache용)
-    public int blacklistControllerInstanceId = 0; // 블랙리스트가 빌드된 Controller 인스턴스 ID
-
-    public Vector3 rootPositionBackup;          // 루트 위치 백업
-    public Quaternion rootRotationBackup;       // 루트 회전 백업
-    public bool isGraphCreated = false;         // 그래프 생성 여부
-    public bool isRootBackedUp = false;         // 루트 백업 여부
-    public bool isBlacklistReady = false;       // 블랙리스트 준비 완료 여부
-
-    public Coroutine blacklistCoroutine = null; // 블랙리스트 빌드 코루틴 참조
-    public GameObject blacklistProbe = null;    // 블랙리스트 빌드용 clone 참조
-}
-
 public class AnimationPlayerManager : MonoBehaviour
 {
     private static AnimationPlayerManager instance;
@@ -575,4 +552,30 @@ public class AnimationPlayerManager : MonoBehaviour
 
         Debug.Log($"[AnimationPlayerManager] Blacklist built for {originalObj.name}: {runtime.blacklistedClips.Count} clips");
     }
+}
+
+// AnimationPlayerManager 정보성 Class.
+// 주의: 이 클래스는 반드시 AnimationPlayerManager(파일의 대표 클래스) 뒤에 두어야 한다 —
+// 파일 첫 클래스가 비-MonoBehaviour면 Unity 프리팹 저장 검증기가 이 스크립트를 PlayerRuntime으로
+// 해석해 GameManager가 포함된 프리팹(Root260616 등)의 저장을 거부한다.
+public class PlayerRuntime
+{
+    public Animator animator;                   // 대상 Animator 참조
+    public PlayableGraph graph;                 // 재사용 그래프
+    public AnimationPlayableOutput output;      // Animator 출력 연결
+    public AnimationClipPlayable clipPlayable;  // 클립 재생용 Playable
+    public List<AnimationClip> clipsCache = new List<AnimationClip>();  // 필터링된 클립 캐시
+    public HashSet<AnimationClip> blacklistedClips = new HashSet<AnimationClip>();  // 블랙리스트 클립
+
+    public int controllerInstanceId = 0;        // Controller 변경 감지용 (clipsCache용)
+    public int blacklistControllerInstanceId = 0; // 블랙리스트가 빌드된 Controller 인스턴스 ID
+
+    public Vector3 rootPositionBackup;          // 루트 위치 백업
+    public Quaternion rootRotationBackup;       // 루트 회전 백업
+    public bool isGraphCreated = false;         // 그래프 생성 여부
+    public bool isRootBackedUp = false;         // 루트 백업 여부
+    public bool isBlacklistReady = false;       // 블랙리스트 준비 완료 여부
+
+    public Coroutine blacklistCoroutine = null; // 블랙리스트 빌드 코루틴 참조
+    public GameObject blacklistProbe = null;    // 블랙리스트 빌드용 clone 참조
 }

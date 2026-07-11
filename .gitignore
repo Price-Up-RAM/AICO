@@ -105,3 +105,10 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 /mrtest1_BackUpThisFolder_ButDontShipItWithYourGame
+
+# Local-only files (not committed)
+/Assets/finalTexture.png
+/Assets/finalTexture.png.meta
+/Assets/Prefabs/Char_toon/
+CLAUDE.md
+CLAUDE.md.meta

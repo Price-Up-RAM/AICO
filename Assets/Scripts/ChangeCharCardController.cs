@@ -28,7 +28,12 @@ public class ChangeCharCardController : MonoBehaviour, IPointerDownHandler, IPoi
     [Header("UI References - Pagination Dots")]
     [SerializeField] private GameObject dotSample;        // 복제할 원본 점 오브젝트
     [SerializeField] private Transform dotParent;         // 점들이 배치될 부모 컨테이너
-    
+
+    [Header("Card Border")]
+    [SerializeField] private Image cardBorderImage;          // 공통 테두리 (외부 이미지 기반)
+    [SerializeField] private Image cardBorderSubImage;       // 보조 테두리 (White 프레임 + 등급 틴트)
+    [SerializeField] private Image cardBorderOriginalImage;  // 전용 테두리 (전용 PNG, 베이크 시 sprite=null)
+
     // 생성된 점들의 Image 컴포넌트를 담을 리스트
     private List<Image> dotImages = new List<Image>();
 
@@ -40,6 +45,12 @@ public class ChangeCharCardController : MonoBehaviour, IPointerDownHandler, IPoi
     private bool suppressClickAfterLongPress;
     private bool pointerPressed;
     private Vector2 pointerDownScreenPosition;
+
+    // 카드 테두리 판정에 사용한 characterId (설정 변경 라이브 갱신/전용 테두리 재적용에 재사용)
+    private string cardBorderCharCode;
+    // 설정 변경 이벤트 중복 구독 방지 래치 + 구독 대상 인스턴스 캐시 (해제 시 동일 대상 보장)
+    private bool characterSettingChangedSubscribed;
+    private SettingCharManager subscribedSettingManager;
 
     private void Update()
     {
@@ -141,6 +152,10 @@ public class ChangeCharCardController : MonoBehaviour, IPointerDownHandler, IPoi
         clothesText.text = currentClothes.text;
         UpdatePaginationDotsUI();
 
+        // 현재 표시 의상 기준으로 카드 테두리 갱신 (InitSlot/좌우 전환 공통 경유 지점).
+        // 키는 인연도 적립과 같은 규칙(BuildCharacterId: 소문자화 + 이름 폴백)으로 통일해야 매칭된다.
+        ApplyAffinityBorder(CharacterDetailStateManager.BuildCharacterId(charData, currentClothes));
+
         // 선택 가능 여부에 따라 아이콘 노출 및 상호작용 제어
         if (characterIcon != null)
         {
@@ -241,6 +256,139 @@ public class ChangeCharCardController : MonoBehaviour, IPointerDownHandler, IPoi
             // off 일때
             favoriteImage.color = new Color32(180, 180, 180, 255);
         }
+    }
+
+    // ===== 카드 테두리 (인연도) =====
+
+    // 인연도 레벨에 따른 카드 테두리 적용 — 우선순위: 전용 테두리 > 등급(동/은/금) 테두리 > 없음
+    private void ApplyAffinityBorder(string charCode)
+    {
+        // 테두리 노드가 베이크되지 않은 프리팹이면 아무것도 하지 않는다 (설정 조회 부작용 방지)
+        if (cardBorderImage == null && cardBorderSubImage == null && cardBorderOriginalImage == null) return;
+
+        // 판정에 쓴 charcode 보관 (설정 변경 콜백/전용 테두리 재적용에서 재사용)
+        cardBorderCharCode = charCode;
+
+        // 설정 변경/로드 완료 라이브 갱신 구독 시도 (Instance가 아직 없으면 다음 호출 때 재시도)
+        TrySubscribeCharacterSettingChanged();
+
+        // 1순위: 전용 테두리 스프라이트가 있으면 Original만 활성, 공통/보조는 강제 비활성
+        if (cardBorderOriginalImage != null && cardBorderOriginalImage.sprite != null)
+        {
+            SetCardBorderActive(false, false, true);
+            return;
+        }
+
+        // 매니저 부재/로드 전이면 테두리 전부 비활성 — 로드 완료 시 OnSettingsLoaded 콜백이 재적용한다
+        SettingCharManager settingManager = SettingCharManager.Instance;
+        if (settingManager == null || !settingManager.isLoaded)
+        {
+            SetCardBorderActive(false, false, false);
+            return;
+        }
+
+        var setting = settingManager.GetCharCodeSetting(charCode);
+        if (setting == null)
+        {
+            SetCardBorderActive(false, false, false);
+            return;
+        }
+
+        // 인연도 포인트 → 레벨 → 테두리 등급 판정
+        int level = AffinityData.LevelFor(setting.affinityPoints);
+        AffinityBorderTier tier = AffinityData.BorderTierFor(level);
+
+        if (tier == AffinityBorderTier.None)
+        {
+            // 등급 미달 — 테두리 없음
+            SetCardBorderActive(false, false, false);
+            return;
+        }
+
+        // 동/은/금 — 공통 테두리(원색) + 보조 테두리(등급 틴트) 활성, 전용은 비활성
+        SetCardBorderActive(true, true, false);
+        if (cardBorderImage != null)
+        {
+            cardBorderImage.color = Color.white;
+        }
+        if (cardBorderSubImage != null)
+        {
+            cardBorderSubImage.color = AffinityData.BorderTintFor(tier);
+        }
+    }
+
+    // 테두리 3종 GameObject 활성 상태 일괄 적용 (참조가 비어 있는 항목은 건너뜀)
+    private void SetCardBorderActive(bool commonActive, bool subActive, bool originalActive)
+    {
+        if (cardBorderImage != null)
+        {
+            cardBorderImage.gameObject.SetActive(commonActive);
+        }
+
+        if (cardBorderSubImage != null)
+        {
+            cardBorderSubImage.gameObject.SetActive(subActive);
+        }
+
+        if (cardBorderOriginalImage != null)
+        {
+            cardBorderOriginalImage.gameObject.SetActive(originalActive);
+        }
+    }
+
+    // 전용 테두리 스프라이트 설정 진입점 (전용 테두리 보상/변경 기능에서 호출)
+    public void SetOriginalBorderSprite(Sprite sprite)
+    {
+        if (cardBorderOriginalImage == null)
+        {
+            Debug.LogWarning("[ChangeCharCard] 전용 테두리 이미지(cardBorderOriginalImage) 참조가 없어 적용을 건너뜁니다.");
+            return;
+        }
+
+        cardBorderOriginalImage.sprite = sprite;
+        ApplyAffinityBorder(cardBorderCharCode);
+    }
+
+    // 설정 변경/로드 완료 이벤트 구독 시도 — 래치 플래그로 중복 구독 방지, Instance가 없으면 다음 기회에 재시도.
+    // 구독한 인스턴스를 캐시해 두고 해제도 같은 인스턴스에 한다 (해제 시점의 Instance와 다를 수 있음).
+    private void TrySubscribeCharacterSettingChanged()
+    {
+        if (characterSettingChangedSubscribed) return;
+        if (SettingCharManager.Instance == null) return;
+
+        subscribedSettingManager = SettingCharManager.Instance;
+        subscribedSettingManager.OnCharacterSettingChanged += HandleCharacterSettingChanged;
+        subscribedSettingManager.OnSettingsLoaded += HandleSettingsLoaded;
+        characterSettingChangedSubscribed = true;
+    }
+
+    // 설정 변경 콜백 — 이 카드가 판정에 쓴 charcode가 바뀐 경우에만 테두리 재적용
+    private void HandleCharacterSettingChanged(string changedCharCode)
+    {
+        if (string.IsNullOrEmpty(cardBorderCharCode)) return;
+        if (changedCharCode != cardBorderCharCode) return;
+
+        ApplyAffinityBorder(cardBorderCharCode);
+    }
+
+    // 설정 로드 완료 콜백 — 로드 전에 판정이 미뤄졌던 카드의 테두리를 재적용
+    private void HandleSettingsLoaded()
+    {
+        if (string.IsNullOrEmpty(cardBorderCharCode)) return;
+        ApplyAffinityBorder(cardBorderCharCode);
+    }
+
+    private void OnDestroy()
+    {
+        // 구독했던 인스턴스에서 해제 (Instance 재조회 금지 — 교체된 인스턴스일 수 있음)
+        if (subscribedSettingManager != null)
+        {
+            subscribedSettingManager.OnCharacterSettingChanged -= HandleCharacterSettingChanged;
+            subscribedSettingManager.OnSettingsLoaded -= HandleSettingsLoaded;
+            subscribedSettingManager = null;
+        }
+
+        characterSettingChangedSubscribed = false;
     }
 
     // 캐릭터 (의상) 최종 변경 적용
