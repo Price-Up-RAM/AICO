@@ -36,14 +36,14 @@ public class CharacterDetailController : MonoBehaviour
     [SerializeField] private GameObject statusAvailableTag;
     [SerializeField] private GameObject statusDownloadRequiredTag;
 
-    [Header("Affection")]
-    [SerializeField] private TextMeshProUGUI affectionValueText;
-    [SerializeField] private TextMeshProUGUI affectionLabelText;
-    [SerializeField] private RectTransform affectionBarYellow;
-    [SerializeField] private RectTransform affectionBarOrange;
-    [SerializeField] private RectTransform affectionBarRed;
-    [SerializeField] private int maxAffection = 300;
-    [SerializeField] private string defaultAffectionLabel = "친밀";
+    [Header("Affinity")]
+    [SerializeField] private TextMeshProUGUI affinityLevelText;
+    [SerializeField] private TextMeshProUGUI affinityValueText;
+    [SerializeField] private TextMeshProUGUI affinityLabelText;
+    [SerializeField] private Image affinityBarFill;
+    [SerializeField] private Image affinityBarFillMax;
+    [SerializeField] private Button affinityButton;
+    [SerializeField] private AffinityRewardModalView affinityRewardModal;
 
     [Header("Feature Tags")]
     [SerializeField] private Transform featureTagContainer;
@@ -164,19 +164,44 @@ public class CharacterDetailController : MonoBehaviour
         }
     }
 
-    public void SetAffection(int value, string label = null)
+    public void SetAffinity(int points)
     {
-        int clamped = Mathf.Clamp(value, 0, maxAffection);
-        SetText(affectionValueText, "호감도 " + clamped + "/" + maxAffection);
-        SetText(affectionLabelText, string.IsNullOrEmpty(label) ? defaultAffectionLabel : label);
+        int level = AffinityData.LevelFor(points);
+        bool isMax = level >= AffinityData.MaxLevel;
 
-        float yellow = Mathf.Clamp(clamped, 0, 100) / 100f;
-        float orange = Mathf.Clamp(clamped - 100, 0, 100) / 100f;
-        float red = Mathf.Clamp(clamped - 200, 0, 100) / 100f;
+        // 가로 배치: [Lv.03] [50/100] — MAX면 Lv.MAX만
+        SetText(affinityLevelText, isMax ? "Lv.MAX" : "Lv." + level.ToString("00"));
+        SetText(affinityValueText, isMax ? "" : AffinityData.PointsInLevel(points) + "/" + AffinityData.PointsPerLevel);
+        SetText(affinityLabelText, AffinityData.StageNameFor(level));
 
-        SetFillWidth(affectionBarYellow, yellow);
-        SetFillWidth(affectionBarOrange, orange);
-        SetFillWidth(affectionBarRed, red);
+        // 평시 = 연노랑 게이지, MAX = 무지개 게이지
+        if (affinityBarFill != null)
+        {
+            affinityBarFill.gameObject.SetActive(!isMax);
+            affinityBarFill.fillAmount = AffinityData.ProgressInLevel(points);
+        }
+
+        if (affinityBarFillMax != null)
+        {
+            affinityBarFillMax.gameObject.SetActive(isMax);
+            affinityBarFillMax.fillAmount = 1f;
+        }
+    }
+
+    private void OpenAffinityRewardModal()
+    {
+        if (affinityRewardModal == null)
+        {
+            affinityRewardModal = GetComponentInChildren<AffinityRewardModalView>(true);
+        }
+
+        if (affinityRewardModal == null)
+        {
+            Debug.LogWarning("[CharacterDetail][Affinity] AffinityRewardModalView not found. Run Tools/CharacterDetail/Setup All.");
+            return;
+        }
+
+        affinityRewardModal.Open(currentCharacterId);
     }
 
     private void EnsurePromptView()
@@ -218,6 +243,11 @@ public class CharacterDetailController : MonoBehaviour
             voiceSamplePlayButton.onClick.AddListener(OnSampleVoicePlayClicked);
         }
 
+        if (affinityButton != null)
+        {
+            affinityButton.onClick.AddListener(OpenAffinityRewardModal);
+        }
+
         if (promptView != null)
         {
             promptView.BindEvents(
@@ -243,6 +273,11 @@ public class CharacterDetailController : MonoBehaviour
         if (voiceSamplePlayButton != null)
         {
             voiceSamplePlayButton.onClick.RemoveListener(OnSampleVoicePlayClicked);
+        }
+
+        if (affinityButton != null)
+        {
+            affinityButton.onClick.RemoveListener(OpenAffinityRewardModal);
         }
 
         if (promptView != null)
@@ -292,7 +327,7 @@ public class CharacterDetailController : MonoBehaviour
 
         SetText(conversationCountText, "대화횟수 : " + conversationCount);
         SetText(costumeCountText, "복장 수 : " + costumeCount);
-        SetAffection(state.affection, state.affectionLabel);
+        SetAffinity(state.affinityPoints);
     }
 
     private void RefreshPrompt(bool isOrigin = false)
@@ -408,7 +443,9 @@ public class CharacterDetailController : MonoBehaviour
             if (shouldShow)
             {
                 TextMeshProUGUI text = existing.GetComponentInChildren<TextMeshProUGUI>(true);
-                SetText(text, featureTags[i]);
+                // CharAttributes 데이터가 구 용어를 담고 있어도 표시는 인연도로 통일 (데이터 일괄 수정 전까지의 표시 별칭)
+                string tag = featureTags[i] == "호감도 보유" ? "인연도 보유" : featureTags[i];
+                SetText(text, tag);
             }
         }
     }
@@ -873,11 +910,13 @@ public class CharacterDetailController : MonoBehaviour
         formText = formText != null ? formText : FindComponent<TextMeshProUGUI>("FormText");
         statusAvailableTag = statusAvailableTag != null ? statusAvailableTag : FindObject("StatusTag_Available");
         statusDownloadRequiredTag = statusDownloadRequiredTag != null ? statusDownloadRequiredTag : FindObject("StatusTag_DownloadRequired");
-        affectionValueText = affectionValueText != null ? affectionValueText : FindComponent<TextMeshProUGUI>("AffectionValueText");
-        affectionLabelText = affectionLabelText != null ? affectionLabelText : FindComponent<TextMeshProUGUI>("AffectionLabelText");
-        affectionBarYellow = affectionBarYellow != null ? affectionBarYellow : FindRect("AffectionBarFillYellow");
-        affectionBarOrange = affectionBarOrange != null ? affectionBarOrange : FindRect("AffectionBarFillOrange");
-        affectionBarRed = affectionBarRed != null ? affectionBarRed : FindRect("AffectionBarFillRed");
+        affinityLevelText = affinityLevelText != null ? affinityLevelText : FindComponent<TextMeshProUGUI>("AffinityLevelText");
+        affinityValueText = affinityValueText != null ? affinityValueText : FindComponent<TextMeshProUGUI>("AffinityValueText");
+        affinityLabelText = affinityLabelText != null ? affinityLabelText : FindComponent<TextMeshProUGUI>("AffinityLabelText");
+        affinityBarFill = affinityBarFill != null ? affinityBarFill : FindComponent<Image>("AffinityBarFill");
+        affinityBarFillMax = affinityBarFillMax != null ? affinityBarFillMax : FindComponent<Image>("AffinityBarFillMax");
+        affinityButton = affinityButton != null ? affinityButton : FindComponent<Button>("AffinityContainer");
+        affinityRewardModal = affinityRewardModal != null ? affinityRewardModal : GetComponentInChildren<AffinityRewardModalView>(true);
         featureTagContainer = featureTagContainer != null ? featureTagContainer : FindTransform("FeatureTagContainer");
         voiceDropdown = voiceDropdown != null ? voiceDropdown : FindComponent<TMP_Dropdown>("VoiceDropdown");
         voiceSamplePlayButton = voiceSamplePlayButton != null ? voiceSamplePlayButton : FindComponent<Button>("VoiceSamplePlayButton");
@@ -897,20 +936,6 @@ public class CharacterDetailController : MonoBehaviour
         alarmSamplePlayButton = alarmSamplePlayButton != null ? alarmSamplePlayButton : FindRect("AlarmSamplePlayButton");
         alarmGenerateButton = alarmGenerateButton != null ? alarmGenerateButton : FindRect("AlarmGenerateButton");
         alarmGeneratedPlayButton = alarmGeneratedPlayButton != null ? alarmGeneratedPlayButton : FindRect("AlarmGeneratedPlayButton");
-    }
-
-    private void SetFillWidth(RectTransform target, float ratio)
-    {
-        if (target == null || target.parent == null)
-        {
-            return;
-        }
-
-        RectTransform parent = target.parent as RectTransform;
-        float width = parent != null ? parent.rect.width : 0f;
-        Vector2 size = target.sizeDelta;
-        size.x = width * Mathf.Clamp01(ratio);
-        target.sizeDelta = size;
     }
 
     private static void SetText(TextMeshProUGUI target, string value)
