@@ -168,7 +168,7 @@ public class EquipWorkbenchController : MonoBehaviour
         Debug.Log("[EquipWorkbench] " + msg);
     }
 
-    // 소켓에서 캐릭터 루트를 결정 (Animator 우선, 없으면 transform.root — EquipDemoController 선례)
+    // 소켓에서 캐릭터 루트를 결정 (Animator 우선, 없으면 transform.root)
     private GameObject ResolveCharacterRoot(EquipSocket socket)
     {
         Animator anim = socket.GetComponentInParent<Animator>();

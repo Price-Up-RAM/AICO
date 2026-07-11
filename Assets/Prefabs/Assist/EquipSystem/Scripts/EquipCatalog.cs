@@ -2,27 +2,17 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// 악세서리 크기 결정 방식
-public enum EquipEntryFit
-{
-    ContainUniform,   // 레거시: 소켓 캡슐 볼륨에 uniform 핏
-    RadiusRelative,   // 신규: 최장변 = 캡슐 월드지름 × sizeRatio (placeholder 경로 기본)
-}
-
-// 카탈로그 엔트리: 키 문자열 ↔ 실제 프리팹 연결 + 슬롯/placeholder/미세보정
+// 카탈로그 엔트리: 키 문자열 ↔ 실제 프리팹 연결 + 자리 이름(해석 사다리) + 크기/미세보정
 [Serializable]
 public class EquipEntry
 {
     public string key;                  // 악세서리 식별 키 (예: "hairpin_placeholder")
     public GameObject prefab;           // 부착할 프리팹
-    public string targetSlotId;         // 어느 슬롯에 붙는가 (예: "hairpin") — 해석 사다리 2순위 (1순위는 key와 같은 이름의 소켓)
+    public string targetSlotId;         // 해석 사다리 2순위 (1순위는 key와 같은 이름의 소켓)
     public List<string> fallbackSlotIds = new List<string>();  // 3순위 폴백: 위가 없을 때 순서대로 시도할 범용 이름들 (예: head, chest, origin)
-    public string targetPlaceholderId;  // 어느 placeholder에 붙는가 (예: "top"). 비면 레거시 소켓 직부착 경로
-    public EquipEntryFit fitMode = EquipEntryFit.ContainUniform;  // 크기 결정 방식
-    public float sizeRatio = 1f;        // RadiusRelative: 최장변 = 캡슐 월드지름 × 이 값
+    public float sizeRatio = 1f;        // 최장변 = refDist 월드환산(rWorld) × 2 × 이 값
     public float fitBias = 1f;          // 최종 크기 미세 보정 (기본 1.0)
-    public Vector3 positionOffset;      // (레거시 경로) 소켓 로컬 위치 오프셋
-    public Vector3 positionOffsetRadii; // (placeholder 경로) placeholder 로컬, 캡슐 radius 배수 단위 — 무차원
+    public Vector3 positionOffsetRadii; // placeholder 로컬, rWorld(refDist) 배수 단위 — 무차원
     public Vector3 rotationOffset;      // 회전(오일러) 오프셋 (아이템 고유)
 }
 

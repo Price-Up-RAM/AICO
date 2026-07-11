@@ -1,38 +1,13 @@
 using UnityEngine;
 
-// 볼륨-핏 방식: 악세서리를 소켓 볼륨(콜라이더)에 맞추는 방법
-public enum EquipFitMode
-{
-    ContainUniform,  // 콜라이더 볼륨에 왜곡 없이 맞춤
-    None             // 스케일 자동조정 안 함 (fitBias만)
-}
-
-// 악세서리 정렬 기준
-public enum EquipAnchorPivot
-{
-    VolumeCenter,     // 콜라이더 볼륨 center 정렬
-    PlaceholderChild  // placeholderAnchor 정렬
-}
-
-// EquipSystem 전용 소켓 (Accessory 시스템과 완전 독립). 본 하위 GO에 붙이고 같은 GO의 콜라이더를 사이징 볼륨으로 사용.
+// EquipSystem 전용 소켓 (Accessory 시스템과 완전 독립). 본 하위 GO에 붙는 "자리의 이름표" —
+// 실제 부착점(위치/크기 기준 refDist)은 자식 placeholder가 가진다.
 [DisallowMultipleComponent]
 public class EquipSocket : MonoBehaviour
 {
-    public string slotId;  // 슬롯 식별자 ("hairpin" 등)
-    public EquipFitMode fit = EquipFitMode.ContainUniform;  // 핏 방식
-    public EquipAnchorPivot pivot = EquipAnchorPivot.VolumeCenter;  // 정렬 기준
-    public Transform placeholderAnchor;  // PlaceholderChild일 때 정렬 기준
+    public string slotId;  // 슬롯 식별자 ("hairpin" 등) — 카탈로그·전파·해석 사다리의 열쇠
 
-    // 사이징 볼륨으로 쓸 콜라이더 (같은 GO)
-    public Collider SizingVolume
-    {
-        get
-        {
-            return GetComponent<Collider>();
-        }
-    }
-
-    // 이 소켓의 placeholder를 id로 탐색 (직계 자식, 없으면 null)
+    // 이 소켓의 placeholder를 id로 탐색 (하위, 없으면 null)
     public EquipPlaceholder FindPlaceholder(string placeholderId)
     {
         if (string.IsNullOrEmpty(placeholderId))

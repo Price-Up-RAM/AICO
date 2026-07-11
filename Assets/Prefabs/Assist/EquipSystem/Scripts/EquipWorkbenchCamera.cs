@@ -103,7 +103,7 @@ public class EquipWorkbenchCamera : MonoBehaviour
     // 선택 캐릭터를 화면에 꽉 차게 프레이밍 (렌더러 바운즈 기반, 없으면 콜라이더/위치 폴백)
     public void FrameSelected()
     {
-        // 워크벤치 컨트롤러가 씬에 없을 수 있는 데모 코드라 명시적 안내 가드 (EquipDemoController 선례)
+        // 워크벤치 컨트롤러가 씬에 없을 수 있는 데모 코드라 명시적 안내 가드
         EquipWorkbenchController controller = EquipWorkbenchController.Instance;
         if (controller == null)
         {

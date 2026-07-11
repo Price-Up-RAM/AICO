@@ -2,16 +2,16 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-// 스냅 모드: 메시(기본 — 실제 표면 글라이드) / 캡슐(레거시) / 자유
+// 스냅 모드: 메시(기본 — 실제 표면 글라이드) / 자유(띄우기용 미세조정)
 public enum EquipSnapMode
 {
     Mesh,
-    Capsule,
     Free,
 }
 
-// EquipPlaceholder 커스텀 인스펙터: 메시 표면 글라이드("중력" 스냅의 메시판) + 캡슐 스냅 + 라이브 미리보기.
+// EquipPlaceholder 커스텀 인스펙터: 메시 표면 글라이드 + 라이브 미리보기 + Size Ratio 직편집.
 // 메시 모드: 씬의 구체 핸들을 드래그하면 마우스 레이를 캐릭터 메시에 캐스트해 히트점을 미끄러진다(up=노멀).
+// 드래그를 놓는 순간 크기 기준(refDist)이 재베이크된다. Free 이동은 재베이크하지 않는다.
 [CustomEditor(typeof(EquipPlaceholder))]
 public class EquipPlaceholderEditor : Editor
 {
@@ -49,64 +49,39 @@ public class EquipPlaceholderEditor : Editor
     {
         EquipPlaceholder ph = (EquipPlaceholder)target;
 
-        // 신모델 판정: 소켓에 캡슐(사이징 볼륨)이 없으면 캡슐 좌표계 자체가 무의미
-        EquipSocket owner = ph.OwnerSocket;
-        bool newModel = owner != null && owner.SizingVolume == null;
+        EditorGUILayout.HelpBox("부착점: 위치·회전 = 이 Transform 그대로, 크기 = Baked Ref Dist × 2 × Size Ratio(카탈로그).\n메시 모드에서 구체 핸들 드래그 = 표면 글라이드 — 놓는 순간 크기 기준(refDist)이 재측정됩니다. Free 이동은 재측정하지 않습니다.", MessageType.Info);
 
-        if (newModel)
-        {
-            // 신모델: 살아있는 필드 3개만 노출 (캡슐 좌표/회전 규약 필드는 no-op이라 숨김)
-            EditorGUILayout.HelpBox("신모델 부착점: 위치·회전 = 이 Transform 그대로, 크기 = Baked Ref Dist × 2 × Size Ratio(카탈로그).\n메시 모드에서 구체 핸들 드래그 = 표면 글라이드 — 놓는 순간 크기 기준(refDist)이 재측정됩니다. Free 이동은 재측정하지 않습니다.", MessageType.Info);
-            serializedObject.Update();
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("placeholderId"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("bakedRefDistLocal"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("contactAnchor"));
-            serializedObject.ApplyModifiedProperties();
-        }
-        else
-        {
-            DrawDefaultInspector();
-        }
+        serializedObject.Update();
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("placeholderId"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("bakedRefDistLocal"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("contactAnchor"));
+        serializedObject.ApplyModifiedProperties();
 
         EditorGUILayout.Space();
 
-        // 스냅 모드 — 신모델은 Mesh/Free 2지선다 (Capsule은 신모델에서 Free와 동일해 무의미)
+        // 스냅 모드: Mesh/Free 2지선다
         Transform charRoot = EquipAuthoringUtil.ResolveCharRoot(ph.transform);
-        if (newModel)
+        string[] options = new string[] { "Mesh (표면 글라이드)", "Free (자유 이동 — 띄우기용)" };
+        int idx = 0;
+        if (snapMode == EquipSnapMode.Free)
         {
-            string[] options = new string[] { "Mesh (표면 글라이드)", "Free (자유 이동 — 띄우기용)" };
-            int idx = 0;
-            if (snapMode == EquipSnapMode.Free)
-            {
-                idx = 1;
-            }
-            int newIdx = EditorGUILayout.Popup("스냅 모드", idx, options);
-            if (newIdx == 1)
-            {
-                snapMode = EquipSnapMode.Free;
-            }
-            else
-            {
-                snapMode = EquipSnapMode.Mesh;
-            }
+            idx = 1;
+        }
+        int newIdx = EditorGUILayout.Popup("스냅 모드", idx, options);
+        if (newIdx == 1)
+        {
+            snapMode = EquipSnapMode.Free;
         }
         else
         {
-            snapMode = (EquipSnapMode)EditorGUILayout.EnumPopup("스냅 모드", snapMode);
+            snapMode = EquipSnapMode.Mesh;
         }
 
         if (snapMode == EquipSnapMode.Mesh)
         {
             if (charRoot == null || EquipMeshRaycaster.Instance.HasCache(charRoot) == false)
             {
-                if (newModel)
-                {
-                    EditorGUILayout.HelpBox("메시를 찾지 못해 자유 이동으로 동작합니다 — [메시 캐시 갱신]을 시도하세요.", MessageType.Warning);
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox("메시를 찾지 못해 캡슐 모드로 동작합니다.", MessageType.Warning);
-                }
+                EditorGUILayout.HelpBox("메시를 찾지 못해 자유 이동으로 동작합니다 — [메시 캐시 갱신]을 시도하세요.", MessageType.Warning);
             }
             else
             {
@@ -114,36 +89,22 @@ public class EquipPlaceholderEditor : Editor
             }
         }
 
-        EditorGUILayout.BeginHorizontal();
-        if (newModel == false)
-        {
-            // 캡슐 좌표 기반 버튼 — 신모델에서는 no-op(사후 캡슐 추가 시 stale 좌표 순간이동 위험도 있어 숨김)
-            if (GUILayout.Button("표면에 스냅 (캡슐 radiusScale=1)"))
-            {
-                Undo.RecordObject(ph.transform, "Snap Placeholder");
-                Undo.RecordObject(ph, "Snap Placeholder");
-                ph.CaptureFromTransform();
-                ph.radiusScale = 1f;
-                ph.ApplyToTransform();
-                EditorUtility.SetDirty(ph);
-            }
-            if (GUILayout.Button("좌표→Transform 재적용"))
-            {
-                Undo.RecordObject(ph.transform, "Apply Placeholder");
-                ph.ApplyToTransform();
-            }
-        }
         if (GUILayout.Button("메시 캐시 갱신"))
         {
             EquipMeshRaycaster.Instance.Invalidate();
         }
-        EditorGUILayout.EndHorizontal();
 
-        // 값 직접 편집 시 Transform 동기화 (캡슐 좌표 기반 — 레거시 전용.
-        // 신모델에서 남겨두면 사후 캡슐 추가 시 stale 좌표로 순간이동하는 사고 경로가 된다)
-        if (newModel == false && GUI.changed && snapMode != EquipSnapMode.Mesh)
+        // 고스트 재조정: 글라이드(회전 리셋됨)와 달리 고스트 픽으로 위치·회전·refDist를 한 번에 다시 잡는다
+        using (new EditorGUI.DisabledScope(Application.isPlaying || ph.OwnerSocket == null))
         {
-            ph.ApplyToTransform();
+            if (GUILayout.Button("Socket Maker에서 고스트 재조정"))
+            {
+                EquipSocketMakerWindow.BeginRepick(ph);
+            }
+        }
+        if (ph.OwnerSocket == null)
+        {
+            EditorGUILayout.HelpBox("부모에 EquipSocket이 없어 재조정할 수 없습니다.", MessageType.Warning);
         }
 
         // ── 라이브 미리보기 ──
@@ -226,10 +187,10 @@ public class EquipPlaceholderEditor : Editor
         }
         else
         {
-            HandleCapsuleOrFree(ph, e);
+            HandleFreeMove(ph);
         }
 
-        DrawVisuals(ph, meshMode);
+        DrawVisuals(ph);
     }
 
     // 메시 글라이드: 구체 핸들/이동툴 이동 → 커서 레이를 메시에 캐스트 → 히트점으로 이동 (up=노멀)
@@ -305,14 +266,13 @@ public class EquipPlaceholderEditor : Editor
             }
         }
 
-        // 드래그 종료(마우스 놓음) = 확정: 인코딩 캡처 + Undo 1회로 접기
+        // 드래그 종료(마우스 놓음) = 확정: 크기 기준 refDist를 새 위치로 재베이크 + Undo 1회로 접기
         if (dragging && GUIUtility.hotControl == 0 && e.type != EventType.Used)
         {
             Undo.RecordObject(ph, "Glide Placeholder");
 
-            // 신모델(캡슐 없는 소켓): 크기 기준 refDist를 새 위치로 재베이크
             EquipSocket ownerSocket = ph.OwnerSocket;
-            if (ownerSocket != null && ownerSocket.SizingVolume == null)
+            if (ownerSocket != null)
             {
                 float d = (ph.transform.position - ownerSocket.transform.position).magnitude;
                 if (d > 1e-6f)
@@ -321,7 +281,6 @@ public class EquipPlaceholderEditor : Editor
                 }
             }
 
-            ph.CaptureFromTransform();  // 캡슐 있으면 좌표 캡처 (없으면 내부 no-op)
             EditorUtility.SetDirty(ph);
             Undo.CollapseUndoOperations(undoGroup);
             dragging = false;
@@ -331,53 +290,23 @@ public class EquipPlaceholderEditor : Editor
         }
     }
 
-    // 캡슐/자유 모드 (레거시 경로 그대로)
-    private void HandleCapsuleOrFree(EquipPlaceholder ph, Event e)
+    // 자유 이동 모드: 위치만 추적 (refDist 재측정 없음 — 띄우기용)
+    private void HandleFreeMove(EquipPlaceholder ph)
     {
         if (ph.transform.localPosition != lastLocalPos)
         {
-            Undo.RecordObject(ph, "Move Placeholder");
-            ph.CaptureFromTransform();
-
-            if (snapMode == EquipSnapMode.Capsule)
-            {
-                ph.radiusScale = 1f;
-                ph.ApplyToTransform();
-            }
-
             lastLocalPos = ph.transform.localPosition;
             EditorUtility.SetDirty(ph);
             RefitPreview(ph);
         }
     }
 
-    // 시각화: 캡슐 접원(캡슐 모드) / 이탈 피드백 / 표면 사이클 배지
-    private void DrawVisuals(EquipPlaceholder ph, bool meshMode)
+    // 시각화: refDist 와이어 원 / 이탈 피드백 / 표면 사이클 배지
+    private void DrawVisuals(EquipPlaceholder ph)
     {
-        if (meshMode == false)
-        {
-            EquipSocket socket = ph.OwnerSocket;
-            if (socket != null)
-            {
-                CapsuleCollider cap = socket.SizingVolume as CapsuleCollider;
-                if (cap != null)
-                {
-                    Handles.color = new Color(0.3f, 0.9f, 1f, 0.8f);
-                    Vector3 axisWorld = socket.transform.TransformDirection(EquipCapsuleMath.AxisVector(cap));
-                    float half = EquipCapsuleMath.HalfSegmentLength(cap);
-                    Vector3 closestLocal = cap.center + EquipCapsuleMath.AxisVector(cap) * (ph.axisT * half);
-                    Vector3 closestWorld = socket.transform.TransformPoint(closestLocal);
-
-                    Handles.DrawDottedLine(closestWorld, ph.transform.position, 4f);
-                    float rWorld = cap.radius * EquipMath.LossyAvg(socket.transform) * ph.radiusScale;
-                    Handles.DrawWireDisc(closestWorld, axisWorld, rWorld);
-                }
-            }
-        }
-
-        // 신모델 refDist 가시화 (float가 안 보이는 문제 보완 — 소켓 중심의 와이어 원 + 수치)
+        // refDist 가시화 (float가 안 보이는 문제 보완 — 소켓 중심의 와이어 원 + 수치)
         EquipSocket owner = ph.OwnerSocket;
-        if (owner != null && owner.SizingVolume == null && ph.bakedRefDistLocal > 1e-12f)
+        if (owner != null && ph.bakedRefDistLocal > 1e-12f)
         {
             float rWorld = ph.bakedRefDistLocal * EquipMath.LossyAvg(owner.transform);
             Handles.color = new Color(1f, 0.8f, 0.3f, 0.7f);
@@ -404,7 +333,7 @@ public class EquipPlaceholderEditor : Editor
         }
     }
 
-    // 노멀에 수직인 접선 (ComputeBaseRotation과 동일 규약)
+    // 노멀에 수직인 접선 (up=노멀, 접선 규약 — Socket Maker 고스트와 동일)
     private static Vector3 TangentOf(Vector3 up)
     {
         Vector3 t = Vector3.Cross(up, Vector3.right);
@@ -488,11 +417,11 @@ public class EquipPlaceholderEditor : Editor
         previewInstance.name = "__EquipPreview__";
         previewInstance.hideFlags = HideFlags.DontSave;
 
-        EquipPlacement.FitToPlaceholder(previewInstance, socket, ph, entry);
-
-        // 크기 기준 부재로 장착 거부(내부 DestroyImmediate)됐을 수 있음 — 파괴된 참조 접근 방지
-        if (previewInstance == null)
+        bool fitted = EquipPlacement.FitToPlaceholder(previewInstance, socket, ph, entry);
+        if (fitted == false)
         {
+            // 크기 기준 부재(refDist 미베이크)로 장착 거부 — 인스턴스는 내부에서 파괴됨
+            previewInstance = null;
             return;
         }
 
@@ -513,7 +442,12 @@ public class EquipPlaceholderEditor : Editor
         {
             return;
         }
-        EquipPlacement.FitToPlaceholder(previewInstance, socket, ph, entry);
+
+        bool fitted = EquipPlacement.FitToPlaceholder(previewInstance, socket, ph, entry);
+        if (fitted == false)
+        {
+            previewInstance = null;
+        }
     }
 
     private void DestroyPreview()

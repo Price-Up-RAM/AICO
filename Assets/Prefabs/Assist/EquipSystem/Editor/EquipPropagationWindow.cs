@@ -2,19 +2,12 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-// 소켓 전파 창: Donor 모드(같은 캐릭터 의상 전파) / Template 모드(크로스 캐릭터 스탬프).
+// 소켓 전파 창: Donor 모드(같은 스켈레톤 의상 전파 — 본 이름 일치 + 로컬 값 무손실 복사).
 // 드라이런이 기본값 — 리포트 확인 후 실제 적용. 각 행 [열기]로 대상 프리팹을 바로 열어 검수.
+// (Template 크로스 캐릭터 전파는 캡슐 시대와 함께 삭제 — P3에서 메시 레이 기반으로 재구축 예정, git 이력 참조)
 public class EquipPropagationWindow : EditorWindow
 {
-    private enum Mode
-    {
-        Donor,     // 같은 스켈레톤 의상 전파 (본 이름 일치 + 로컬 값 무손실 복사)
-        Template,  // 크로스 캐릭터 스탬프 (본 해석 사다리)
-    }
-
-    private Mode mode = Mode.Donor;                     // 현재 모드
-    private GameObject donorPrefab;                     // Donor 모드: 소스 프리팹
-    private EquipSlotTemplate template;                 // Template 모드: 원본 템플릿
+    private GameObject donorPrefab;                     // 소스 프리팹 (소켓을 잘 만들어둔 캐릭터/의상)
     private readonly List<GameObject> targets = new List<GameObject>();  // 대상 프리팹들
     private bool dryRun = true;                         // 드라이런 (기본 ON)
     private List<EquipStampEntry> report;               // 마지막 실행 리포트
@@ -27,36 +20,10 @@ public class EquipPropagationWindow : EditorWindow
         GetWindow<EquipPropagationWindow>(false, "Equip Propagation", true);
     }
 
-    // 열릴 때 기본 템플릿 자동 연결
-    private void OnEnable()
-    {
-        if (template == null)
-        {
-            template = EquipAuthoringUtil.GetOrCreateDefaultTemplate();
-        }
-    }
-
     private void OnGUI()
     {
-        // 모드 선택
-        mode = (Mode)GUILayout.Toolbar((int)mode, new string[] { "Donor (의상 전파)", "Template (새 캐릭터)" });
-        EditorGUILayout.Space();
-
-        if (mode == Mode.Donor)
-        {
-            EditorGUILayout.HelpBox("같은 스켈레톤(의상 프리팹들)에 소켓을 무손실 복사합니다. 본 이름이 일치해야 합니다.", MessageType.Info);
-            donorPrefab = (GameObject)EditorGUILayout.ObjectField("Donor Prefab", donorPrefab, typeof(GameObject), false);
-        }
-        else
-        {
-            EditorGUILayout.HelpBox("다른 캐릭터에 템플릿을 스탬프합니다. 본 해석: 정확이름 → Humanoid → 별칭 → 최근접(물리 본 제외).", MessageType.Info);
-            template = (EquipSlotTemplate)EditorGUILayout.ObjectField("Slot Template", template, typeof(EquipSlotTemplate), false);
-
-            if (template != null && template.slots.Count == 0)
-            {
-                EditorGUILayout.HelpBox("템플릿에 슬롯이 0개 — 실행해도 아무것도 스탬프되지 않습니다. (캡처 UI는 P3에서 이 창에 재배치 예정)", MessageType.Warning);
-            }
-        }
+        EditorGUILayout.HelpBox("같은 스켈레톤(의상 프리팹들)에 소켓을 무손실 복사합니다. 본 이름이 일치해야 합니다.\n손보정된 소켓(KEEP_TUNED)과 수동 저작 소켓(KEEP_MANUAL)은 덮어쓰지 않습니다.", MessageType.Info);
+        donorPrefab = (GameObject)EditorGUILayout.ObjectField("Donor Prefab", donorPrefab, typeof(GameObject), false);
 
         EditorGUILayout.Space();
 
@@ -101,15 +68,7 @@ public class EquipPropagationWindow : EditorWindow
         // 실행
         dryRun = EditorGUILayout.ToggleLeft("드라이런 (수정 없이 리포트만 — 확인 후 해제하고 실제 적용)", dryRun);
 
-        bool canRun = targets.Count > 0;
-        if (mode == Mode.Donor && donorPrefab == null)
-        {
-            canRun = false;
-        }
-        if (mode == Mode.Template && template == null)
-        {
-            canRun = false;
-        }
+        bool canRun = targets.Count > 0 && donorPrefab != null;
 
         using (new EditorGUI.DisabledScope(canRun == false))
         {
@@ -215,14 +174,7 @@ public class EquipPropagationWindow : EditorWindow
             }
         }
 
-        if (mode == Mode.Donor)
-        {
-            report = EquipSlotStamper.RunDonorBatch(donorPrefab, valid, dryRun == false);
-        }
-        else
-        {
-            report = EquipSlotStamper.RunTemplateBatch(template, valid, dryRun == false);
-        }
+        report = EquipSlotStamper.RunDonorBatch(donorPrefab, valid, dryRun == false);
 
         // 콘솔 요약
         int ok = 0;

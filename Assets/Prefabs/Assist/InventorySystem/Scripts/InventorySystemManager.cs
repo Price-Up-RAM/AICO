@@ -561,8 +561,14 @@ public class InventorySystemManager : MonoBehaviour
             return true; // 이미 장착 중 (멱등)
         }
 
-        // 장착 (같은 슬롯 기존 장착물은 EquipManager가 교체)
-        EquipManager.Instance.Equip(ActiveTarget, key);
+        // 장착 (같은 슬롯 기존 장착물은 EquipManager가 교체). 실패 시 미러 오염 방지
+        string reason;
+        bool equipped = EquipManager.Instance.Equip(ActiveTarget, key, out reason);
+        if (equipped == false)
+        {
+            Debug.LogWarning($"[InventorySystemManager] EquipKey: 장착 실패 — {reason}");
+            return false;
+        }
         slots[slotId] = key;
 
         InventoryEvents.OnStoreChanged?.Invoke(ActiveCharcode);
