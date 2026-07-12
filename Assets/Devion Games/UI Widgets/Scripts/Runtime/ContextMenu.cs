@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -7,8 +7,24 @@ using UnityEngine.EventSystems;
 
 namespace DevionGames.UIWidgets
 {
-	public class ContextMenu : UIWidget
+	public class ContextMenu : UIWidget, IPointerEnterHandler, IPointerExitHandler
 	{
+		public bool keepOpen = false;
+		public MenuItem currentSubMenuTrigger;
+		public bool isPointerOver = false;
+
+		private ContextMenu m_SubMenuCache;
+		private ContextMenu GetSubMenu() {
+			if (m_SubMenuCache == null) m_SubMenuCache = WidgetUtility.Find<ContextMenu>("ContextMenuSub");
+			return m_SubMenuCache;
+		}
+
+		private ContextMenu m_MainMenuCache;
+		private ContextMenu GetMainMenu() {
+			if (m_MainMenuCache == null) m_MainMenuCache = WidgetUtility.Find<ContextMenu>("ContextMenu");
+			return m_MainMenuCache;
+		}
+
 		[Header ("Reference")]
 		[SerializeField]
 		protected MenuItem m_MenuItemPrefab= null;
@@ -20,9 +36,61 @@ namespace DevionGames.UIWidgets
 			base.Show ();
 		}
 
+		public override void Close ()
+		{
+			base.Close ();
+			keepOpen = false;
+			if (currentSubMenuTrigger != null) {
+				currentSubMenuTrigger.isLocked = false;
+				currentSubMenuTrigger.ResetColor();
+			}
+			currentSubMenuTrigger = null;
+			isPointerOver = false;
+
+			for (int i = 0; i < itemCache.Count; i++) {
+				if (itemCache[i] != null) {
+					itemCache[i].isLocked = false;
+					itemCache[i].ResetColor();
+				}
+			}
+			
+			ContextMenu subMenu = GetSubMenu();
+			if (subMenu != null && subMenu != this && subMenu.IsVisible) {
+				subMenu.Close();
+			}
+		}
+
+		public void OnPointerEnter(PointerEventData eventData) {
+			isPointerOver = true;
+		}
+
+		public void OnPointerExit(PointerEventData eventData) {
+			isPointerOver = false;
+		}
+
+		private float hoverOutTimer = 0f;
+
 		protected override void Update ()
 		{
 			base.Update();
+
+			ContextMenu subMenu = GetSubMenu();
+			if (subMenu != null && subMenu != this && subMenu.IsVisible && !subMenu.keepOpen) {
+				bool isOverMenus = this.isPointerOver || subMenu.isPointerOver;
+				
+				if (!isOverMenus) {
+					hoverOutTimer += Time.deltaTime;
+					if (hoverOutTimer > 0.15f) {
+						subMenu.Close();
+						hoverOutTimer = 0f;
+					}
+				} else {
+					hoverOutTimer = 0f;
+				}
+			} else {
+				hoverOutTimer = 0f;
+			}
+
 			if (m_CanvasGroup.alpha > 0f && (Input.GetMouseButtonDown (0) || Input.GetMouseButtonDown (1) || Input.GetMouseButtonDown (2))) {
 
 				var pointer = new PointerEventData (EventSystem.current);
@@ -31,7 +99,7 @@ namespace DevionGames.UIWidgets
 				EventSystem.current.RaycastAll (pointer, raycastResults);
 
 				for (int i = 0; i < raycastResults.Count; i++) {
-					MenuItem item = raycastResults [i].gameObject.GetComponent<MenuItem> ();
+					MenuItem item = raycastResults [i].gameObject.GetComponentInParent<MenuItem> ();
 					if (item != null) {
 						if (item.transform.IsChildOf (m_RectTransform)) {
 							item.OnPointerClick (pointer);
@@ -48,6 +116,8 @@ namespace DevionGames.UIWidgets
 		{
 			for (int i = 0; i < itemCache.Count; i++) {
 				itemCache [i].gameObject.SetActive (false);
+				itemCache [i].isLocked = false;
+				itemCache [i].ResetColor();
 			}
 
 			ContextMenu subMenu = WidgetUtility.Find<ContextMenu> ("ContextMenuSub");
@@ -71,6 +141,17 @@ namespace DevionGames.UIWidgets
 				itemText.text = text;
 			}
 			item.onTrigger.RemoveAllListeners ();
+			item.onEnter.RemoveAllListeners ();
+			item.onExit.RemoveAllListeners ();
+			item.isSubMenuTrigger = false;
+
+			item.onEnter.AddListener(delegate() {
+				ContextMenu subMenu = GetSubMenu();
+				if (subMenu != null && subMenu != this && !item.isSubMenuTrigger && !subMenu.keepOpen) {
+					subMenu.Close();
+				}
+			});
+
 			item.interactable = used != null;
 			item.gameObject.SetActive (true);
 			item.transform.SetParent (m_RectTransform, false);
@@ -88,14 +169,26 @@ namespace DevionGames.UIWidgets
 		{
 			MenuItem item = AddMenuItem (text, delegate() {});
 			item.onTrigger.RemoveAllListeners ();
+			item.isSubMenuTrigger = true;
 			item.interactable = subMenuItems != null && subMenuItems.Count > 0;
 			SetArrowVisible (item, item.interactable);
 			if (item.interactable) {
-				item.onTrigger.AddListener (delegate() {
-					ContextMenu subMenu = WidgetUtility.Find<ContextMenu> ("ContextMenuSub");
+				UnityAction showSubMenu = delegate() {
+					ContextMenu subMenu = GetSubMenu();
 					if (subMenu == null || subMenu == this) {
 						return;
 					}
+
+					if (subMenu.currentSubMenuTrigger == item && subMenu.IsVisible) {
+						return;
+					}
+
+					if (subMenu.currentSubMenuTrigger != null && subMenu.currentSubMenuTrigger != item) {
+						subMenu.currentSubMenuTrigger.isLocked = false;
+						subMenu.currentSubMenuTrigger.ResetColor();
+					}
+
+					subMenu.currentSubMenuTrigger = item;
 
 					subMenu.Clear ();
 					for (int i = 0; i < subMenuItems.Count; i++) {
@@ -104,7 +197,12 @@ namespace DevionGames.UIWidgets
 						UnityAction wrappedAction = null;
 						if (itemAction != null) {
 							wrappedAction = delegate() {
-								Close ();
+								ContextMenu main = GetMainMenu();
+								if (main != null) main.Close();
+								
+								ContextMenu sub = GetSubMenu();
+								if (sub != null) sub.Close();
+
 								itemAction.Invoke ();
 							};
 						}
@@ -112,6 +210,23 @@ namespace DevionGames.UIWidgets
 					}
 
 					subMenu.ShowNextTo (item);
+				};
+
+				item.onEnter.AddListener (delegate() {
+					ContextMenu subMenu = GetSubMenu();
+					if (subMenu != null && !subMenu.keepOpen) {
+						showSubMenu.Invoke();
+					}
+				});
+
+				item.onTrigger.AddListener (delegate() {
+					ContextMenu subMenu = GetSubMenu();
+					if (subMenu != null) {
+						subMenu.keepOpen = true;
+						item.isLocked = true;
+						item.SetLockedColor();
+						showSubMenu.Invoke();
+					}
 				});
 			}
 			return item;
