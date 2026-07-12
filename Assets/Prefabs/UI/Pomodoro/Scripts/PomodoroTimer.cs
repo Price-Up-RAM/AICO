@@ -44,6 +44,10 @@ public class PomodoroTimer : MonoBehaviour
     [Header("소형 타이머")]
     [SerializeField] private TextMeshProUGUI compactTimerText;  // 소형 타이머 텍스트
 
+    [Header("진행 게이지")]
+    [SerializeField] private GameObject progressRingRoot;  // 원형 게이지 루트 (트랙+게이지)
+    [SerializeField] private Image progressRingImage;  // 흰색 진행 게이지 이미지 (Radial Filled)
+
     [Header("색상 설정")]
     [SerializeField] private Color workStartColor = Color.green;
     [SerializeField] private Color workEndColor   = new Color(1f, 0.4f, 0.2667f);
@@ -522,6 +526,13 @@ public class PomodoroTimer : MonoBehaviour
         {
             compactTimerText.gameObject.SetActive(true);
         }
+
+        if (progressRingRoot != null)
+        {
+            progressRingRoot.SetActive(true);
+        }
+
+        UpdateProgressRing();
     }
 
     // 타이머 텍스트 숨김
@@ -532,6 +543,28 @@ public class PomodoroTimer : MonoBehaviour
         {
             compactTimerText.gameObject.SetActive(false);
         }
+
+        if (progressRingRoot != null)
+        {
+            progressRingRoot.SetActive(false);
+        }
+    }
+
+    // 원형 게이지 갱신 (집중: 100%→0% 감소 / 휴식: 0%→100% 증가)
+    private void UpdateProgressRing()
+    {
+        if (progressRingImage == null)
+        {
+            return;
+        }
+
+        float remainRatio = 0f;
+        if (totalSeconds > 0)
+        {
+            remainRatio = remaining / (float)totalSeconds;
+        }
+
+        progressRingImage.fillAmount = phase == Phase.Work ? remainRatio : 1f - remainRatio;
     }
 
     // 시간 입력 필드 표시
@@ -643,6 +676,8 @@ public class PomodoroTimer : MonoBehaviour
         {
             tomatoImage.color = Color.Lerp(workEndColor, workStartColor, colorCurve.Evaluate(t));
         }
+
+        UpdateProgressRing();
     }
 
     private void ShowWorkOrBreakMessage()
