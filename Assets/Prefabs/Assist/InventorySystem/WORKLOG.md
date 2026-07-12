@@ -18,16 +18,23 @@
 | `Scripts/InventoryEvents.cs` | 정적 이벤트 허브: `OnActiveOwnerChanged`(캐릭터 전환), `OnStoreChanged`(스토어 변경/장착 토글). |
 | `Scripts/InventoryCatalog.cs` | 아이템 **표시 메타** SO (`displayName`/`icon`/`maxStack`/`category`). EquipCatalog과 동일 구조, key 문자열 공간 공유. |
 | `Scripts/InventorySystemManager.cs` | 싱글톤. MAIN + 캐릭터별 스토어, JSON 저장/로드, 이동(MoveMainToChar/MoveCharToMain), 장착(EquipKey 멱등 / ToggleEquip) + 표시용 장착 미러, 정렬(SortStore: 종류→이름). (주의: `InventoryManager`라는 이름은 미션 재화 시스템 `Assets/Prefabs/UI/Mission/MissionView/Scripts/InventoryManager.cs`가 이미 전역으로 사용 중이라 충돌 회피를 위해 이 이름을 쓴다.) |
-| `Scripts/InventoryView.cs` | UI 창 컨트롤러(이중 모드). **창 1개 = 스토어 1개**(`InventorySection.Main/Char`, `ConfigureSection`으로 지정). 헤더 바(타이틀+정렬/닫기) + **8x6=48칸 고정 그리드(빈 칸 포함)** + 푸터 바(`<` 페이지 `>`). 드롭 해석(`HandleSlotDrop`): 칸=위치 이동/스왑/병합, 반대 창=이동, 캐릭터(3D, 렌더러 바운드 스크린 투영)=이동+장착. 우클릭=컨텍스트 메뉴. CanvasGroup 토글. |
+| `Scripts/InventoryView.cs` | UI 창 컨트롤러(**베이크 전용**: Awake가 `BindExisting`으로 참조만 연결 — 베이크 계층이 없으면 에러 로그 + 무동작). **창 1개 = 스토어 1개**(`InventorySection.Main/Char`, `ConfigureSection`으로 지정). 헤더 바(타이틀+정렬/닫기) + **8x6=48칸 고정 그리드(빈 칸 포함)** + 푸터 바(`<` 페이지 `>`). 드롭 해석(`HandleSlotDrop`): 칸=위치 이동/스왑/병합, 반대 창=이동, 캐릭터(3D, 렌더러 바운드 스크린 투영)=이동+장착. 우클릭=컨텍스트 메뉴. CanvasGroup 토글 + `IsVisible`(외부 토글 판정용 공개 프로퍼티). |
 | `Scripts/InventorySlotView.cs` | 그리드 셀 1칸(64px): **빈 칸/아이템 칸** 표시(아이콘·이름·수량·장착 하이라이트). 좌클릭(퀵액션)/우클릭(메뉴)/**아이템 드래그**(고스트 추종, 빈 칸은 드래그 불가·드롭 타깃만). |
 | `Scripts/InventoryMenu.cs` | 우클릭 컨텍스트 메뉴(상세/장착·해제/**CHAR·MAIN으로 이동**) + 상세 팝업 (Devion UIWidgets ContextMenu 참고, 서브메뉴 없음). 코드 런타임 생성, 백드롭 클릭 닫기, 동시 1개. 폰트는 뷰의 SUIT-Bold를 물려받음. |
 | `Scripts/InventoryTooltip.cs` | **hover 미니 툴팁**(이름 + 수량·분류 + 짧은 설명). 레이캐스트 완전 통과(깜빡임 방지), 드래그 중/메뉴 열림/Rebuild 시 자동 숨김. |
 | `Scripts/InventoryWindowDragHandler.cs` | 창 전역 드래그(패널 루트 부착, 슬롯 위 드래그도 버블링). 프로젝트 확립 패턴(JarvisCalendarToggleDragHandler) 미러. |
 | `Scripts/InventoryDemoController.cs` | 데모 트리거: 숫자키로 MAIN에 아이템 지급, I키로 패널 토글. |
-| `Editor/InventorySystemTools.cs` | `Tools/InventorySystem/*` 메뉴(카탈로그/UI 프리팹 베이크/SUIT-Bold 폰트/데모씬) + batchmode 진입점 `BatchBuildAll`. |
-| `Resources/InventoryCatalog_Demo.asset` | 데모 카탈로그(런타임 자동 로드 폴백). |
-| `InventoryPanel.prefab` | 베이크된 다크테마 UI 프리팹 (SUIT-Bold 적용). |
-| `InventoryDemo.unity` | 데모 씬. |
+| `Resources/InventoryCatalog_Demo.asset` | 카탈로그(런타임 자동 로드 폴백). 아이템 추가/수정은 인스펙터에서 직접. |
+| `InventoryPanel.prefab` | 베이크된 다크테마 UI 프리팹 (SUIT-Bold 적용). **UI 크롬의 유일한 원본** — 외형 변경은 이 프리팹을 직접 편집한다. |
+| `InventoryDemo.unity` | 데모 씬 (이미 빌드 완료 — 재생성 수단 없음). |
+
+> **프리팹 완결 선언**: 런타임 자가구축 코드(`InventoryView.BuildHierarchy/BuildInternal`,
+> `InventorySlotView.BuildTemplate`)를 제거했다. UI는 베이크된 `InventoryPanel.prefab`이 완결 상태이며,
+> 컨트롤러는 `BindExisting` 전용이다 (베이크 계층이 없으면 에러 로그 + 무동작).
+> **Editor 도구(`Editor/InventorySystemTools.cs`)도 함께 삭제** — 재베이크 수단은 소멸했고, 이후 크롬 변경은
+> 프리팹 직접 편집으로만 한다. 부수 효과로, 재실행 시 `InventoryCatalog_Demo.asset`을 하드코딩 목록으로
+> 재작성해 이후 추가된 엔트리(Store 등이 주입한 상점 키 포함)를 날릴 수 있던 **파괴적 `CreateCatalog` 지뢰도
+> 함께 소멸**했다.
 
 ---
 
@@ -51,7 +58,9 @@
 ### 저장
 - 경로: `Application.persistentDataPath/InventorySystem/` 아래 `main.json` + `char_{charcode}.json`.
 - 시점: 아이템 조작 즉시 저장 + `OnApplicationQuit`에서 전체 저장 (구 시스템의 OnDestroy-only 유실 문제 개선).
-- 구 Vault 세이브(`inventory_{charcode}.json`)는 **마이그레이션하지 않는다** (새 출발, 사용자 결정).
+- 구 Vault 세이브(`persistentDataPath/inventory_{charcode}.json`, `accessory_data.json`)는
+  **마이그레이션하지 않고 방치**한다 (새 출발, 사용자 결정). 이 시스템은 해당 파일을 읽지도 쓰지도 않으므로
+  고아로 남아도 **무해**하다.
 
 ### 함정 원천 회피 (구 Vault 트러블슈팅 이력 반영)
 - **DbKey류 조용한 실패 없음** — 식별은 string key + `Contains(key)` 검증뿐.
@@ -81,14 +90,12 @@
 6. **헤더 버튼**: `정렬` = 종류→이름 순 정렬 + 1페이지부터 재배치(저장됨) / `X` = 창 닫기(`I`로 다시 열기).
 7. **푸터**: `<` `>` 페이지 이동 (칸이 48개를 넘으면 페이지가 늘어난다. 예: 정렬 없이 slot 48+ 위치로 이동 시).
 
-### B. 메뉴 (`Tools/InventorySystem/`)
-- `Setup All (catalog + UI prefab + font + demo scene)` — 일괄 실행.
-- `1. Create Catalog` — `Resources/InventoryCatalog_Demo.asset` 생성/갱신.
-- `2. Build UI Prefab` — 코드 빌드 → `InventoryPanel.prefab` 베이크(에디터에서 보이고 편집 가능).
-- `3. Apply SUIT-Bold Font` — 프리팹의 모든 `TMP_Text`를 `Assets/FontAssets/SUIT-Bold.asset`으로 교체
-  (**베이크 후 필수 마지막 단계**).
-- `4. Build Demo Scene` — 카메라+라이트+arona POC(완전 언팩+앱 컴포넌트 제거)+매니저+EventSystem+패널+데모 컨트롤러.
-- batchmode: `Unity.exe -batchmode -quit -projectPath <proj> -executeMethod InventorySystemTools.BatchBuildAll`
+### B. 에디터 메뉴 — 삭제됨
+`Tools/InventorySystem/*` 메뉴(`Editor/InventorySystemTools.cs`)는 프리팹 완결 선언과 함께 삭제했다 (§1 참조).
+- UI 크롬 변경: `InventoryPanel.prefab` **직접 편집** (재베이크 수단 없음). 새 `TMP_Text`를 추가했다면
+  범용 창 `Tools → TMP → Replace Font In Prefab`으로 SUIT-Bold를 적용.
+- 카탈로그 아이템 추가/수정: `Resources/InventoryCatalog_Demo.asset` 인스펙터에서 직접.
+- 데모 씬: 이미 빌드된 `InventoryDemo.unity`를 그대로 사용.
 
 ### C. 코드에서 호출
 ```csharp
@@ -118,10 +125,13 @@ InventorySystemManager.Instance.ToggleEquip("arona_a_pareo");                   
 - 저장 파일은 전용 하위 폴더(`persistentDataPath/InventorySystem/`)만 사용 — 구 시스템 세이브와 충돌 없음.
 
 ## 5. 남은 것 (후속 작업)
-- **앱 배선**: `CharManager`가 캐릭터 스폰/전환 시 `SetActiveOwner(charcode, charObj)`를 호출하도록 훅 추가
-  (현 `setInventoryVar` 대체). 실캐릭터 프리팹에 EquipSocket 저작 필요.
+- **앱 배선 (진행 중 — 타 에이전트 작업)**: `CharManager`가 캐릭터 스폰/전환 시
+  `SetActiveOwner(charcode, charObj)`를 호출하고, 창 열기/닫기는 `UIManager` 메뉴 경유로 배선한다
+  (`InventoryView.IsVisible`이 이 배선의 토글 판정용 공개 API). 실캐릭터 프리팹에 EquipSocket 저작 필요.
 - **Vault 제거**: `CharInventoryOwner`/`AccessoryItem`/`ClickToUseItemUiPlug`/`AccessoryManager`/`AccessoryData`
   + SampleScene의 Vault UI 4프리팹 정리 (별도 커밋).
-- 드래그 앤 드롭(장기적으로 MR 레이캐스트 장착) 인터랙션으로 교체.
+- **Vault 고아 세이브 파일**: `persistentDataPath/inventory_{charcode}.json`, `accessory_data.json`이
+  구 시스템 잔재로 남는다 — 이 시스템은 접근하지 않으므로 **방치 (무해)**. 정리 여부는 Vault 제거 커밋에서 결정.
+- (완료) 드래그 앤 드롭 인터랙션 교체 — 칸 이동/스왑/병합, 창 간 이동, 캐릭터(3D) 드롭 장착까지 구현 (§2·§3).
 - (완료) 아이콘: 구 Vault AccessoryItem이 쓰던 `Assets/Model/Sprite/*.png` 스프라이트를 카탈로그에 연결
   (Vault와 무관한 독립 자산이라 discard-안전). 아이콘 없는 아이템은 이름 텍스트 폴백.
