@@ -1,32 +1,103 @@
 # CharacterDetail — 작업 이력 / 사용법
 
-계획 문서: `Affinity_Plan.md` (인연도 시스템 전환) / 상점 연동: `Affinity_Store_Integration.md`
+계획 문서: `Affinity_Plan.md` (친밀도 시스템 전환) / 상점 연동: `Affinity_Store_Integration.md`
+
+## 2026-07-12 (3차) — 보상 모델 타입 확장 (Mission gold 단일화 대응)
+
+Mission이 보상을 gold 단일 성분으로 단순화(`MissionReward.gold`)했으나, 친밀도 보상은
+전용 테두리·gem/crystal·악세서리·전용 악세서리·호칭으로 확장돼야 함 → **타입 있는 보상 정의 도입**
+(설계 상세: `Affinity_Plan.md` 4.3).
+
+- `AffinityData`: `AffinityRewardType { Currency, Item, Border, Title }` + `AffinityRewardDef {type, id, amount}`
+  + `RewardsFor(level)` 단일 출처 (RewardGoldFor는 파생으로 격하). 해금 id 상수
+  `border_affinity_bronze/silver/gold`, `title_affinity_custom`.
+- `SettingCharManager.CharCodeSetting.affinityUnlockedIds` (List<string>) + `UnlockAffinityReward` /
+  `IsAffinityRewardUnlocked` — 캐릭터 단위 해금물 저장 (테두리/호칭).
+- `AffinityRewardModalView.GrantRewards` 라우터: Currency→`CurrencyManager.Earn`(골드는 내부 레거시
+  브리지로 미션 집계 유지, ItemSystem 부재 시 EarnGold 폴백) / Item→`ItemSystemManager.GrantItem`
+  (id 빈값=보류 로그 — Lv.3 전용 장신구는 시그니처 카탈로그 후속) / Border·Title→해금 기록.
+- gem/crystal 추가 절차(준비 완료): `ItemCurrencyCatalog`에 엔트리 1개 + `RewardsFor`에 Currency 성분
+  추가 — 지갑(`CurrencyManager`, currency.json)은 키 기반이라 무수정.
+- 미결: 동/은/금테 표시를 "수령해야 적용" 모델로 바꿀지(현재는 레벨 파생 + 해금 기록 병행),
+  전용 장신구 캐릭터별 키 카탈로그, 호칭의 캐릭터/계정 단위 구분(현재 캐릭터 단위).
+
+## 2026-07-12 (2차) — 다국어(LanguageData) 적용 + 태그 정합성 수정 (전 UI의 기준 구현)
+
+**전사 기준은 루트 `CLAUDE.md`의 "UI 다국어(LanguageData) 적용 기준" 절 참조** — 이 폴더가 참조 구현.
+
+- **사전 등록 44건 추가**(재사용 2: 음성/캐릭터) — `LanguageData.cs` 말미 `// CharacterDetail 관련 다국어 지원`
+  섹션: 라벨 16 + 기능 태그 9 + 출전 4 + 친밀도 15. critic이 366엔트리 전수 섀도잉 스캔 + 실컴파일
+  왕복(ko↔jp↔en) 테스트로 충돌 0건 확인.
+- **적용 방식**: 컨트롤러/모달에 null-가드 `T()` 헬퍼(ui_language null까지 가드) /
+  Show() 서두 `TranslateBakedLabels()` 전수 스윕(정적 라벨) / 동적 조합은 토큰 단위 T() /
+  태그·출전·단계명은 데이터 ko 원문 유지 + 표시 직전 T().
+- **번역 제외(기능 결합)**: 음성 라벨 41종(딕셔너리 키), 프롬프트 언어 3종(비교값), "없음", 테스트 버튼 2종, "100G".
+  → en/jp UI에서도 음성·프롬프트 언어 드롭다운은 한국어 유지(의도) — 고도화 항목.
+- **jp 폰트**: SUIT-Bold에 일본어 글리프 없음 → `5. Ensure JP Font Fallback` 메뉴 신설(SetupAll/Batch 포함),
+  SUIT-Bold 폴백에 NotoSansJP 추가(전역 1회, 멱등). 한글/라틴 외형 불변, 희귀 한자는 정적 아틀라스 한계로 □ 가능.
+- **태그 정합성 수정**(코드 신호 근거): AICO·Diana +머리쓰다듬기(isPat 확인) / Plana +감정표현(EmotionFaceController) /
+  Mika "3D" 의상 오버라이드(+감정표현) / ARONA·Plana "Ball" 오버라이드(감정표현 제외) /
+  ARONA "2D" 오버라이드에서 머리쓰다듬기 제거(isPat 없음) / id=18 중복(Miyako·Ui) → 0..31 재부여
+  (id를 읽는 코드 0곳 확인 — 안전). 프리팹 볼 칩 오타 "볼땡기기"→**"볼당기기"**(CheekPullHandler 표준) 베이크 교정.
+- **유지(의도 플래그)**: Miku "AI 대화 없음"(강제 장치는 없음 — 선택하면 대화됨), Miku 감정표현(VRM 표정 경로 확인 필요),
+  음악재생/커피끓여주기(선언적 태그 — 구현 없음).
+- **알려진 한계**: 열린 패널에서 언어 변경 시 다음 Show까지 정적/동적 혼합 표시 가능(언어 변경 이벤트 부재).
+  CheekPullHandler는 JSON이 아닌 프리팹 CharAttributes.featureTags를 읽음 — 태그 소스 통일은 후속.
+
+## 2026-07-12 — 기능 태그/출전의 캐릭터별 데이터화 (character_database.json 마스터 승격)
+
+그동안 태그("AI 대화/친밀도 보유/감정표현")와 출전("오리지널")은 `CharAttributes.cs`의 **코드 기본값**이었다
+(61개 프리팹 중 커스텀 0건 — 전 캐릭터 동일 표시). 이제 `StreamingAssets/Config/character_database.json`이 마스터.
+
+- **JSON**: 32캐릭터 전부에 `source` + `featureTags` 추가 (출전은 웹 검색 검증 — BA 25종/원신 2/VOCALOID/
+  꿈씨패밀리/오리지널 2). 의상별 예외는 `featureTagsOverride` (현재 아로나 "2D" 의상 1건 — 감정표현 제외.
+  단 이 의상은 isSelectable=false라 열리기 전까지는 표시 경로 없음 — 장래 대비 데이터).
+- **코드**: `ChangeCharInfo.source/featureTags` + `ChangeCharClothesInfo.featureTagsOverride` 필드 추가
+  (JsonUtility 필드명 일치로 로더 2곳 자동 반영) / `CharManager.FindCharacterInfoByCharacterId`
+  (BuildCharacterId와 같은 우선순위: charcode 전수 → 이름 폴백) / `CharacterDetailStateManager.GetState`
+  DB 우선 + CharAttributes 폴백 / 컨트롤러: 의상 오버라이드 적용 + 태그 0개면 라벨 숨김.
+- **표기**: 태그 어휘 = "AI 대화 / 감정표현 / 친밀도 보유 / 머리쓰다듬기 / 음악재생 / 커피끓여주기"
+  (+ 예약: 볼땡기기/화초관리/전원키기). 아이코·다이애나는 표가 공란이라 [AI 대화, 친밀도 보유]만 —
+  JSON에서 직접 조정하면 됨. 표에 없던 캐릭터(BA 나머지)는 [AI 대화, 친밀도 보유, 머리쓰다듬기] 기본.
+- **추가 방법**: 새 캐릭터/태그는 JSON의 해당 캐릭터에 `featureTags` 배열만 수정 — 코드/프리팹 불변.
+  칩 상한 8개(초과분 무표시), 셀 폭 116px(긴 문자열 주의).
+
+## 2026-07-12 — 표기 개정: "인연도" → "친밀도" (친밀도(ko) / affinity(code))
+
+- 한국어 표기를 **친밀도**로 통일 (구 "호감도"/"인연도" 표기 폐기). 파일명·코드 식별자(Affinity*/affinity*)는 유지.
+  결정 조항 개정은 `Affinity_Store_Integration.md` 용어 절.
+- `CharacterDetailController.RefreshFeatureTags`: 입력 별칭 2종("호감도 보유"/"인연도 보유") 모두
+  "친밀도 보유"로 표시 치환.
+- `AffinityUiTools`: 베이크 리터럴 "친밀도 보유"/"친밀도 보상", 노드명 `FeatureTag_친밀도보유`로 생성
+  (FindDeep 폴백 체인은 신명칭 우선 + 구명칭 2종 후순위 유지 — 리베이크 멱등).
+- 아래 과거 이력의 표기도 친밀도로 일괄 갱신했다(당시 용어는 "인연도").
 
 ## 2026-07-11 (2차) — 표시/게이지/모달 피드백 반영
 
-- **표기 분할**: "인연도 Lv.0 / 0/100" 2줄 → 가로 1줄 `[Lv.03] [50/100]`.
+- **표기 분할**: "친밀도 Lv.0 / 0/100" 2줄 → 가로 1줄 `[Lv.03] [50/100]`.
   `AffinityLevelText`(골드, 20pt, Lv.00 제로패딩, MAX면 "Lv.MAX") + `AffinityValueText`(16pt, MAX면 빈 문자열).
-  "인연도"라는 단어는 제거. 모달 표기도 `Lv.01` 형식으로 통일.
+  친밀도 라벨 단어 자체는 제거. 모달 표기도 `Lv.01` 형식으로 통일.
 - **게이지**: 평시 = **연노랑 단색**(구 호감도 Yellow `(1, 0.827, 0.357)`), **MAX일 때만 무지개** 그라데이션.
   fill 2종(`AffinityBarFill` 연노랑 / `AffinityBarFillMax` 무지개)을 트랙 안쪽 **2px 인셋**으로 베이크 —
   트랙(어두운 배경)이 테두리로 보이고, fill이 트랙보다 커 보이던 문제 해결
   (원인: 구 fill은 Sliced UISprite라 10px 높이에서 시각적으로 얇아졌는데, 신 fill은 Single이라 그대로 꽉 참).
   단색 Filled용 `Sprites/AffinityBarWhite.png`(8x8) 추가 베이크.
 - **모달**: 헤더 우측(X 왼쪽)에 **`전부 수령`** 버튼(도달한 미수령 레벨 일괄 수령, 골드 합산 1회 지급).
-  하단 테스트 버튼 `+50` → **`+40 (테스트)`** + **`초기화 (테스트)`**(인연도 포인트만 0, 수령 상태 유지) 추가.
+  하단 테스트 버튼 `+50` → **`+40 (테스트)`** + **`초기화 (테스트)`**(친밀도 포인트만 0, 수령 상태 유지) 추가.
 
-## 2026-07-11 — 인연도 1단계: 표시 교체 + 보상 수령 모달 (프로토타입)
+## 2026-07-11 — 친밀도 1단계: 표시 교체 + 보상 수령 모달 (프로토타입)
 
-호감도(affection, 0/300, 3단 바)를 인연도(affinity, Lv.N n/100, 무지개 단일 게이지)로 교체.
-인연도 블록 클릭 → 레벨 보상 수령 모달(스크롤 리스트, Lv.1~10).
+호감도(affection, 0/300, 3단 바)를 친밀도(affinity, Lv.N n/100, 무지개 단일 게이지)로 교체.
+친밀도 블록 클릭 → 레벨 보상 수령 모달(스크롤 리스트, Lv.1~10).
 
 ### 지금 할 수 있는 것
 
-- **표시**: `인연도 Lv.N  n/100` + 우측 6단계 명칭(낯선 사이 ~ 둘도 없는 사이, 색상은 기존 핑크 유지).
-  Lv.10은 `인연도 Lv.MAX`만 표시(숫자 없음), 게이지 만땅.
+- **표시**: `친밀도 Lv.N  n/100` + 우측 6단계 명칭(낯선 사이 ~ 둘도 없는 사이, 색상은 기존 핑크 유지).
+  Lv.10은 `친밀도 Lv.MAX`만 표시(숫자 없음), 게이지 만땅.
 - **게이지**: 무지개 그라데이션(좌 빨강 → 우 보라) 단일 바 — Image Filled(Horizontal)라 진행할수록 색이 드러난다.
-- **보상 모달**: 인연도 블록(카드) 클릭 → 모달. 레벨별 행 = 보상 표기 + 상태(수령/수령 완료/미도달).
-  수령 시 골드는 Mission 지갑(`InventoryManager.AddGold`)으로 지급, 수령 상태는 `settings_char.json`
+- **보상 모달**: 친밀도 블록(카드) 클릭 → 모달. 레벨별 행 = 보상 표기 + 상태(수령/수령 완료/미도달).
+  수령 시 골드는 Mission 지갑(`InventoryManager.EarnGold` — 보상은 소득이라 누적 획득 집계)으로 지급,
+  수령 상태는 `settings_char.json`
   (`affinityClaimedLevels`)에 charCode 단위 저장. 장신구/카드 테두리/명칭 커스텀은 **표기만** (후속 구현).
 - **레벨업 미션**: 레벨 상승 시 `MissionList.Report("AF0004")` 자동 보고.
 - **테스트**: 모달 좌하단 `+50 (테스트)` 버튼으로 포인트 지급(포인트 획득 규칙 확정 전 임시 — 확정 시 제거).
@@ -38,7 +109,7 @@
 | `Assets/Scripts/AffinityData.cs` | 도메인 단일 출처: 100pt/레벨, Lv.10 max, 6단계 명칭, 레벨 보상 정의 |
 | `Assets/Scripts/SettingCharManager.cs` | `CharCodeSetting.affinityPoints`(0~1000) + `affinityClaimedLevels`, `AddAffinityPoints`/`ClaimAffinityReward` (구 affection 제거, 마이그레이션 없음) |
 | `Assets/Scripts/CharacterDetailStateManager.cs` | 상태 DTO(affinityPoints/Level/StageName) + `AddAffinityPoints`(AF0004 보고) |
-| `CharacterDetailController.cs` | `SetAffinity(points)` 표시 + 인연도 블록 Button → 모달 오픈. "호감도 보유" 태그는 표시 시점에 "인연도 보유"로 치환 |
+| `CharacterDetailController.cs` | `SetAffinity(points)` 표시 + 친밀도 블록 Button → 모달 오픈. 구 태그("호감도 보유"/"인연도 보유")는 표시 시점에 "친밀도 보유"로 치환 |
 | `AffinityRewardModalView.cs` | 보상 수령 모달 (베이크 계층 BindExisting + 행 코드 생성) |
 | `Editor/AffinityUiTools.cs` | `Tools/CharacterDetail/*` 메뉴 + batchmode 진입점 `BatchBuildAll` |
 | `Sprites/AffinityRainbow.png` | (생성물) 무지개 게이지 스프라이트 256x16 |
@@ -54,7 +125,7 @@ batchmode: `Unity.exe -batchmode -quit -projectPath <proj> -executeMethod Affini
 ### 테스트 방법 (전용 데모 씬 없음)
 
 SampleScene Play → 캐릭터 카드/리스트 **롱프레스(0.5초)** → CharacterDetail 열림 →
-인연도 블록 클릭 → 모달에서 `+50 (테스트)` 연타 → 게이지/명칭/Lv 변화 확인 → `수령` 버튼 → 골드 증가(미션 지갑).
+친밀도 블록 클릭 → 모달에서 `+50 (테스트)` 연타 → 게이지/명칭/Lv 변화 확인 → `수령` 버튼 → 골드 증가(미션 지갑).
 
 ## 2026-07-11 (3차) — 카드 3중 테두리 구현 (ChangeChar 카드)
 
@@ -68,7 +139,7 @@ SampleScene Play → 캐릭터 카드/리스트 **롱프레스(0.5초)** → Cha
   Lv4~6 동 `#B87333` / Lv7~9 은 `#C0C0C0` / Lv10 금 `#FFD700` (Image+Sub 활성, Sub에 틴트) / 미만 전부 off.
   판정/색은 `AffinityData.BorderTierFor/BorderTintFor`(enum `AffinityBorderTier`)가 단일 출처.
 - **배선**: `ChangeCharCardController.UpdateClothesUI`에서 `CharacterDetailStateManager.BuildCharacterId(charData, currentClothes)`
-  키로 판정 — **인연도 적립과 같은 키 규칙**(소문자화+이름 폴백)이라 Detail에서 올린 포인트와 매칭된다.
+  키로 판정 — **친밀도 적립과 같은 키 규칙**(소문자화+이름 폴백)이라 Detail에서 올린 포인트와 매칭된다.
   `SettingCharManager.OnCharacterSettingChanged`/`OnSettingsLoaded` 구독으로 라이브 갱신(구독 인스턴스 캐시 후 OnDestroy 해제).
   전용 테두리 진입점 `SetOriginalBorderSprite(Sprite)` (호출처는 아직 없음 — 테두리 보상/변경 기능용).
 - **안전장치(검증에서 잡은 치명 버그 수정)**: `SettingCharManager.GetCharCodeSetting`이 조회만으로
@@ -128,4 +199,4 @@ SampleScene Play → 캐릭터 카드/리스트 **롱프레스(0.5초)** → Cha
 - 선물 → 포인트 연동 (`Affinity_Store_Integration.md`)
 - LanguageData ko/jp/en 등록 (현재 컨트롤러 전체가 한국어 하드코딩 — 일괄 과제)
 - `+50 (테스트)` 디버그 버튼 제거
-- CharAttributes.featureTags 원본 데이터의 "호감도 보유" → "인연도 보유" 일괄 수정(현재는 표시 치환)
+- CharAttributes.featureTags 원본 데이터의 구 표기("호감도 보유"/"인연도 보유") → "친밀도 보유" 일괄 수정(현재는 표시 치환)

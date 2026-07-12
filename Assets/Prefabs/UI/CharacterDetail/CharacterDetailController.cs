@@ -83,6 +83,16 @@ public class CharacterDetailController : MonoBehaviour
     private int promptRequestVersion;
     private bool isSampleVoiceRequesting;
 
+    // UI 언어 번역 헬퍼 — 매니저 부재 시 원문 반환 (LanguageData.Translate는 미등록 문자열이면 원문 반환)
+    private static string T(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        if (LanguageManager.Instance == null || SettingManager.Instance == null || SettingManager.Instance.settings == null) return text;
+        // 레거시 settings.json에는 ui_language가 없을 수 있음 — null이면 Translate 내부 TryGetValue(null) 예외
+        if (string.IsNullOrEmpty(SettingManager.Instance.settings.ui_language)) return text;
+        return LanguageManager.Instance.Translate(text);
+    }
+
     private void Awake()
     {
         AutoBindMissingReferences();
@@ -117,6 +127,7 @@ public class CharacterDetailController : MonoBehaviour
 
         gameObject.SetActive(true);
 
+        TranslateBakedLabels();
         ApplyState(CharacterDetailStateManager.Instance.GetState(currentCharacterId));
         SetPromptExpanded(false);
 
@@ -127,6 +138,16 @@ public class CharacterDetailController : MonoBehaviour
 
         RectTransform rectTransform = transform as RectTransform;
         Debug.Log($"[CharacterDetail][Controller] Show complete. active={gameObject.activeSelf} world={(rectTransform != null ? rectTransform.position.ToString() : transform.position.ToString())} anchored={(rectTransform != null ? rectTransform.anchoredPosition.ToString() : "no rect")}");
+    }
+
+    // 베이크된 정적 라벨 일괄 번역 — 미등록 문자열(음성 드롭다운 라벨 등 기능 결합 문자열)은 원문 유지.
+    // 스윕 후 동적 필드는 ApplyState가 재작성한다.
+    private void TranslateBakedLabels()
+    {
+        foreach (TMP_Text t in GetComponentsInChildren<TMP_Text>(true))
+        {
+            t.text = T(t.text);
+        }
     }
 
     public void Hide()
@@ -172,7 +193,7 @@ public class CharacterDetailController : MonoBehaviour
         // 가로 배치: [Lv.03] [50/100] — MAX면 Lv.MAX만
         SetText(affinityLevelText, isMax ? "Lv.MAX" : "Lv." + level.ToString("00"));
         SetText(affinityValueText, isMax ? "" : AffinityData.PointsInLevel(points) + "/" + AffinityData.PointsPerLevel);
-        SetText(affinityLabelText, AffinityData.StageNameFor(level));
+        SetText(affinityLabelText, T(AffinityData.StageNameFor(level)));
 
         // 평시 = 연노랑 게이지, MAX = 무지개 게이지
         if (affinityBarFill != null)
@@ -300,19 +321,27 @@ public class CharacterDetailController : MonoBehaviour
     {
         if (state == null) return;
 
-        string displayName = currentCharInfo != null ? currentCharInfo.name : "캐릭터 이름";
+        string displayName = currentCharInfo != null ? currentCharInfo.name : T("캐릭터 이름");
         string form = !string.IsNullOrEmpty(currentClothesInfo?.charAttr_type) ? currentClothesInfo.charAttr_type : state.form;
 
         SetText(nameText, displayName);
-        SetText(sourceText, "출전 : " + state.source);
-        SetText(formText, "형태 : " + form);
+        SetText(sourceText, T("출전") + " : " + T(state.source));
+        SetText(formText, T("형태") + " : " + form);
 
         bool selectable = currentClothesInfo == null || currentClothesInfo.isSelectable;
         SetActive(statusAvailableTag, selectable);
         SetActive(statusDownloadRequiredTag, !selectable);
 
         RefreshPortrait();
-        RefreshFeatureTags(state.featureTags);
+
+        // 의상별 오버라이드가 있으면 캐릭터 공통 태그 대신 표시 (예: 아로나 2D 의상은 감정표현 제외)
+        List<string> featureTags = state.featureTags;
+        if (currentClothesInfo != null && currentClothesInfo.featureTagsOverride != null && currentClothesInfo.featureTagsOverride.Count > 0)
+        {
+            featureTags = currentClothesInfo.featureTagsOverride;
+        }
+        RefreshFeatureTags(featureTags);
+
         RefreshPrompt();
 
         string normalizedVoiceId = NormalizeVoiceRefId(state.voiceId);
@@ -325,8 +354,8 @@ public class CharacterDetailController : MonoBehaviour
         int conversationCount = GetConversationCount();
         int costumeCount = currentCharInfo != null && currentCharInfo.clothesList != null ? currentCharInfo.clothesList.Count : 0;
 
-        SetText(conversationCountText, "대화횟수 : " + conversationCount);
-        SetText(costumeCountText, "복장 수 : " + costumeCount);
+        SetText(conversationCountText, T("대화횟수") + " : " + conversationCount);
+        SetText(costumeCountText, T("복장 수") + " : " + costumeCount);
         SetAffinity(state.affinityPoints);
     }
 
@@ -337,7 +366,7 @@ public class CharacterDetailController : MonoBehaviour
 
         if (promptView != null)
         {
-            promptView.SetTextWithoutNotify(isOrigin ? "초기화 중..." : "로딩 중...");
+            promptView.SetTextWithoutNotify(isOrigin ? T("초기화 중...") : T("로딩 중..."));
         }
 
         if (!string.IsNullOrEmpty(charCode))
@@ -434,6 +463,10 @@ public class CharacterDetailController : MonoBehaviour
             return;
         }
 
+        // 태그가 하나도 없으면 "사용가능 기능 태그" 라벨도 함께 숨긴다
+        GameObject label = FindObject("FeatureTagsLabelText");
+        SetActive(label, featureTags.Count > 0);
+
         for (int i = 0; i < featureTagContainer.childCount; i++)
         {
             Transform existing = featureTagContainer.GetChild(i);
@@ -443,9 +476,9 @@ public class CharacterDetailController : MonoBehaviour
             if (shouldShow)
             {
                 TextMeshProUGUI text = existing.GetComponentInChildren<TextMeshProUGUI>(true);
-                // CharAttributes 데이터가 구 용어를 담고 있어도 표시는 인연도로 통일 (데이터 일괄 수정 전까지의 표시 별칭)
-                string tag = featureTags[i] == "호감도 보유" ? "인연도 보유" : featureTags[i];
-                SetText(text, tag);
+                // CharAttributes 데이터가 구 용어(호감도/인연도)를 담고 있어도 표시는 친밀도로 통일 (데이터 일괄 수정 전까지의 표시 별칭)
+                string tag = (featureTags[i] == "호감도 보유" || featureTags[i] == "인연도 보유") ? "친밀도 보유" : featureTags[i];
+                SetText(text, T(tag));
             }
         }
     }

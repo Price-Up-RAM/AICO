@@ -1,6 +1,6 @@
-# Store(상점) — 인연도 재화 루프 검증용 StandAlone 프로토타입
+# Store(상점) — 친밀도 재화 루프 검증용 StandAlone 프로토타입
 
-Affinity_Plan(인연도)의 재화 루프를 검증하는 상점 프로토타입. 폴더 감성 탭 상점(구매, 수량 확인 팝업)
+Affinity_Plan(친밀도)의 재화 루프를 검증하는 상점 프로토타입. 폴더 감성 탭 상점(구매, 수량 확인 팝업)
 + 페이징 + **인벤토리 슬롯 → 판매 존 드래그앤드롭 → 수량 선택 판매**. 기존 시스템과의 연결은 전부
 **문자열 key + 공개 API + 이벤트**뿐이라 약결합을 유지한다. 설계 문서: `Store_Design.md`.
 
@@ -28,7 +28,7 @@ Affinity_Plan(인연도)의 재화 루프를 검증하는 상점 프로토타입
 | `Scripts/StoreDemoController.cs` | 데모 입력(레거시 Input): S/I 창 토글, G 골드 지급, 1~4 아이템 지급, 5 포즈 리롤(`StoreManager.RerollPoses`). |
 | `Editor/StoreTools.cs` | `Tools/Store/*` 메뉴(카탈로그 에셋 8종 = 레지스트리 1 + 태그 5 + 상세 2, NoImage/주사위 스프라이트 베이크/UI 프리팹 2종 베이크/SUIT-Bold 폰트/데모씬+StoreManager+프리뷰 리그) + batchmode 진입점 `BatchBuildAll`. **카탈로그 갱신은 전부 additive**(기존 엔트리 불변 + 누락 기본 키만 추가, **빈 값만 보충**: clip/effectPrefab 바인딩·File 행의 빈 icon·빈 detailText — 구 스키마(giftPoints 시절) 에셋의 이행 경로이기도 하다: 포즈/이펙트 기본 키는 Runtime으로 승격). 장착물 4종 아이콘은 Assets/Model 스프라이트 PNG를 guid로 찾아 베이크(`LoadSpriteByGuid`). |
 | `Resources/StoreCatalog.asset` | **태그 레지스트리** — 태그 5행(장착물/포즈/이펙트/선물/잡화 → 각 태그 카탈로그 참조. 생성물, 런타임 자동 로드 — guid 보존을 위해 기존 에셋 재사용). |
-| `Resources/Store{Equip,Pose,Effect,Gift,Misc}Catalog.asset` | 태그별 상품 카탈로그 5종(StoreTagCatalog 타입, 생성물): 장착물 4 / 포즈 3 / 이펙트 3 / 선물 3 / 잡화 3 — 합계 16종. 기본 구성: 장착물 4종 = **File 아이콘**(Assets/Model 스프라이트 PNG를 guid로 베이크) / 포즈·이펙트 6종 = **Runtime**(리그 캡처) / 선물 3종 = detailText "호감도 +N". |
+| `Resources/Store{Equip,Pose,Effect,Gift,Misc}Catalog.asset` | 태그별 상품 카탈로그 5종(StoreTagCatalog 타입, 생성물): 장착물 4 / 포즈 3 / 이펙트 3 / 선물 3 / 잡화 3 — 합계 16종. 기본 구성: 장착물 4종 = **File 아이콘**(Assets/Model 스프라이트 PNG를 guid로 베이크) / 포즈·이펙트 6종 = **Runtime**(리그 캡처) / 선물 3종 = detailText "친밀도 +N". |
 | `Resources/StoreDetailPoseCatalog.asset` | 포즈 상세(프리뷰) 카탈로그 3종 — pose_greeting/pose_dance/pose_sit 클립 바인딩(생성물, 런타임 자동 로드). 클립 해석 실패 시 clip null로 남고 리그가 널가드한다. |
 | `Resources/StoreDetailEffectCatalog.asset` | 이펙트 상세(프리뷰) 카탈로그 3종 — fx_pat_heart→`Fx_LoveAura`(실제 머리 쓰다듬기 하트) / fx_pat_star→CFXR4 Falling Stars / fx_click_sparkle→CFXR2 Shiny Item (Loop) — 뒤 2종은 JMO Cartoon FX Remaster(생성물, 런타임 자동 로드, 프리팹은 읽기 전용 참조). 프리팹 해석 실패 시 null로 남고 리그가 널가드한다. |
 | `Resources/StoreNoImage.png` | 'NO IMAGE' 플레이스홀더 스프라이트 256²(생성물 — `1. Create Catalog`이 베이크: 라운드 사각 + 5x7 픽셀폰트). **베이크 PNG가 단일 소스** — 없으면 매니저가 경고 1회 후 null을 반환하고 카드/모달은 아이콘을 숨긴다(런타임 절차 생성 폴백 없음). |
@@ -76,7 +76,7 @@ Affinity_Plan(인연도)의 재화 루프를 검증하는 상점 프로토타입
   NoImage 플레이스홀더 체인(PNG 부재 시 아이콘 숨김 + 이름 텍스트).
 - 태그(탭): `StoreEntry`에 tab 필드가 없다 — **키의 소속 태그는 그 키를 담은 StoreTagCatalog을 참조하는
   레지스트리 행이 결정**(`TagForKey`). 현재 `"장착물"`(EquipCatalog 키 4종) / `"포즈"` / `"이펙트"` /
-  `"선물"`(카드에 detailText "호감도 +N" 표기 — 표시 전용, 실제 수치는 ItemSystem의 ItemGiftCatalog 소유) / `"잡화"`.
+  `"선물"`(카드에 detailText "친밀도 +N" 표기 — 표시 전용, 실제 수치는 ItemSystem의 ItemGiftCatalog 소유) / `"잡화"`.
 - **주의**: `"포즈"`/`"장착물"` 태그 이름은 코드 상수와 결합(리롤 버튼 표시 / AF0005 미션 보고) —
   태그명 변경 금지. 같은 key를 두 태그 카탈로그에 중복 등록하면 첫 태그가 우선(경고 없음 — 금지 관례).
 - 상점 전용 키(포즈/이펙트/선물/잡화 12종)는 `StoreTools.CreateCatalog`이 **InventoryCatalog_Demo.asset에
@@ -142,7 +142,8 @@ Affinity_Plan(인연도)의 재화 루프를 검증하는 상점 프로토타입
 - **수량 상한 = 남은 적재 가능량**(스택 잔여 공간): 무조건 1~99가 아니라 인벤토리에 더 담을 수 있는
   만큼만 올라가고, 수량 표시는 **"n / max"** 형식.
 - "계산하기" → `InventoryManager.Instance.SpendGold(총액)` 성공 시
-  `InventorySystemManager.Instance.AddToMain(key, 수량)`. AddToMain 실패 시 `AddGold(총액)`로 전액 환불.
+  `InventorySystemManager.Instance.AddToMain(key, 수량)`. AddToMain 실패 시 `RefundGold(총액)`로 전액
+  환불(실패 결제 되돌림 — 누적 소비(goldSpentTotal)를 역가산, 소득/소비 집계를 펌핑하지 않는다).
 - 골드 부족: 토스트 "골드가 부족합니다" + GoldText 빨강 플래시(0.5초).
 - 골드 표시는 `InventoryManager.InventoryChanged`, 보유 수("보유 n")는
   `InventoryEvents.OnStoreChanged` 구독으로 갱신.
@@ -171,8 +172,8 @@ Affinity_Plan(인연도)의 재화 루프를 검증하는 상점 프로토타입
   1. 슬롯 인덱스 + key로 스택을 **재조회** — 모달이 떠 있는 동안 인벤토리가 바뀌었을 수 있으므로,
      스택이 사라졌거나 key가 다르면 토스트로 안내하고 판매 취소.
   2. 부분 판매(수량 < 보유): `stack.count`에서 수량만 차감. 전량 판매: 스택 자체를 제거.
-  3. `SaveStore` → `InventoryEvents.OnStoreChanged?.Invoke(MainOwnerId)` → `InventoryManager.AddGold(총액)`
-     → `NotifySold(...)` 토스트 "이름 xN 판매 +NG".
+  3. `SaveStore` → `InventoryEvents.OnStoreChanged?.Invoke(MainOwnerId)` → `InventoryManager.EarnGold(총액)`
+     (판매 대금은 소득 — 누적 획득(goldEarnedTotal) 집계) → `NotifySold(...)` 토스트 "이름 xN 판매 +NG".
 
 ### InventorySlotView 최소 패치 (유일한 기존 코드 수정)
 `Prefabs/Assist/InventorySystem/Scripts/InventorySlotView.cs`에만 최소 패치:
@@ -194,7 +195,8 @@ Affinity_Plan(인연도)의 재화 루프를 검증하는 상점 프로토타입
    (개별 단계: `1. Create Catalog`(태그 레지스트리 + 태그별 상품 5종 + 프리뷰 상세 2종 + NoImage 스프라이트) →
    `2. Build UI Prefab`(주사위 리롤 아이콘 베이크, 확인 팝업 → 상점 패널 순 2종 베이크) →
    `3. Apply SUIT-Bold Font`(2종 모두) → `4. Build Demo Scene`(+StoreManager/프리뷰 리그 배치)).
-   데모 씬은 `InventoryPanel.prefab`이 필요 — 없으면 에러 로그로 `Tools/InventorySystem` 선실행을 안내한다.
+   데모 씬은 `InventoryPanel.prefab`이 필요 — 커밋된 베이크 산출물이라 리포지토리에 있으며(생성 도구
+   Tools/InventorySystem은 삭제됨), 없으면 에러 로그로 안내하고 패널 없이 계속 빌드한다.
 2. `Assets/Prefabs/UI/Store/Demo/StoreDemo.unity` 열기 → **Play**.
 3. 키: `S` 상점 토글 / `I` 인벤토리 토글 / `G` +500G / `1~4` MAIN에 데모 아이템 지급
    (1 치파오 / 2 선물(소) / 3 포즈: 댄스 / 4 바나나 — 판매 시연용) / `5` 포즈 프리뷰 리롤.
@@ -232,7 +234,8 @@ int sell = storeView.GetSellPrice(key);   // 판매가 질의 (카탈로그 밖�
 
 ## 4. 독립성
 
-- **의존하는 것**: ① 골드 지갑 `InventoryManager`(Mission)의 `AddGold/SpendGold/InventoryChanged`,
+- **의존하는 것**: ① 골드 지갑 `InventoryManager`(Mission)의 4동사
+  `EarnGold(소득)/AddGold(순수 변경)/RefundGold(환불)/SpendGold(소비)` + `InventoryChanged`,
   ② InventorySystem 공개 API(`AddToMain`/`GetMainStore`/`SaveStore`/`Catalog`/`InventoryEvents`)
   + 위 최소 슬롯 패치, ③ InventoryCatalog/EquipCatalog와 공유하는 문자열 key 공간,
   ④ `MissionList.Report` — AF0005 보고용(플레이 중 자동 생성 싱글톤).
@@ -242,9 +245,9 @@ int sell = storeView.GetSellPrice(key);   // 판매가 질의 (카탈로그 밖�
   전부 폴더 안). 슬롯 패치의 `DropConsumed`는 Store 없이도 무해한 범용 플래그로 남는다.
 
 ## 5. 남은 것 (후속 작업)
-- **선물 → 인연도 포인트 연동** — 증정 UX와 포인트 지급은 인연도 시스템 구현 시. 능력
+- **선물 → 친밀도 포인트 연동** — 증정 UX와 포인트 지급은 친밀도 시스템 구현 시. 능력
   수치(`affinityPoints`)는 **ItemSystem**(`Assets/Prefabs/Assist/ItemSystem`의 ItemGiftCatalog —
-  별도 WORKLOG)이 소유하고, Store는 `detailText`("호감도 +N")로 표시만 한다.
+  별도 WORKLOG)이 소유하고, Store는 `detailText`("친밀도 +N")로 표시만 한다.
   설계 책임 이관: `../CharacterDetail/Affinity_Store_Integration.md`.
 - **포즈 애니메이션 연동 구현** — Playables one-shot 기반 PoseSystem(PoseManager + equipped_pose
   저장). 검토 완료: `Store_PoseAnimation_Review.md` 1장. 클립 데이터 소스(`StoreDetailPoseCatalog`)는 구현됨.
@@ -255,7 +258,7 @@ int sell = storeView.GetSellPrice(key);   // 판매가 질의 (카탈로그 밖�
 - 이펙트 아이템의 실제 발동 연동(쓰다듬기/클릭 파티클) — **정지컷 프리뷰는 구현됨**
   (`StoreDetailEffectCatalog` + 리그 이펙트 캡처), 실제 발동(쓰다듬기/클릭 연동)은 남음.
 - 의상 탭(캐릭터별 가변 상품) — 캐릭터 컨텍스트 설계 후 예비 슬롯에 추가.
-- 인연도 단계 한정 상품(단계 미달 시 잠금 표시) / 상품 로테이션(기간/일일 갱신).
+- 친밀도 단계 한정 상품(단계 미달 시 잠금 표시) / 상품 로테이션(기간/일일 갱신).
   설계 책임 이관: `../CharacterDetail/Affinity_Store_Integration.md`.
 - UIManager/실앱 통합(데모 씬 → SampleScene 배선, 열기 버튼).
 - 전용 장신구 판매불가 플래그(카탈로그에 sellable 필드).

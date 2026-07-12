@@ -124,7 +124,7 @@ public static class StoreTools
             new[] { 50, 120, 300 },
             new[] { StoreIconType.File, StoreIconType.File, StoreIconType.File },
             new Sprite[] { null, null, null },
-            new[] { "호감도 +10", "호감도 +30", "호감도 +100" });
+            new[] { "친밀도 +10", "친밀도 +30", "친밀도 +100" });
         StoreTagCatalog miscCat = CreateTagCatalog(
             TagMiscCatalogPath,
             new[] { "snack_banana", "potion_energy", "ticket_random" },
@@ -313,7 +313,7 @@ public static class StoreTools
         if (invCat == null)
         {
             Debug.LogError($"[Store][StoreTools] InventoryCatalog을 찾을 수 없습니다: {InventoryCatalogPath} " +
-                           "(먼저 'Tools/InventorySystem/1. Create Catalog'를 실행하세요. 상점 카탈로그만 생성하고 계속합니다)");
+                           "(이 에셋은 커밋된 베이크 산출물입니다 — 생성 도구 Tools/InventorySystem은 삭제되었으니 리포지토리에서 복원하세요. 상점 카탈로그만 생성하고 계속합니다)");
             return;
         }
 
@@ -904,7 +904,7 @@ public static class StoreTools
         else
         {
             Debug.LogError($"[Store][StoreTools] 인벤토리 패널 프리팹 없음: {InventoryPanelPath} " +
-                           "(먼저 'Tools/InventorySystem/Setup All'을 실행하세요. 인벤토리 패널 없이 씬을 계속 빌드합니다)");
+                           "(InventoryPanel.prefab은 커밋된 베이크 산출물입니다 — 생성 도구 Tools/InventorySystem은 삭제되었으니 리포지토리에서 복원하세요. 인벤토리 패널 없이 씬을 계속 빌드합니다)");
         }
 
         // 상점 패널 (좌측, Show 상태 — S로 토글)

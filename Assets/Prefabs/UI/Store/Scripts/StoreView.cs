@@ -19,7 +19,7 @@ using UnityEngine.UI;
 ///  - 구매: 카드 클릭 → StoreConfirmView(Buy 모드, 수량/최종금액 확인 팝업) → 확인 시 SpendGold → AddToMain(key, 수량).
 ///          AddToMain 실패 시 전액 환불. 장착물 탭 구매 성공 시 MissionList.Report("AF0005", 수량).
 ///  - 판매: StoreSellZone(IDropHandler)이 드롭 검증 후 RequestSell 호출 → StoreConfirmView(Sell 모드,
-///          수량 선택) → 확인 시 ExecuteSale(스택 차감 + AddGold) → NotifySold.
+///          수량 선택) → 확인 시 ExecuteSale(스택 차감 + EarnGold) → NotifySold.
 ///  - 골드 표시: InventoryManager.InventoryChanged 구독. 보유 수: InventoryEvents.OnStoreChanged 구독.
 /// </summary>
 public class StoreView : MonoBehaviour
@@ -398,7 +398,8 @@ public class StoreView : MonoBehaviour
         if (manager == null || manager.AddToMain(entry.key, quantity) == false)
         {
             // 지급 실패 → 전액 환불 (AddToMain이 카탈로그 검증/최대 스택에서 거부할 수 있다)
-            wallet.AddGold(total);
+            // 실패한 결제의 되돌림이라 RefundGold — earned/spent 누적을 펌핑하지 않는다
+            wallet.RefundGold(total);
             ShowToast("아이템 지급에 실패해 환불되었습니다");
             Debug.LogWarning($"[Store][StoreView] AddToMain 실패로 환불: {entry.key} x{quantity} ({total} G)");
             return;
@@ -489,7 +490,7 @@ public class StoreView : MonoBehaviour
         InventoryEvents.OnStoreChanged?.Invoke(InventorySystemManager.MainOwnerId);
 
         int total = GetSellPrice(key) * quantity;
-        wallet.AddGold(total);
+        wallet.EarnGold(total);
         NotifySold(ResolveSellDisplayName(key), quantity, total);
         Debug.Log($"[Store][StoreView] 판매: {key} x{quantity} → +{total}G");
     }

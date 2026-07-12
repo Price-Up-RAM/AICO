@@ -333,7 +333,6 @@ public class MissionList : MonoBehaviour
             {
                 SetCurrent("CH0001", inv.GoldEarnedTotal);
                 SetCurrent("CH0007", inv.GoldSpentTotal);
-                SetCurrent("CH0008", inv.ItemTotal);
             }
 
             SetCurrent("CH0003", AllTabDone(MissionTab.Onboarding) ? 1 : 0);

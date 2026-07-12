@@ -2,14 +2,11 @@ using System;
 using System.IO;
 using UnityEngine;
 
-// gold/item1~3 재화 보유. inventory.json으로 영속 저장. 미션 보상 적립 대상. 런타임 접근 시 자동 생성.
+// gold 재화 보유. inventory.json으로 영속 저장. 미션 보상 적립 대상. 런타임 접근 시 자동 생성.
 [Serializable]
 public class InventoryData
 {
     public int gold;
-    public int item1;
-    public int item2;
-    public int item3;
     public int goldEarnedTotal;  // 누적 획득(도전 미션용)
     public int goldSpentTotal;   // 누적 소비(도전 미션용)
 }
@@ -44,7 +41,6 @@ public class InventoryManager : MonoBehaviour
     public int Gold => data.gold;
     public int GoldEarnedTotal => data.goldEarnedTotal;
     public int GoldSpentTotal => data.goldSpentTotal;
-    public int ItemTotal => data.item1 + data.item2 + data.item3;
 
     private string SavePath => Path.Combine(Application.persistentDataPath, "inventory.json");
 
@@ -101,47 +97,37 @@ public class InventoryManager : MonoBehaviour
         InventoryChanged?.Invoke();
     }
 
-    public int GetItem(int slot)
+    // 소득 — 잔액과 누적 획득(goldEarnedTotal)을 함께 올린다(CH0001 골드 모으기 반응).
+    public void EarnGold(int amount)
     {
-        switch (slot)
-        {
-            case 1: return data.item1;
-            case 2: return data.item2;
-            case 3: return data.item3;
-            default: return 0;
-        }
-    }
-
-    public InventoryData GetSnapshot()
-    {
-        return new InventoryData
-        {
-            gold = data.gold,
-            item1 = data.item1,
-            item2 = data.item2,
-            item3 = data.item3,
-            goldEarnedTotal = data.goldEarnedTotal,
-            goldSpentTotal = data.goldSpentTotal,
-        };
-    }
-
-    public void AddGold(int amount)
-    {
-        if (amount == 0)
+        if (amount <= 0)
         {
             return;
         }
 
-        if (amount > 0)
+        data.gold += amount;
+        data.goldEarnedTotal += amount;
+        Persist();
+    }
+
+    // 순수 잔액 변경 — 미션류(누적 획득/소비)에 잡히지 않는 db성 변경. 음수 가능(0 하한).
+    public void AddGold(int amount)
+    {
+        data.gold = Mathf.Max(0, data.gold + amount);
+        Persist();
+    }
+
+    // 실패한 결제 되돌림 — 잔액 복구 + 누적 소비(goldSpentTotal) 차감.
+    // CH0007(골드 소비하기) 진행도가 뒤로 물러나는 것은 의도된 동작(실패 결제는 소비가 아님).
+    public void RefundGold(int amount)
+    {
+        if (amount <= 0)
         {
-            data.gold += amount;
-            data.goldEarnedTotal += amount;
-        }
-        else
-        {
-            data.gold = Mathf.Max(0, data.gold + amount);
+            return;
         }
 
+        data.gold += amount;
+        data.goldSpentTotal = Mathf.Max(0, data.goldSpentTotal - amount);
         Persist();
     }
 
@@ -158,29 +144,7 @@ public class InventoryManager : MonoBehaviour
         return true;
     }
 
-    public void AddItem(int slot, int amount)
-    {
-        if (amount == 0)
-        {
-            return;
-        }
-
-        SetItem(slot, Mathf.Max(0, GetItem(slot) + amount));
-        Persist();
-    }
-
-    public bool SpendItem(int slot, int amount)
-    {
-        if (amount <= 0 || GetItem(slot) < amount)
-        {
-            return false;
-        }
-
-        SetItem(slot, GetItem(slot) - amount);
-        Persist();
-        return true;
-    }
-
+    // 미션 보상 적립 — gold는 소득(Earn) 의미(양수면 누적 획득에도 가산).
     public void AddReward(MissionReward reward)
     {
         if (reward == null || reward.IsEmpty)
@@ -190,16 +154,13 @@ public class InventoryManager : MonoBehaviour
 
         if (reward.gold != 0)
         {
-            data.gold += reward.gold;
+            // 음수 보상이 정의돼도 잔액 불변식(0 하한)은 지킨다 — 다른 진입점들과 동일
+            data.gold = Mathf.Max(0, data.gold + reward.gold);
             if (reward.gold > 0)
             {
                 data.goldEarnedTotal += reward.gold;
             }
         }
-
-        if (reward.item1 != 0) data.item1 = Mathf.Max(0, data.item1 + reward.item1);
-        if (reward.item2 != 0) data.item2 = Mathf.Max(0, data.item2 + reward.item2);
-        if (reward.item3 != 0) data.item3 = Mathf.Max(0, data.item3 + reward.item3);
 
         Persist();
     }
@@ -207,21 +168,8 @@ public class InventoryManager : MonoBehaviour
     public void ResetAll()
     {
         data.gold = 0;
-        data.item1 = 0;
-        data.item2 = 0;
-        data.item3 = 0;
         data.goldEarnedTotal = 0;
         data.goldSpentTotal = 0;
         Persist();
-    }
-
-    private void SetItem(int slot, int value)
-    {
-        switch (slot)
-        {
-            case 1: data.item1 = value; break;
-            case 2: data.item2 = value; break;
-            case 3: data.item3 = value; break;
-        }
     }
 }

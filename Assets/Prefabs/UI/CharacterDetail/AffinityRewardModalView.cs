@@ -2,12 +2,12 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-// 인연도 레벨 보상 수령 모달 (프로토타입).
+// 친밀도 레벨 보상 수령 모달 (프로토타입).
 // - 계층은 에디터 툴(AffinityUiTools)이 CharacterDetail.prefab 안에 베이크하고, Awake의 BindExisting이
 //   이름 계약으로 재연결한다 (StoreConfirmView 패턴). 표시/숨김은 CanvasGroup만 조작(SetActive 금지).
 // - 레벨 행(Row)은 열 때마다 코드로 생성한다(SkillView 방식) — 폰트는 베이크된 타이틀에서 캡처.
-// - 보상 정의/계산은 AffinityData, 수령 상태 저장은 SettingCharManager(affinityClaimedLevels),
-//   골드 지급은 Mission 지갑 InventoryManager를 재사용한다(새 지갑 금지).
+// - 보상 정의는 AffinityData.RewardsFor(타입 확장 모델), 수령/해금 저장은 SettingCharManager,
+//   지급은 GrantRewards 라우터(Currency→CurrencyManager, Item→ItemSystemManager, Border/Title→해금 기록).
 public class AffinityRewardModalView : MonoBehaviour
 {
     private static readonly Color RowBg = new Color(0.176f, 0.196f, 0.243f, 1f);
@@ -29,6 +29,16 @@ public class AffinityRewardModalView : MonoBehaviour
 
     private string currentCharacterId;
     private bool bound;
+
+    // UI 언어 번역 헬퍼 — 매니저 부재 시 원문 반환 (LanguageData.Translate는 미등록 문자열이면 원문 반환)
+    private static string T(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        if (LanguageManager.Instance == null || SettingManager.Instance == null || SettingManager.Instance.settings == null) return text;
+        // 레거시 settings.json에는 ui_language가 없을 수 있음 — null이면 Translate 내부 TryGetValue(null) 예외
+        if (string.IsNullOrEmpty(SettingManager.Instance.settings.ui_language)) return text;
+        return LanguageManager.Instance.Translate(text);
+    }
 
     private void Awake()
     {
@@ -113,7 +123,7 @@ public class AffinityRewardModalView : MonoBehaviour
 
         int level = AffinityData.LevelFor(points);
         string levelLabel = level >= AffinityData.MaxLevel ? "Lv.MAX" : "Lv." + level.ToString("00");
-        SetText(summaryText, levelLabel + " · " + AffinityData.StageNameFor(level) + " · " + points + " / " + AffinityData.MaxPoints);
+        SetText(summaryText, levelLabel + " · " + T(AffinityData.StageNameFor(level)) + " · " + points + " / " + AffinityData.MaxPoints);
 
         for (int rewardLevel = 1; rewardLevel <= AffinityData.MaxLevel; rewardLevel++)
         {
@@ -139,13 +149,13 @@ public class AffinityRewardModalView : MonoBehaviour
             reached ? GoldYellow : TextMuted, TextAlignmentOptions.MidlineLeft);
         SetRect(levelText.rectTransform, new Vector2(12f, 0f), new Vector2(56f, 40f));
 
-        TextMeshProUGUI descText = CreateText("DescText", row.transform, AffinityData.RewardDescFor(rewardLevel), 14,
+        TextMeshProUGUI descText = CreateText("DescText", row.transform, T(AffinityData.RewardDescFor(rewardLevel)), 14,
             reached ? TextWhite : TextMuted, TextAlignmentOptions.MidlineLeft);
         SetRect(descText.rectTransform, new Vector2(70f, 0f), new Vector2(170f, 40f));
 
         if (claimed)
         {
-            TextMeshProUGUI done = CreateText("StateText", row.transform, "수령 완료", 13, TextMuted, TextAlignmentOptions.Midline);
+            TextMeshProUGUI done = CreateText("StateText", row.transform, T("수령 완료"), 13, TextMuted, TextAlignmentOptions.Midline);
             SetRectRight(done.rectTransform, new Vector2(-10f, 0f), new Vector2(76f, 26f));
         }
         else if (reached)
@@ -160,12 +170,12 @@ public class AffinityRewardModalView : MonoBehaviour
             int captured = rewardLevel;
             button.onClick.AddListener(() => OnClaimClicked(captured));
 
-            TextMeshProUGUI label = CreateText("ClaimButton_Text", buttonObject.transform, "수령", 13, TextWhite, TextAlignmentOptions.Midline);
+            TextMeshProUGUI label = CreateText("ClaimButton_Text", buttonObject.transform, T("수령"), 13, TextWhite, TextAlignmentOptions.Midline);
             StretchFull(label.rectTransform);
         }
         else
         {
-            TextMeshProUGUI lockedText = CreateText("StateText", row.transform, "미도달", 13, TextMuted, TextAlignmentOptions.Midline);
+            TextMeshProUGUI lockedText = CreateText("StateText", row.transform, T("미도달"), 13, TextMuted, TextAlignmentOptions.Midline);
             SetRectRight(lockedText.rectTransform, new Vector2(-10f, 0f), new Vector2(76f, 26f));
         }
     }
@@ -179,17 +189,14 @@ public class AffinityRewardModalView : MonoBehaviour
 
         if (!SettingCharManager.Instance.ClaimAffinityReward(currentCharacterId, rewardLevel)) return;
 
-        if (InventoryManager.Instance != null)
-        {
-            InventoryManager.Instance.AddGold(AffinityData.RewardGoldFor(rewardLevel));
-        }
+        GrantRewards(AffinityData.RewardsFor(rewardLevel));
 
         Debug.Log("[CharacterDetail][AffinityModal] 보상 수령: char=" + currentCharacterId + " Lv." + rewardLevel +
                   " gold=" + AffinityData.RewardGoldFor(rewardLevel));
         RefreshRows();
     }
 
-    // 도달한 레벨의 미수령 보상을 한 번에 수령 (골드는 합산 1회 지급)
+    // 도달한 레벨의 미수령 보상을 한 번에 수령
     private void OnClaimAllClicked()
     {
         if (SettingCharManager.Instance == null) return;
@@ -198,27 +205,73 @@ public class AffinityRewardModalView : MonoBehaviour
         if (setting == null) return;
 
         int level = AffinityData.LevelFor(setting.affinityPoints);
-        int totalGold = 0;
         int claimedCount = 0;
         for (int rewardLevel = 1; rewardLevel <= level; rewardLevel++)
         {
             if (SettingCharManager.Instance.ClaimAffinityReward(currentCharacterId, rewardLevel))
             {
-                totalGold += AffinityData.RewardGoldFor(rewardLevel);
+                GrantRewards(AffinityData.RewardsFor(rewardLevel));
                 claimedCount++;
             }
         }
 
         if (claimedCount == 0) return;
 
-        if (InventoryManager.Instance != null)
-        {
-            InventoryManager.Instance.AddGold(totalGold);
-        }
-
-        Debug.Log("[CharacterDetail][AffinityModal] 전부 수령: char=" + currentCharacterId +
-                  " levels=" + claimedCount + " gold=" + totalGold);
+        Debug.Log("[CharacterDetail][AffinityModal] 전부 수령: char=" + currentCharacterId + " levels=" + claimedCount);
         RefreshRows();
+    }
+
+    // 보상 지급 라우터 — 타입별 지급 경로.
+    // Currency: CurrencyManager(골드는 내부에서 레거시 지갑에 위임 — 미션 집계 유지) / Item: ItemSystemManager /
+    // Border·Title: 캐릭터 단위 해금(settings_char.json의 affinityUnlockedIds).
+    private void GrantRewards(System.Collections.Generic.List<AffinityRewardDef> rewards)
+    {
+        if (rewards == null) return;
+
+        foreach (AffinityRewardDef def in rewards)
+        {
+            switch (def.type)
+            {
+                case AffinityRewardType.Currency:
+                    // Earn은 실패할 수 있다(재화 카탈로그 부재/미등재 키) — 골드는 레거시 지갑으로 폴백, 그래도 실패면 유실 경고
+                    bool earned = CurrencyManager.Instance != null && CurrencyManager.Instance.Earn(def.id, def.amount);
+                    if (!earned && def.id == AffinityData.CurrencyGoldKey && InventoryManager.Instance != null)
+                    {
+                        InventoryManager.Instance.EarnGold(def.amount);
+                        earned = true;
+                    }
+                    if (!earned)
+                    {
+                        Debug.LogError("[CharacterDetail][AffinityModal] 재화 지급 실패(유실) — key=" + def.id + " amount=" + def.amount);
+                    }
+                    break;
+
+                case AffinityRewardType.Item:
+                    if (string.IsNullOrEmpty(def.id))
+                    {
+                        // 전용 장신구 키 미정 — 수령 이력을 남겨 카탈로그 확정 후 백필 가능하게 한다
+                        if (SettingCharManager.Instance != null)
+                        {
+                            SettingCharManager.Instance.UnlockAffinityReward(currentCharacterId, AffinityData.PendingSignatureItemId);
+                        }
+                        Debug.Log("[CharacterDetail][AffinityModal] 아이템 보상 보류 — 키 미정 (전용 장신구 카탈로그 후속, pending 기록됨)");
+                        break;
+                    }
+                    if (ItemSystemManager.Instance == null || !ItemSystemManager.Instance.GrantItem(def.id, def.amount))
+                    {
+                        Debug.LogError("[CharacterDetail][AffinityModal] 아이템 지급 실패(유실) — key=" + def.id + " amount=" + def.amount);
+                    }
+                    break;
+
+                case AffinityRewardType.Border:
+                case AffinityRewardType.Title:
+                    if (SettingCharManager.Instance != null)
+                    {
+                        SettingCharManager.Instance.UnlockAffinityReward(currentCharacterId, def.id);
+                    }
+                    break;
+            }
+        }
     }
 
     // 프로토타입 테스트용 — 포인트 획득 규칙이 확정되면 제거한다.

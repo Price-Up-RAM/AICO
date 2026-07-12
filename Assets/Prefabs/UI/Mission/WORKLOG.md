@@ -11,8 +11,14 @@
   - `MissionList.cs` — **싱글톤. `List<MissionInfo>`를 코드(`BuildMissions`)로 1줄씩 보유(38개)**.
     `GetByTab/GetById/Report/ReportFlag/ClaimReward/TestIncrement/ResetAllProgress/GetTabCounts/IsClaimable`,
     인벤토리 연동(보상 적립), **메타/도전 파생 진행도 자동 계산**. 저장 없음(메모리). 재진입 가드.
-  - `InventoryManager.cs` — gold/item1~3 재화 싱글톤(**메모리 전용**, JSON 없음).
-    `AddGold/SpendGold/AddItem/SpendItem/AddReward/ResetAll` + `InventoryChanged`, 누적 획득/소비 통계.
+  - `InventoryManager.cs` — **gold 단일 재화** 싱글톤(`inventory.json` 영속). 아이템(i1~3) 재화는 폐지.
+    `EarnGold/AddGold/RefundGold/SpendGold/AddReward/ResetAll` + `InventoryChanged`, 누적 획득/소비 통계.
+    - **Earn/Add/Refund 의미론**:
+      - `EarnGold` = 소득. 잔액 + 누적 획득(`goldEarnedTotal`) 동시 가산 → CH0001(골드 모으기) 반응.
+      - `AddGold` = 순수 잔액 변경(0 하한). 누적 집계 무반응 — 미션류에 잡히지 않는 db성 변경(치트/데모 지급 등).
+      - `RefundGold` = 실패한 결제 되돌림. 잔액 복구 + 누적 소비(`goldSpentTotal`) 차감.
+        **환불 시 CH0007(골드 소비하기) 진행 후퇴는 의도된 동작**(실패 결제는 소비가 아님).
+      - `AddReward`(미션 보상)의 gold는 Earn 의미(양수면 누적 획득 가산).
 - **UI (이중 모드: Build/BindExisting)**
   - `MissionUi.cs` — 공통 팩토리/다크 팔레트(SkillView 차용).
   - `MissionTabButton.cs` — 좌측 카테고리 탭(선택 강조 + `달성/전체` 뱃지).
@@ -30,6 +36,9 @@
 - **영속성**: 진행도는 `missions.json`(id/current/claimedTiers), 재화는 `inventory.json`(평문). 정의는 코드(`MissionDatabase`)에만.
 - **집계 방식**: `Report`(누적) / `ReportFlag`(단발) / `ReportBest`(한 세션 최고치, 예 "한 번의 대화에 바나나 5회") / 인벤토리·메타는 `UpdateDerived` 자동.
 - 미션 정의는 `MissionDatabase.Build()`에 코드로 1줄씩. 추가/수정은 여기서(프리팹 재베이크 불필요, UI 구조 바꿀 때만 베이크).
+- **보상은 gold 단일**: 아이템(i1~3) 재화·보상 성분을 폐지하고, 아이템 성분이 있던 티어는 **티어당 +100G로 일괄 환산**.
+  '아이템 모으기' 도전 미션(구 `cha_item_own`)은 DB에서 삭제 — 저장 파일(`missions.json`)에 남은 해당 진행도는
+  `LoadProgress`가 미지 id로 스킵하고 다음 저장에서 자연 소멸. 보상 셀 순환(다중 보상 페이드)도 제거(단일 셀 고정).
 - 도장/서랍 애니메이션은 DOTween(`Assets/Plugins/Demigiant/DOTween`).
 
 ## 내가(사용자가) 해야 할 일
@@ -49,7 +58,7 @@
 ## 남은 것 / 열린 결정
 
 - 실제 게임 이벤트 → `Report` 훅 배선(감정 분류·친밀도·캐릭터 변경 등).
-- item1~3의 정체/아이콘, 보상 칩 아이콘화(현재 텍스트 `G/i1/i2/i3`).
+- 보상 칩 아이콘화(현재 골드 아이콘 미지정 시 텍스트 폴백 `G50`).
 - `Increment` 레벨 보상 점증, 메타 보상 수치 밸런싱.
 - UIManager/UIPositionManager 등록(열기 버튼/위치).
 - 도장 이미지·효과음 에셋(현재 색상 원형 + "달성" 텍스트, 무음 가드).

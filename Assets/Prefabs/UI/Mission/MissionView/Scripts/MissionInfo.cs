@@ -22,63 +22,20 @@ public enum MissionType
     Tiered,     // 열거형: 정해진 단계 배열(단계마다 목표·보상)
 }
 
+// 보상은 gold 단일 성분(과거 아이템 성분 i1~3은 티어당 +100G로 일괄 환산해 흡수).
 [Serializable]
 public class MissionReward
 {
     public int gold;
-    public int item1;
-    public int item2;
-    public int item3;
 
     public MissionReward() { }
 
-    public MissionReward(int gold, int item1 = 0, int item2 = 0, int item3 = 0)
+    public MissionReward(int gold)
     {
         this.gold = gold;
-        this.item1 = item1;
-        this.item2 = item2;
-        this.item3 = item3;
     }
 
-    public bool IsEmpty => gold == 0 && item1 == 0 && item2 == 0 && item3 == 0;
-
-    public int RewardKinds =>
-        (gold != 0 ? 1 : 0) + (item1 != 0 ? 1 : 0) + (item2 != 0 ? 1 : 0) + (item3 != 0 ? 1 : 0);
-
-    // kind: 0=gold, 1=item1, 2=item2, 3=item3 — 보상 종류 처리를 한 곳(데이터)에 모음.
-    public int ValueOf(int kind)
-    {
-        switch (kind)
-        {
-            case 0: return gold;
-            case 1: return item1;
-            case 2: return item2;
-            case 3: return item3;
-            default: return 0;
-        }
-    }
-
-    public List<int> NonZeroKinds()
-    {
-        List<int> list = new List<int>();
-        if (gold != 0) list.Add(0);
-        if (item1 != 0) list.Add(1);
-        if (item2 != 0) list.Add(2);
-        if (item3 != 0) list.Add(3);
-        return list;
-    }
-
-    public static string KindLabel(int kind)
-    {
-        switch (kind)
-        {
-            case 0: return "G";
-            case 1: return "i1";
-            case 2: return "i2";
-            case 3: return "i3";
-            default: return string.Empty;
-        }
-    }
+    public bool IsEmpty => gold == 0;
 }
 
 // 다국어 제목 (ko/en/ja).

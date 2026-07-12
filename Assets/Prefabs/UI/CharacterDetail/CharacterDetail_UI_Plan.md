@@ -15,14 +15,14 @@ Create a wide character detail UI prefab only, without binding scripts or runtim
 2. Portrait column
    - Large character portrait placeholder.
    - Status tag row for `사용가능`, `다운로드필요`.
-   - Affection container with `호감도 0/100` and `친밀`.
+   - Affection container with `호감도 0/100` and `친밀`. (구 표기 — 이후 친밀도(affinity) 블록으로 교체됨, `Affinity_Plan.md` 6장 참조)
 3. Information column
    - Name TextMeshPro title.
    - Source and form fields.
    - Available feature tags as rounded text pills.
    - Voice TMP dropdown with hardcoded options `남자1~15`, `여자1~25`.
    - Prompt area with copy/reset buttons in the upper right and multiline TMP input field.
-   - Affinity(인연도) TMP dropdown and direct input field, initially inactive.
+   - Affinity(친밀도) TMP dropdown and direct input field, initially inactive.
    - Conversation count, costume count, and default alarm voice buttons.
 
 ## Notes

@@ -1,6 +1,4 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using DG.Tweening;
 using TMPro;
 using UnityEngine;
@@ -33,9 +31,6 @@ public class MissionCardRow : MonoBehaviour, IPointerClickHandler
 
     private MissionInfo def;
     private MissionReward currentReward;
-    private readonly List<int> cycleKinds = new List<int>();
-    private int cycleIndex;
-    private Coroutine cycleCo;
     private bool drawerOpen;
     private bool bound;
 
@@ -108,7 +103,6 @@ public class MissionCardRow : MonoBehaviour, IPointerClickHandler
 
     private void OnDisable()
     {
-        StopCycle();
         // 파괴/비활성 시 진행 중인 트윈 정리(destroyed target 트윈 경고 방지)
         if (stamp != null) stamp.transform.DOKill();
         if (stampGroup != null) stampGroup.DOKill();
@@ -124,7 +118,6 @@ public class MissionCardRow : MonoBehaviour, IPointerClickHandler
         this.onDrawerOpen = onDrawerOpen;
 
         CloseDrawerImmediate();
-        StopCycle();
 
         if (info == null)
         {
@@ -163,24 +156,17 @@ public class MissionCardRow : MonoBehaviour, IPointerClickHandler
             tierLabel.gameObject.SetActive(!string.IsNullOrEmpty(tierLabel.text));
         }
 
-        // 보상 셀/서랍 — 달성 완료면 '마지막으로 받은' 단계 보상을 보여준다(빈 흰 칸 방지).
+        // 보상 셀/서랍 — 달성 완료면 '마지막으로 받은' 단계 보상을 보여준다(빈 흰 칸 방지). 보상은 gold 단일.
         int rewardLevel = allDone ? Mathf.Max(0, level - 1) : level;
         currentReward = info.RewardForLevel(rewardLevel);
-        cycleKinds.Clear();
-        if (currentReward != null)
-        {
-            cycleKinds.AddRange(currentReward.NonZeroKinds());
-        }
-
-        cycleIndex = 0;
         if (rewardContentGroup != null)
         {
             rewardContentGroup.alpha = 1f;
         }
 
-        if (cycleKinds.Count > 0)
+        if (currentReward != null && currentReward.IsEmpty == false)
         {
-            MissionUi.ApplyRewardCell(rewardIcon, rewardAmount, cycleKinds[0], currentReward.ValueOf(cycleKinds[0]));
+            MissionUi.ApplyRewardCell(rewardIcon, rewardAmount, currentReward.gold);
         }
         else if (rewardAmount != null)
         {
@@ -189,12 +175,6 @@ public class MissionCardRow : MonoBehaviour, IPointerClickHandler
         }
 
         BuildDrawer();
-
-        // 다중 보상이면 3초마다 내용(Content)만 페이드로 순환(배경 흰 박스는 유지)
-        if (cycleKinds.Count > 1 && isActiveAndEnabled)
-        {
-            cycleCo = StartCoroutine(CycleRoutine());
-        }
 
         // 상태별 카드 색: 미수행 / 수령가능 / 달성 셋 다 다르게
         if (background != null)
@@ -294,6 +274,7 @@ public class MissionCardRow : MonoBehaviour, IPointerClickHandler
     }
 
     // ── 보상 셀 렌더 ──────────────────────────────────────────────────────────
+    // 서랍은 gold 단일 셀 1개(대표 보상 셀과 동일 크기).
     private void BuildDrawer()
     {
         if (drawerContent == null)
@@ -306,55 +287,16 @@ public class MissionCardRow : MonoBehaviour, IPointerClickHandler
             Destroy(drawerContent.GetChild(i).gameObject);
         }
 
-        for (int i = 0; i < cycleKinds.Count; i++)
+        if (currentReward == null || currentReward.IsEmpty)
         {
-            int kind = cycleKinds[i];
-            GameObject cell = MissionUi.CreateRewardCell("Chip", drawerContent, out Image ic, out TMP_Text am);
-            LayoutElement le = cell.AddComponent<LayoutElement>();
-            le.preferredWidth = 54f;   // 대표 보상 셀과 동일 크기
-            le.preferredHeight = 54f;
-            MissionUi.ApplyRewardCell(ic, am, kind, currentReward.ValueOf(kind));
-        }
-    }
-
-    private IEnumerator CycleRoutine()
-    {
-        WaitForSecondsRealtime hold = new WaitForSecondsRealtime(3f);
-        WaitForSecondsRealtime fade = new WaitForSecondsRealtime(0.3f);
-        while (true)
-        {
-            yield return hold;
-            if (rewardContentGroup != null)
-            {
-                rewardContentGroup.DOKill();
-                rewardContentGroup.DOFade(0f, 0.3f);
-            }
-
-            yield return fade;
-            cycleIndex = (cycleIndex + 1) % cycleKinds.Count;
-            MissionUi.ApplyRewardCell(rewardIcon, rewardAmount, cycleKinds[cycleIndex], currentReward.ValueOf(cycleKinds[cycleIndex]));
-            if (rewardContentGroup != null)
-            {
-                rewardContentGroup.DOFade(1f, 0.3f);
-            }
-
-            yield return fade;
-        }
-    }
-
-    private void StopCycle()
-    {
-        if (cycleCo != null)
-        {
-            StopCoroutine(cycleCo);
-            cycleCo = null;
+            return;
         }
 
-        if (rewardContentGroup != null)
-        {
-            rewardContentGroup.DOKill();
-            rewardContentGroup.alpha = 1f;
-        }
+        GameObject cell = MissionUi.CreateRewardCell("Chip", drawerContent, out Image ic, out TMP_Text am);
+        LayoutElement le = cell.AddComponent<LayoutElement>();
+        le.preferredWidth = 54f;   // 대표 보상 셀과 동일 크기
+        le.preferredHeight = 54f;
+        MissionUi.ApplyRewardCell(ic, am, currentReward.gold);
     }
 
     // ── 서랍 ─────────────────────────────────────────────────────────────────

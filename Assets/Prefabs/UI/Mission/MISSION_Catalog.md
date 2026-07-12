@@ -15,11 +15,11 @@
     `a` = **레벨이 오를 때마다 더 필요한 증가량**, `b` = 시작 보정값. 보상은 매 레벨 동일.
   - `Tiered` (열거형): **정해진 단계** 배열. 단계마다 목표·보상이 다름.
 - **목표**: `OneTime`=단일 수치 / `Tiered`=`a / b / c` (단계별) / `Increment`=**실제 식**(`10N`, `2N+1` 등).
-- **보상**: `g`=gold, `i1`~`i3`=item1~3. `Tiered`는 단계와 `/`로 정렬. `Increment`는 레벨당 보상.
+- **보상**: `g`=gold **단일**. (과거 아이템 성분 `i1`~`i3`은 폐지 — 아이템 성분이 있던 티어는 **티어당 +100G로 일괄 환산**해 흡수.) `Tiered`는 단계와 `/`로 정렬. `Increment`는 레벨당 보상.
 - **한국어 / English / 日本語**: 표시용 다국어 제목. 앱 주언어 설정에 따라 노출.
 
-> 보상이 여러 개(예: `g300, i2×1`)면 카드에서 보상 칩 클릭 시 **좌측으로 서랍이 열리며**
-> 전체 보상을 보여준다(→ MISSION_Design.md §2.1 보상 서랍).
+> 보상은 gold 단일 — 카드에서 보상 칩 클릭 시 **좌측으로 서랍이 열리며**
+> 보상(gold 단일 셀)을 보여준다(→ MISSION_Design.md §2.1 보상 서랍).
 >
 > ⚠️ 일부 미션은 미연동 시스템(감정 분류·친밀도 등)에 의존. 훅 없으면 카탈로그에만 두고
 > `Report` 배선은 추후. View 자체는 샘플로 검증.
@@ -34,7 +34,7 @@
 | `OB0002` | ob_talk_first | OneTime | 1 | g50 | '아이코'와 처음 대화해보기 | Talk to Aiko for the first time | アイコと初めて会話する |
 | `OB0003` | ob_change_char | OneTime | 1 | g50 | 캐릭터 변경해보기 | Change your character | キャラクターを変更する |
 | `OB0004` | ob_lang_change | OneTime | 1 | g50 | 주언어 설정 변경해보기 (Preference 제외) | Change main language (excl. Preference) | 主言語設定を変更する(Preference除く) |
-| `OB0005` | ob_head_pat | OneTime | 1 | i1×1 | 머리 쓰다듬어 보기 | Pat Aiko's head | 頭をなでてみる |
+| `OB0005` | ob_head_pat | OneTime | 1 | g100 | 머리 쓰다듬어 보기 | Pat Aiko's head | 頭をなでてみる |
 | `OB0006` | ob_open_settings | OneTime | 1 | g30 | 설정 화면 열어보기 | Open the settings screen | 設定画面を開く |
 | `OB0007` | ob_accessory_first | OneTime | 1 | g50 | 액세서리 처음 착용해보기 | Equip an accessory for the first time | アクセサリーを初めて装着する |
 | `OB0008` | ob_open_jukebox | OneTime | 1 | g30 | 주크박스 열어보기 | Open the jukebox | ジュークボックスを開く |
@@ -44,23 +44,24 @@
 | id | name | type | 목표 | 보상 | 한국어 | English | 日本語 |
 |----|------|------|------|------|--------|---------|--------|
 | `CV0001` | talk_emotion | OneTime | 1 | g80 | 감정 표현이 포함된 대화해보기 | Have a conversation with emotion | 感情表現を含む会話をする |
-| `CV0002` | talk_joy_5 | Tiered | 10 / 30 / 50 | g150 / g300,i2×1 / g500,i2×2 | "기쁨" 감정이 담긴 답변 받기 | Get joyful replies | 「喜び」がこもった返答をもらう |
+| `CV0002` | talk_joy_5 | Tiered | 10 / 30 / 50 | g150 / g400 / g600 | "기쁨" 감정이 담긴 답변 받기 | Get joyful replies | 「喜び」がこもった返答をもらう |
 | `CV0003` | talk_sad_5 | Tiered | 10 / 30 / 50 | g150 / g300 / g500 | "슬픔" 감정이 담긴 답변 받기 | Get sad replies | 「悲しみ」がこもった返答をもらう |
 | `CV0004` | talk_choice | OneTime | 1 | g80 | 선택지로 답변해보기 | Answer with a choice option | 選択肢で答えてみる |
 | `CV0005` | talk_choice_start | Tiered | 1 / 5 / 15 | g80 / g150 / g300 | 선택지로 대화 시작하기 | Start a conversation with a choice | 選択肢で会話を始める |
-| `CV0006` | talk_banana | OneTime | 1 | g100, i3×1 | 답변에 '바나나' 포함하기 | Get "banana" in a reply | 返答に「バナナ」を含める |
-| `CV0007` | talk_count_10 | Tiered | 10 / 50 / 100 | g100 / g300,i2×1 / g600,i2×2 | 대화하기 | Talk with Aiko | アイコと会話する |
+| `CV0006` | talk_banana | OneTime | 1 | g200 | 답변에 '바나나' 포함하기 | Get "banana" in a reply | 返答に「バナナ」を含める |
+| `CV0007` | talk_count_10 | Tiered | 10 / 50 / 100 | g100 / g400 / g700 | 대화하기 | Talk with Aiko | アイコと会話する |
 | `CV0008` | talk_long | OneTime | 1 | g80 | 한 번에 긴 대화 나누기 | Have a long conversation at once | 一度に長い会話をする |
 | `CV0009` | talk_choice_10 | Tiered | 10 / 30 | g200 / g400 | 선택지로 대화하기 | Have choice-based conversations | 選択肢で会話する |
+| `CV0010` | talk_banana_best | Tiered | 5 / 10 | g120 / g400 | 한 번의 대화에 '바나나' 포함하기 | Get "banana" N times in one conversation | 一度の会話で「バナナ」をN回出す |
 
 ## 교감 (AF)
 
 | id | name | type | 목표 | 보상 | 한국어 | English | 日本語 |
 |----|------|------|------|------|--------|---------|--------|
 | `AF0001` | aff_pat | Increment | 10N | g100 (매 레벨) | 머리 쓰다듬기 | Pat Aiko's head | 頭をなでる |
-| `AF0002` | aff_see_all_emotion | OneTime | 6 | g200, i2×1 | 모든 감정 표현 보기 | See all emotional expressions | 全ての感情表現を見る |
+| `AF0002` | aff_see_all_emotion | OneTime | 6 | g300 | 모든 감정 표현 보기 | See all emotional expressions | 全ての感情表現を見る |
 | `AF0003` | aff_char_change | OneTime | 5 | g120 | 캐릭터 변경 | Change your character | キャラクターを変更する |
-| `AF0004` | aff_affinity_up | Increment | 2N+1 | g100 (매 레벨) | 인연도 레벨업 | Level up affinity | 親密度をレベルアップする |
+| `AF0004` | aff_affinity_up | Increment | 2N+1 | g100 (매 레벨) | 친밀도 레벨업 | Level up affinity | 親密度をレベルアップする |
 | `AF0005` | aff_accessory_buy | Tiered | 5 / 15 / 30 | g150 / g300 / g600 | 액세서리 구매하기 | Buy accessories | アクセサリーを購入する |
 
 ## 생활 (PR)
@@ -69,7 +70,7 @@
 |----|------|------|------|------|--------|---------|--------|
 | `PR0001` | pro_alarm_create | Tiered | 1 / 5 / 10 | g50 / g120 / g250 | 알람 만들기 | Create alarms | アラームを作成する |
 | `PR0002` | pro_timer_use | OneTime | 1 | g50 | 타이머 사용해보기 | Use a timer | タイマーを使ってみる |
-| `PR0003` | pro_pomodoro_1 | Tiered | 1 / 5 / 20 | g80 / g200,i2×1 / g500 | 포모도로 완료하기 | Complete pomodoro sessions | ポモドーロを完了する |
+| `PR0003` | pro_pomodoro_1 | Tiered | 1 / 5 / 20 | g80 / g300 / g500 | 포모도로 완료하기 | Complete pomodoro sessions | ポモドーロを完了する |
 | `PR0004` | pro_todo_add | OneTime | 1 | g40 | 할 일 추가하기 | Add a to-do | やることを追加する |
 | `PR0005` | pro_todo_done_10 | Increment | 10N | g120 (매 레벨) | 할 일 완료하기 | Complete to-dos | やることを完了する |
 | `PR0006` | pro_calendar_add | OneTime | 1 | g40 | 일정 추가하기 | Add a calendar event | 予定を追加する |
@@ -80,20 +81,30 @@
 
 | id | name | type | 목표 | 보상 | 한국어 | English | 日本語 |
 |----|------|------|------|------|--------|---------|--------|
-| `CH0001` | cha_gold | Tiered | 100 / 1000 / 5000 | i1×1 / i2×1,i3×1 / i3×3 | 골드 모으기 | Accumulate gold | ゴールドを貯める |
-| `CH0002` | cha_mission_all | Tiered | 10 / 25 / 50 | g300 / g600,i3×1 / g1500,i3×2 | 미션 달성하기 | Clear missions | ミッションを達成する |
-| `CH0003` | cha_clear_ob | OneTime | 1 | g300, i1×1 | '첫걸음' 미션 모두 달성 | Complete all Onboarding missions | 「はじめの一歩」を全て達成する |
-| `CH0004` | cha_clear_cv | OneTime | 1 | g400, i2×1 | '대화' 미션 모두 달성 | Complete all Conversation missions | 「会話」ミッションを全て達成する |
-| `CH0005` | cha_clear_af | OneTime | 1 | g400, i2×1 | '교감' 미션 모두 달성 | Complete all Affection missions | 「ふれあい」ミッションを全て達成する |
-| `CH0006` | cha_clear_pr | OneTime | 1 | g400, i2×1 | '생활' 미션 모두 달성 | Complete all Productivity missions | 「生活」ミッションを全て達成する |
-| `CH0007` | cha_gold_spend | Tiered | 100 / 1000 / 5000 | i1×1 / i2×1 / i3×1 | 골드 소비하기 | Spend gold | ゴールドを使う |
-| `CH0008` | cha_item_own | Tiered | 5 / 20 / 50 | g300 / g800 / g2000 | 아이템 모으기 | Own items | アイテムを集める |
+| `CH0001` | cha_gold | Tiered | 100 / 1000 / 5000 | g100 / g100 / g100 | 골드 모으기 | Accumulate gold | ゴールドを貯める |
+| `CH0002` | cha_mission_all | Tiered | 10 / 25 / 50 | g300 / g700 / g1600 | 미션 달성하기 | Clear missions | ミッションを達成する |
+| `CH0003` | cha_clear_ob | OneTime | 1 | g400 | '첫걸음' 미션 모두 달성 | Complete all Onboarding missions | 「はじめの一歩」を全て達成する |
+| `CH0004` | cha_clear_cv | OneTime | 1 | g500 | '대화' 미션 모두 달성 | Complete all Conversation missions | 「会話」ミッションを全て達成する |
+| `CH0005` | cha_clear_af | OneTime | 1 | g500 | '교감' 미션 모두 달성 | Complete all Affection missions | 「ふれあい」ミッションを全て達成する |
+| `CH0006` | cha_clear_pr | OneTime | 1 | g500 | '생활' 미션 모두 달성 | Complete all Productivity missions | 「生活」ミッションを全て達成する |
+| `CH0007` | cha_gold_spend | Tiered | 100 / 1000 / 5000 | g100 / g100 / g100 | 골드 소비하기 | Spend gold | ゴールドを使う |
 
-**합계: OB 8 + CV 9 + AF 5 + PR 8 + CH 8 = 38.** (수집 폐지, 접속/일자 삭제, 메타 카테고리별로 분리)
+**합계: OB 8 + CV 10 + AF 5 + PR 8 + CH 7 = 38.** (아이템 재화 폐지에 따라 '아이템 모으기' 삭제, CV0010 표 누락분 반영)
 
 ---
 
 ## 메모 (수정 시 참고 — 너와 대화하며 확정)
+
+### 이번 패스 변경 (보상 단일화)
+- **아이템 재화(i1~3) 폐지 → 보상은 gold 단일.** 아이템 성분이 있던 모든 티어는 **티어당 +100G 일괄 환산**
+  (아이템만 있던 티어는 g100). 보상 셀의 다중 보상 순환(페이드)도 제거 — 단일 셀 고정.
+- **'아이템 모으기'(구 `cha_item_own`) 도전 미션 삭제.** 집계 원천(보유 아이템 합계)이 사라짐.
+  저장 파일의 잔존 진행도는 로드 시 미지 id로 스킵되고 다음 저장에서 자연 소멸.
+- **지갑 API 의미론 분리** (`InventoryManager`):
+  `EarnGold`=소득(잔액+누적 획득 → CH0001 반응) · `AddGold`=순수 잔액 변경(누적 집계 무반응, db성 변경) ·
+  `RefundGold`=실패 결제 되돌림(잔액 복구+누적 소비 차감 — **CH0007 진행 후퇴는 의도된 동작**) ·
+  `SpendGold`=소비(누적 소비 가산 → CH0007 반응).
+- `AF0004` 한국어 표시명 "인연도 레벨업" → **"친밀도 레벨업"** (en 유지, ja는 기존부터 親密度).
 
 ### 이번 패스 변경
 - **수집(CL) 카테고리 폐지** → 5개 카테고리(첫걸음/대화/교감/생활/도전). 액세서리 행은 교감으로 이동.
@@ -111,8 +122,8 @@
 - 다른 미션 수령 시 `MissionList`가 내부 `UpdateDerived`로 메타/도전 진행도 재계산. **메타가 메타를 트리거하지 않도록 가드.**
 
 ### 열린 결정
-- `Increment` 레벨 보상 점증 여부(현재 고정). `2N+1` 인연도 보상도 레벨마다 g100 고정.
-- `CH0001`(골드 모으기) 순환: 보상 gold가 다시 채우는 루프 → "누적 **획득** gold" 별도 카운터?
-- `CH0007`(골드 소비)=누적 소비량, `CH0008`(아이템 모으기)=보유 item1~3 합계 기준(추후 아이템별 분리 가능).
-- 보상 수치(g/i1~3), item1~3의 정체, 영/일 번역 표현은 게임 톤에 맞춰 다듬기.
+- `Increment` 레벨 보상 점증 여부(현재 고정). `2N+1` 친밀도 보상도 레벨마다 g100 고정.
+- ~~`CH0001` 순환 문제~~ → 해결: `CH0001`=누적 **획득**(`goldEarnedTotal`, `EarnGold`/보상 적립만 가산),
+  `CH0007`=누적 소비(`goldSpentTotal`, `SpendGold` 가산 / `RefundGold` 차감).
+- 보상 수치(g), 영/일 번역 표현은 게임 톤에 맞춰 다듬기.
 </content>

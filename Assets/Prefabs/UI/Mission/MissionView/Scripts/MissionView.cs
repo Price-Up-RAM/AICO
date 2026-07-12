@@ -19,9 +19,6 @@ public class MissionView : MonoBehaviour
 
     [Header("Reward Icons (비우면 텍스트 폴백)")]
     [SerializeField] private Sprite goldIcon;
-    [SerializeField] private Sprite item1Icon;
-    [SerializeField] private Sprite item2Icon;
-    [SerializeField] private Sprite item3Icon;
 
     [Header("Sound")]
     [SerializeField] private AudioSource audioSource;
@@ -147,9 +144,6 @@ public class MissionView : MonoBehaviour
         MissionUi.RoundedSpriteOverride = panelSprite;
         MissionUi.FontOverride = font;
         MissionUi.GoldIcon = goldIcon;
-        MissionUi.Item1Icon = item1Icon;
-        MissionUi.Item2Icon = item2Icon;
-        MissionUi.Item3Icon = item3Icon;
     }
 
     private void EnsureBuilt()
@@ -718,7 +712,7 @@ public class MissionView : MonoBehaviour
         GameObject rewardArea = MissionUi.CreateUIObject("RewardArea", card.transform);
         MissionUi.Layout(rewardArea, prefW: 118f, minW: 118f);
 
-        // 대표 보상 셀(아이콘 + 우하단 수량). 다중 보상이면 3초마다 페이드로 순환.
+        // 대표 보상 셀(골드 아이콘 + 우하단 수량). 보상은 gold 단일.
         GameObject rewardCell = MissionUi.CreateRewardCell("RewardCell", rewardArea.transform, out _, out _);
         RectTransform cellRect = rewardCell.GetComponent<RectTransform>();
         cellRect.anchorMin = new Vector2(1f, 0.5f);

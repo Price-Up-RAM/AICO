@@ -17,7 +17,6 @@ public static class MissionUi
     public static readonly Color GaugeFill = new Color(0.35f, 0.78f, 0.45f, 1f);
     public static readonly Color Accent = new Color(0.243f, 0.325f, 0.502f, 1f);
     public static readonly Color Gold = new Color(0.85f, 0.7f, 0.28f, 1f);
-    public static readonly Color ItemChip = new Color(0.30f, 0.45f, 0.62f, 1f);
     public static readonly Color TextWhite = new Color(0.92f, 0.93f, 0.95f, 1f);
     public static readonly Color TextMuted = new Color(0.6f, 0.62f, 0.66f, 1f);
     public static readonly Color StampColor = new Color(0.85f, 0.27f, 0.27f, 1f);
@@ -27,28 +26,13 @@ public static class MissionUi
 
     public static TMP_FontAsset FontOverride;
 
-    // 보상 아이콘(외부 입력). kind: 0=gold, 1=item1, 2=item2, 3=item3. null이면 텍스트 폴백.
+    // 보상 아이콘(외부 입력). 보상은 gold 단일. null이면 텍스트 폴백.
     public static Sprite GoldIcon;
-    public static Sprite Item1Icon;
-    public static Sprite Item2Icon;
-    public static Sprite Item3Icon;
 
-    public static Sprite GetRewardIcon(int kind)
+    // 보상 셀에 골드 아이콘+수량을 채운다. 아이콘 없으면 텍스트 폴백(G50). (CardRow와 Drawer가 공용)
+    public static void ApplyRewardCell(Image icon, TMP_Text amount, int value)
     {
-        switch (kind)
-        {
-            case 0: return GoldIcon;
-            case 1: return Item1Icon;
-            case 2: return Item2Icon;
-            case 3: return Item3Icon;
-            default: return null;
-        }
-    }
-
-    // 보상 셀에 아이콘+수량을 채운다. 아이콘 없으면 텍스트 폴백(G50). (CardRow와 Drawer가 공용)
-    public static void ApplyRewardCell(Image icon, TMP_Text amount, int kind, int value)
-    {
-        Sprite sprite = GetRewardIcon(kind);
+        Sprite sprite = GoldIcon;
         if (icon != null)
         {
             icon.enabled = sprite != null;
@@ -69,7 +53,7 @@ public static class MissionUi
             }
             else
             {
-                amount.text = MissionReward.KindLabel(kind) + value;
+                amount.text = "G" + value;
                 amount.alignment = TextAlignmentOptions.Center;
                 amount.fontSize = 15f;
             }

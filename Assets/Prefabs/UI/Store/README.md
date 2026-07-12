@@ -1,6 +1,6 @@
 # Store(상점) — 기능 안내서
 
-인연도(Affinity_Plan) 재화 루프 검증용 **StandAlone 상점 프로토타입**.
+친밀도(Affinity_Plan) 재화 루프 검증용 **StandAlone 상점 프로토타입**.
 폴더 감성 탭 상점(구매 확인 모달 + 페이징) + 인벤토리 드래그앤드롭 판매 +
 포즈/이펙트 리얼타임 프리뷰 아이콘(Runtime/File 소스 · 포즈 리롤 · NoImage 폴백).
 기존 시스템과는 문자열 key + 공개 API + 이벤트로만 연결되는 약결합 구조다.
@@ -13,7 +13,8 @@
 
 1. 메뉴 `Tools/Store/Setup All (catalog + UI prefab + font + demo scene)` 실행.
    (개별 단계: `1. Create Catalog` → `2. Build UI Prefab` → `3. Apply SUIT-Bold Font` → `4. Build Demo Scene`.
-   데모 씬은 `InventoryPanel.prefab`이 필요 — 없으면 에러 로그가 `Tools/InventorySystem` 선실행을 안내한다.)
+   데모 씬은 `InventoryPanel.prefab`이 필요 — 커밋된 베이크 산출물이라 리포지토리에 있으며(생성 도구
+   Tools/InventorySystem은 삭제됨), 없으면 에러 로그로 안내하고 패널 없이 계속 빌드한다.)
 2. `Assets/Prefabs/UI/Store/Demo/StoreDemo.unity` 열고 **Play**.
 
 batchmode 일괄 빌드(에디터 GUI가 닫혀 있어야 함):
@@ -61,15 +62,16 @@ batchmode 일괄 빌드(에디터 GUI가 닫혀 있어야 함):
   **File**(기본) = 등록한 `icon` 스프라이트(비면 NoImage), **Runtime** = 리그 캡처 + 리롤 대상
   (Detail 카탈로그 등재 키에서만 유효 — 미등재 Runtime 키는 NoImage로 정착).
 - **카드 보조 표기 (detailText)** — 카드의 `CardSub`는 `StoreEntry.detailText` 자유 텍스트를 그대로
-  표시한다(기본값은 선물 3종 "호감도 +N"). **표시 전용** — 실제 아이템 성능 수치(선물 인연도 등)는
+  표시한다(기본값은 선물 3종 "친밀도 +N"). **표시 전용** — 실제 아이템 성능 수치(선물 친밀도 등)는
   ItemSystem(`Assets/Prefabs/Assist/ItemSystem`)의 ItemGiftCatalog(`affinityPoints`)가 소유한다.
 - **포즈 리롤** — 주사위 버튼/키 `5`로 Runtime 모드 포즈 전 키를 강제 재캡처. 정지 시점이
   랜덤이라 리롤마다 다른 포즈가 나온다.
 - **NoImage 폴백** — 실아이콘이 없는 카드/모달은 베이크된 'NO IMAGE' 플레이스홀더를 우선 표시하고
   캡처가 끝나면 교체한다. 플레이스홀더 PNG가 없으면 아이콘을 숨기고 이름 텍스트만 남는다.
-- **재화/미션 연동** — 구매 = `SpendGold` → `AddToMain`(실패 시 전액 환불), 판매 = 스택 차감 →
-  `AddGold`. 장착물 태그 구매 시 AF0005 미션 보고(`TagForKey` 판정), CH0007(골드 소비)은
-  SpendGold만으로 자동 진행.
+- **재화/미션 연동** — 구매 = `SpendGold` → `AddToMain`(지급 실패 시 `RefundGold`로 전액 환불 —
+  실패 결제 되돌림, 누적 소비 역가산), 판매 = 스택 차감 → `EarnGold`(소득 — 누적 획득 집계).
+  장착물 태그 구매 시 AF0005 미션 보고(`TagForKey` 판정), CH0007(골드 소비)은 SpendGold만으로
+  자동 진행.
 
 ## 3. 카탈로그 관리
 
@@ -83,7 +85,7 @@ batchmode 일괄 빌드(에디터 GUI가 닫혀 있어야 함):
 
 연계 카탈로그(폴더 밖, 읽기·additive 등록만): **InventoryCatalog**(모든 아이템 필수 — 없으면 소유
 불가. 상점은 표시 이름/maxStack만 참조하고 **아이콘은 참조하지 않는다**), **EquipCatalog**(장착물만).
-아이템 성능 데이터(선물 인연도 수치 등)는 **ItemSystem**(`Assets/Prefabs/Assist/ItemSystem`,
+아이템 성능 데이터(선물 친밀도 수치 등)는 **ItemSystem**(`Assets/Prefabs/Assist/ItemSystem`,
 ItemGiftCatalog.`affinityPoints`)이 소유 — Store는 detailText로 표시만 한다.
 아이템 정체성은 문자열 key 하나로 전 카탈로그가 공유한다.
 
@@ -236,7 +238,7 @@ S 상점 토글 / I 인벤토리 토글 / G +500G / 숫자키 지급(직렬화 `
 | 메뉴 | 역할 |
 |---|---|
 | `Setup All` | 아래 4단계 일괄 실행 |
-| `1. Create Catalog` | 레거시 프리뷰 에셋 정리 → 태그별 상품 카탈로그 5종(**장착물 4종 아이콘을 Assets/Model 스프라이트 PNG에서 guid로 찾아 베이크**, 선물 detailText "호감도 +N") → 태그 레지스트리(guid 보존) → 상점 전용 키 12종 InventoryCatalog_Demo 등록 → 프리뷰 상세 카탈로그 2종(클립/파티클 프리팹 해석 실패 시 에러 로그 + null 유지) → NoImage 베이크. **전부 additive**(기존 엔트리·태그 행 보존, 누락 기본 키만 추가, 빈 값만 보충 — 구 스키마 에셋은 이 보충으로 이행: 포즈/이펙트 기본 키 Runtime 승격, File 행 빈 icon·빈 detailText 채움) |
+| `1. Create Catalog` | 레거시 프리뷰 에셋 정리 → 태그별 상품 카탈로그 5종(**장착물 4종 아이콘을 Assets/Model 스프라이트 PNG에서 guid로 찾아 베이크**, 선물 detailText "친밀도 +N") → 태그 레지스트리(guid 보존) → 상점 전용 키 12종 InventoryCatalog_Demo 등록 → 프리뷰 상세 카탈로그 2종(클립/파티클 프리팹 해석 실패 시 에러 로그 + null 유지) → NoImage 베이크. **전부 additive**(기존 엔트리·태그 행 보존, 누락 기본 키만 추가, 빈 값만 보충 — 구 스키마 에셋은 이 보충으로 이행: 포즈/이펙트 기본 키 Runtime 승격, File 행 빈 icon·빈 detailText 채움) |
 | `2. Build UI Prefab` | **카탈로그 선행 보장**(존재 + `Tabs()` 비어있지 않음 — 미비 시 CreateCatalog) → StoreConfirm.prefab 선베이크 → StorePanel.prefab에 카탈로그/확인 팝업/주사위 아이콘 참조 베이크(`EditorSetCatalog` 등) + **확인 팝업을 "StoreConfirm" 자식으로 베이크** |
 | `3. Apply SUIT-Bold Font` | 두 프리팹의 전 TMP_Text를 SUIT-Bold로 교체(베이크 후 필수 마지막 단계) |
 | `4. Build Demo Scene` | 카탈로그 선행 보장(위와 동일 검사) 후 카메라/EventSystem/매니저(GO "StoreManager" 포함)/Canvas/인벤토리·상점 패널/프리뷰 리그(GO "StorePosePreviewRig", 아로나 POC 프리팹 주입)/데모 컨트롤러/안내 배치 |
@@ -251,7 +253,7 @@ S 상점 토글 / I 인벤토리 토글 / G +500G / 숫자키 지급(직렬화 `
 | 상품 목록·이름·가격 | 태그별 합계 16종 | 태그별 StoreTagCatalog 에셋 인스펙터에서 직접 추가/수정(**재실행에도 보존**). 기본 16종의 초기값은 `Editor/StoreTools.cs` `CreateCatalog()`의 `CreateTagCatalog(...)` 배열 |
 | 탭 구성 | 태그 5종 (장착물/포즈/이펙트/선물/잡화) | `Resources/StoreCatalog.asset` 태그 레지스트리 — 행 추가/재배열/참조 교체 보존(기본 5태그 누락분만 재실행이 보충). 슬롯 최대 6(`MaxTabSlots`), 부재 시 `StoreView.DefaultTabs` 폴백 |
 | 아이콘 소스/스프라이트(키별) | File(장착물·선물·잡화) / Runtime(포즈·이펙트) | 태그 카탈로그 에셋 엔트리 `iconType`/`icon` (인스펙터 편집 보존 — 상점 소유, Inventory 아이콘과 별개) |
-| 카드 보조 표기(키별) | 선물 3종 "호감도 +N" (나머지 공백) | 태그 카탈로그 에셋 엔트리 `detailText` — 표시 전용 자유 텍스트(성능 수치는 ItemSystem 소유) |
+| 카드 보조 표기(키별) | 선물 3종 "친밀도 +N" (나머지 공백) | 태그 카탈로그 에셋 엔트리 `detailText` — 표시 전용 자유 텍스트(성능 수치는 ItemSystem 소유) |
 | 장착물 4종 기본 아이콘 | Assets/Model 스프라이트 PNG | `Editor/StoreTools.cs` `LoadSpriteByGuid(...)` guid 4종 — File 행의 빈 icon만 보충하므로 에셋에서 직접 바꿔도 보존 |
 | 포즈 정지 구간(랜덤) | 20%~80% | `StoreDetailPoseEntry.freezeMin/freezeMax` (엔트리별, 에셋 인스펙터 — 편집 보존) |
 | 이펙트 정지컷 시각 | 1.5초 | `StoreDetailEffectEntry.simulateTime` (엔트리별, 에셋 인스펙터 — 편집 보존) |
@@ -293,7 +295,7 @@ S 상점 토글 / I 인벤토리 토글 / G +500G / 숫자키 지급(직렬화 `
 - NoImage 플레이스홀더는 베이크 PNG 단일 소스 — 없으면 경고 1회 + 아이콘 숨김(이름 텍스트만).
 - 포즈 실발동(PoseManager)/이펙트 실발동(쓰다듬기·클릭 연동) 미구현 — 현재는 소유 + 프리뷰까지
   (포즈 검토: `Store_PoseAnimation_Review.md` 1장).
-- 선물 증정 → 인연도 포인트 지급은 미구현. 능력 수치(`affinityPoints`)의 소유처는
+- 선물 증정 → 친밀도 포인트 지급은 미구현. 능력 수치(`affinityPoints`)의 소유처는
   ItemSystem(`Assets/Prefabs/Assist/ItemSystem`의 ItemGiftCatalog — 별도 WORKLOG 참조)이고,
   Store는 `detailText`로 표시만 한다.
   설계 소유는 `../CharacterDetail/Affinity_Store_Integration.md` — Store는 구현 시 해당 문서를 따른다.

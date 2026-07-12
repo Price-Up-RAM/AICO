@@ -1,16 +1,18 @@
+using System.Collections.Generic;
 using System.IO;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 
-// 인연도(Affinity) UI 셋업 파이프라인 — CharacterDetail.prefab의 호감도(0/300, 3단 바) 블록을
-// 인연도(Lv.N n/100, 무지개 단일 게이지) 블록으로 변환하고, 보상 수령 모달을 베이크한다.
+// 친밀도(Affinity) UI 셋업 파이프라인 — CharacterDetail.prefab의 호감도(0/300, 3단 바) 블록을
+// 친밀도(Lv.N n/100, 무지개 단일 게이지) 블록으로 변환하고, 보상 수령 모달을 베이크한다.
 // 계획: Affinity_Plan.md / 작업 이력: WORKLOG.md
 public static class AffinityUiTools
 {
     private const string PrefabPath = "Assets/Prefabs/UI/CharacterDetail/CharacterDetail.prefab";
     private const string FontPath = "Assets/FontAssets/SUIT-Bold.asset";
+    private const string JpFontPath = "Assets/FontAssets/NotoSansJP-Regular SDF.asset"; // 일본어 글리프 폴백용
     private const string SpritesDir = "Assets/Prefabs/UI/CharacterDetail/Sprites";
     private const string RainbowPath = SpritesDir + "/AffinityRainbow.png";
     private const string WhitePath = SpritesDir + "/AffinityBarWhite.png";
@@ -31,13 +33,14 @@ public static class AffinityUiTools
     private static readonly Color TextMuted = new Color(0.6f, 0.62f, 0.66f, 1f);
     private static readonly Color TrackDark = new Color(0.047f, 0.055f, 0.071f, 0.9f);
 
-    [MenuItem("Tools/CharacterDetail/Setup All (rainbow + affinity UI + font + card border)")]
+    [MenuItem("Tools/CharacterDetail/Setup All (rainbow + affinity UI + font + card border + jp fallback)")]
     public static void SetupAll()
     {
         BakeRainbowSprite();
         ConvertAffinityUi();
         ApplyFont();
         InjectCardBorder();
+        EnsureJpFontFallback();
         AssetDatabase.SaveAssets();
         Debug.Log("[CharacterDetail][AffinityUiTools] Setup All 완료.");
     }
@@ -123,7 +126,7 @@ public static class AffinityUiTools
         importer.SaveAndReimport();
     }
 
-    // ── 2) 프리팹 변환: 호감도 블록 → 인연도 블록 + 보상 모달 베이크 ──
+    // ── 2) 프리팹 변환: 호감도 블록 → 친밀도 블록 + 보상 모달 베이크 ──
     [MenuItem("Tools/CharacterDetail/2. Convert Affinity UI (prefab)")]
     public static void ConvertAffinityUi()
     {
@@ -208,16 +211,32 @@ public static class AffinityUiTools
             affinityButton.targetGraphic = container.GetComponent<Image>();
             affinityButton.transition = Selectable.Transition.ColorTint;
 
-            // 2-4. FeatureTag 호감도 → 인연도 (베이크 기본값 — 런타임 표시는 컨트롤러가 치환)
-            Transform featureTag = FindDeep(root.transform, "FeatureTag_호감도보유") ?? FindDeep(root.transform, "FeatureTag_인연도보유");
+            // 2-4. FeatureTag 구 표기 → 친밀도 (베이크 기본값 — 런타임 표시는 컨트롤러가 치환)
+            //      폴백 체인: 신명칭 우선, 구명칭 2종(호감도/인연도)은 리베이크 멱등성을 위해 후순위 유지
+            Transform featureTag = FindDeep(root.transform, "FeatureTag_친밀도보유")
+                ?? FindDeep(root.transform, "FeatureTag_호감도보유")
+                ?? FindDeep(root.transform, "FeatureTag_인연도보유");
             if (featureTag != null)
             {
-                featureTag.name = "FeatureTag_인연도보유";
+                featureTag.name = "FeatureTag_친밀도보유";
                 TMP_Text tagText = featureTag.GetComponentInChildren<TMP_Text>(true);
                 if (tagText != null)
                 {
-                    tagText.gameObject.name = "FeatureTag_인연도보유_Text";
-                    tagText.text = "인연도 보유";
+                    tagText.gameObject.name = "FeatureTag_친밀도보유_Text";
+                    tagText.text = "친밀도 보유";
+                }
+            }
+
+            // 2-4b. 볼 태그 오타 교정 — 코드 표준 어휘는 "볼당기기" (CheekPullHandler.requiredFeatureTag)
+            Transform cheekTag = FindDeep(root.transform, "FeatureTag_볼당기기") ?? FindDeep(root.transform, "FeatureTag_볼땡기기");
+            if (cheekTag != null)
+            {
+                cheekTag.name = "FeatureTag_볼당기기";
+                TMP_Text cheekText = cheekTag.GetComponentInChildren<TMP_Text>(true);
+                if (cheekText != null)
+                {
+                    cheekText.gameObject.name = "FeatureTag_볼당기기_Text";
+                    cheekText.text = "볼당기기";
                 }
             }
 
@@ -278,7 +297,7 @@ public static class AffinityUiTools
         panelImage.type = Image.Type.Sliced;
         panelImage.color = PanelBg;
 
-        TextMeshProUGUI title = CreateText("AffinityModalTitleText", panel.transform, "인연도 보상", 20, TextWhite, font, TextAlignmentOptions.MidlineLeft, true);
+        TextMeshProUGUI title = CreateText("AffinityModalTitleText", panel.transform, "친밀도 보상", 20, TextWhite, font, TextAlignmentOptions.MidlineLeft, true);
         SetTopLeft(title.rectTransform, new Vector2(16f, -12f), new Vector2(220f, 28f));
 
         // 닫기 버튼
@@ -387,7 +406,7 @@ public static class AffinityUiTools
         scroll.verticalScrollbar = scrollbar;
         scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
 
-        // 프로토타입 테스트용 버튼 2종 (포인트 획득 규칙 확정 시 제거): +40 / 인연도 초기화
+        // 프로토타입 테스트용 버튼 2종 (포인트 획득 규칙 확정 시 제거): +40 / 친밀도 초기화
         CreateFooterButton(panel.transform, font, "AffinityDebugAddButton", "+40 (테스트)", new Vector2(12f, 12f));
         CreateFooterButton(panel.transform, font, "AffinityDebugResetButton", "초기화 (테스트)", new Vector2(130f, 12f));
 
@@ -492,6 +511,39 @@ public static class AffinityUiTools
         {
             PrefabUtility.UnloadPrefabContents(root);
         }
+    }
+
+    // ── 5) SUIT-Bold → NotoSansJP 폴백 등록 (jp 문자열 □ 렌더 방지) ──
+    // SUIT-Bold는 한글/라틴만 보유(일본어 글리프 0) → fallbackFontAssetTable에 NotoSansJP를 추가하면
+    // SUIT-Bold를 쓰는 모든 UI가 일본어를 표시할 수 있다.
+    // (NotoSansJP의 폴백에 SUIT-Bold가 이미 있어 상호 참조가 되지만, TMP는 방문 목록으로 순환을 방어한다.)
+    [MenuItem("Tools/CharacterDetail/5. Ensure JP Font Fallback (SUIT→NotoJP)")]
+    public static void EnsureJpFontFallback()
+    {
+        TMP_FontAsset suit = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
+        TMP_FontAsset noto = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(JpFontPath);
+        if (suit == null || noto == null)
+        {
+            Debug.LogError("[CharacterDetail][AffinityUiTools] 폴백용 폰트 에셋을 찾지 못했습니다: "
+                + FontPath + " / " + JpFontPath);
+            return;
+        }
+
+        if (suit.fallbackFontAssetTable == null)
+        {
+            suit.fallbackFontAssetTable = new List<TMP_FontAsset>();
+        }
+
+        if (suit.fallbackFontAssetTable.Contains(noto))
+        {
+            Debug.Log("[CharacterDetail][AffinityUiTools] SUIT-Bold 폴백에 NotoSansJP가 이미 등록되어 있습니다 — 스킵.");
+            return;
+        }
+
+        suit.fallbackFontAssetTable.Add(noto);
+        EditorUtility.SetDirty(suit);
+        AssetDatabase.SaveAssets();
+        Debug.Log("[CharacterDetail][AffinityUiTools] SUIT-Bold 폴백에 NotoSansJP 추가 완료 — jp 글리프 렌더 가능.");
     }
 
     // 프리팹 전체에서 미싱 스크립트 컴포넌트를 제거하고 대상 오브젝트 경로를 로그로 남긴다

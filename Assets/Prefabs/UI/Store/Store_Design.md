@@ -1,17 +1,17 @@
 # Store(상점) 프로토타입 — 설계 문서
 
-> 목적: Affinity_Plan(인연도)의 재화 루프를 검증하는 **상점 프로토타입**.
+> 목적: Affinity_Plan(친밀도)의 재화 루프를 검증하는 **상점 프로토타입**.
 > 원칙: StandAlone(데모 씬 단독 동작), 기존 시스템과의 연결은 최대한 약하게(문자열 key + 공개 API + 이벤트만).
 
 ## 1. 범위
 
 - 탭이 있는 상점 창(구매) + **인벤토리 → 상점 드래그앤드롭 판매**.
 - 재화는 기존 지갑 `InventoryManager`(Prefabs/UI/Mission/MissionView/Scripts/InventoryManager.cs)의 Gold를 그대로 사용.
-  - 구매: `InventoryManager.Instance.SpendGold(price)` → 성공 시 `InventorySystemManager.Instance.AddToMain(key, 1)`. AddToMain 실패 시 `AddGold(price)`로 환불.
-  - 판매: 아래 SellZone 참조. `AddGold(총액)`.
+  - 구매: `InventoryManager.Instance.SpendGold(price)` → 성공 시 `InventorySystemManager.Instance.AddToMain(key, 1)`. AddToMain 실패 시 `RefundGold(price)`로 환불(실패 결제 되돌림 — 누적 소비 역가산).
+  - 판매: 아래 SellZone 참조. `EarnGold(총액)`(소득 — 누적 획득 집계).
   - 골드 표시: `InventoryManager.InventoryChanged` 구독.
   - CH0007(골드 소비) 미션은 SpendGold만으로 자동 진행. 구매 키의 소속 태그가 "장착물"이면(`StoreCatalog.TagForKey(key)` 판정 — 엔트리에 tab 필드가 없어 레지스트리 역조회) `MissionList.Instance.Report("AF0005", 수량)` 호출(널가드).
-- 인연도 연동(선물 → 포인트)은 이번 범위 밖. WORKLOG에 남은 일로 기록. 연동 설계 소유는 `../CharacterDetail/Affinity_Store_Integration.md`로 이관.
+- 친밀도 연동(선물 → 포인트)은 이번 범위 밖. WORKLOG에 남은 일로 기록. 연동 설계 소유는 `../CharacterDetail/Affinity_Store_Integration.md`로 이관.
 
 ## 2. 폴더/파일
 
@@ -86,7 +86,7 @@ public enum StoreIconType { File, Runtime }  // StoreTagCatalog.cs 정의 — Fi
     public int price = 100;     // 구매가(G)
     public StoreIconType iconType = StoreIconType.File;  // 아이콘 소스 — 상점 소유 (인벤토리 UI 아이콘과 별개)
     public Sprite icon;         // File 모드 아이콘 (비면 NoImage)
-    public string detailText;   // 카드 보조 표기 자유 텍스트 (예: "호감도 +100") — 표시 전용, 성능 수치 아님
+    public string detailText;   // 카드 보조 표기 자유 텍스트 (예: "친밀도 +100") — 표시 전용, 성능 수치 아님
     // tab 필드 없음 — 태그는 이 카탈로그를 참조하는 레지스트리 행이 결정한다
 }
 [CreateAssetMenu(menuName = "Store/Store Tag Catalog")]
@@ -111,9 +111,9 @@ public class StoreTagCatalog : ScriptableObject {
   - 장착물(File 아이콘 — Assets/Model 스프라이트 PNG를 guid로 베이크): arona_a_chipao 300 / arona_a_idolfrontribbon 200 / arona_a_pareo 250 / hairpin_placeholder 150
   - 포즈(Runtime 아이콘): pose_greeting "포즈: 인사" 150 / pose_dance "포즈: 댄스" 300 / pose_sit "포즈: 앉기" 200
   - 이펙트(Runtime 아이콘): fx_pat_heart "쓰다듬기: 하트" 250 / fx_pat_star "쓰다듬기: 별" 250 / fx_click_sparkle "클릭: 반짝임" 200
-  - 선물(detailText "호감도 +10/+30/+100" — 표시 전용): gift_s "선물(소)" 50 / gift_m "선물(중)" 120 / gift_l "선물(대)" 300
+  - 선물(detailText "친밀도 +10/+30/+100" — 표시 전용): gift_s "선물(소)" 50 / gift_m "선물(중)" 120 / gift_l "선물(대)" 300
   - 잡화: snack_banana "바나나" 10 / potion_energy "에너지 드링크" 30 / ticket_random "랜덤 티켓" 80
-- **아이템 성능 데이터는 상점 소유가 아니다** — 선물의 인연도 수치(`affinityPoints`)는
+- **아이템 성능 데이터는 상점 소유가 아니다** — 선물의 친밀도 수치(`affinityPoints`)는
   ItemSystem(`Assets/Prefabs/Assist/ItemSystem`의 ItemGiftCatalog, 별도 WORKLOG)이 소유하고,
   Store는 `detailText`로 표시만 한다.
 - **의상 탭은 제외** — 캐릭터별로 판매 내용이 바뀌는 카테고리라 프로토 범위 밖 (탭 예비 슬롯으로 대응).
@@ -186,7 +186,7 @@ StorePanel (RectTransform 520x560, 포인트 앵커, Image RootBg(0.09,0.09,0.11
 │                      클릭 리스너는 예비 슬롯에도 걸린다 — 런타임 태그 추가 대응)
 │                      선택 탭 = PanelBg(본문과 같은 색으로 이어짐) + 전체 높이 / 비선택 = HeaderBg + 6px 낮음 + 라벨 muted
 ├─ CardTemplate       (루트 직속, 비활성, Grid 밖) : CardIcon / CardName / CardPrice("100 G") /
-│                      CardSub(StoreEntry.detailText 직표시 — 예: "호감도 +10", 비면 공백) /
+│                      CardSub(StoreEntry.detailText 직표시 — 예: "친밀도 +10", 비면 공백) /
 │                      CardOwned("보유 n") / 전체가 Button(확인 팝업 열기)
 ├─ SellZone           (하단 고정앵커 스트립 h84, Image Track(0.047,0.055,0.071,0.9) raycastTarget=true,
 │                      StoreSellZone 컴포넌트) : SellZoneText "판매: 인벤토리 아이템을 여기로 드래그 (구매가의 50%)"
@@ -259,7 +259,7 @@ public class StoreSellZone : MonoBehaviour, IDropHandler, IPointerEnterHandler, 
 
 1. `GetMainStore().FindBySlot(슬롯 인덱스)`로 스택 **재조회**. 모달이 떠 있는 동안 인벤토리가 바뀔 수 있으므로(다른 판매/장착/이동), **스택이 없거나 key가 예약 시점과 다르면 토스트로 안내하고 판매 취소**(slot+key 이중 검증).
 2. 수량 처리: 선택 수량 < `stack.count` → `stack.count`에서 수량만 차감(부분 판매). 선택 수량 == `stack.count` → `store.stacks.Remove(stack)`(전량 판매, 같은 키 중복 스택 대비 키가 아닌 스택 자체를 제거).
-3. `InventorySystemManager.Instance.SaveStore(store); InventoryEvents.OnStoreChanged?.Invoke(InventorySystemManager.MainOwnerId); InventoryManager.Instance.AddGold(판매가 x 수량);`
+3. `InventorySystemManager.Instance.SaveStore(store); InventoryEvents.OnStoreChanged?.Invoke(InventorySystemManager.MainOwnerId); InventoryManager.Instance.EarnGold(판매가 x 수량);` — 판매 대금은 소득(EarnGold — 누적 획득 집계).
 4. `NotifySold(표시이름, 수량, 총액)` → 토스트 "이름 xN 판매 +NG".
 
 호버 시 SellZone 배경을 AccentBlue로 하이라이트(Enter/Exit)는 기존과 동일.
@@ -294,7 +294,7 @@ Start()에서 FindFirstObjectByType 폴백. Update()는 `Input.GetKeyDown`만 �
 ## 8. StoreTools.cs — 에디터 파이프라인 (InventorySystemTools 패턴)
 
 - `[MenuItem("Tools/Store/Setup All (catalog + UI prefab + font + demo scene)")] SetupAll()`
-- `[MenuItem("Tools/Store/1. Create Catalog")] CreateCatalog()` — 실행 순서: ①**레거시 프리뷰 에셋 정리**(클래스 리네임으로 Detail 타입이 된 구 StorePoseCatalog.asset/StoreEffectCatalog.asset 삭제 — 태그 카탈로그가 같은 경로를 쓰므로 자리 확보. 이미 신형 StoreTagCatalog 타입이면 타입 불일치로 로드가 null이라 삭제되지 않음) → ②태그별 상품 카탈로그 5종(`CreateTagCatalog` — StoreEquip/StorePose/StoreEffect/StoreGift/StoreMiscCatalog.asset. **장착물 4종 아이콘은 Assets/Model 스프라이트 PNG를 guid로 찾아 베이크**(`LoadSpriteByGuid`), 포즈/이펙트 6종은 Runtime, 선물 3종은 detailText "호감도 +N") → ③태그 레지스트리(StoreCatalog.asset — 기존 에셋 재사용으로 guid 보존, 프리팹 직렬화 참조 유지) → ④InventoryCatalog_Demo에 상점 전용 키 additive 등록 → ⑤프리뷰 상세 카탈로그 2종(StoreDetailPoseCatalog.asset 포즈 3종 클립 / StoreDetailEffectCatalog.asset 이펙트 3종 파티클 프리팹 — Fx_LoveAura/CFXR4 Falling Stars/CFXR2 Shiny Item (Loop), 읽기 전용 참조) → ⑥NoImage 스프라이트 베이크(`EnsureNoImageSprite`).
+- `[MenuItem("Tools/Store/1. Create Catalog")] CreateCatalog()` — 실행 순서: ①**레거시 프리뷰 에셋 정리**(클래스 리네임으로 Detail 타입이 된 구 StorePoseCatalog.asset/StoreEffectCatalog.asset 삭제 — 태그 카탈로그가 같은 경로를 쓰므로 자리 확보. 이미 신형 StoreTagCatalog 타입이면 타입 불일치로 로드가 null이라 삭제되지 않음) → ②태그별 상품 카탈로그 5종(`CreateTagCatalog` — StoreEquip/StorePose/StoreEffect/StoreGift/StoreMiscCatalog.asset. **장착물 4종 아이콘은 Assets/Model 스프라이트 PNG를 guid로 찾아 베이크**(`LoadSpriteByGuid`), 포즈/이펙트 6종은 Runtime, 선물 3종은 detailText "친밀도 +N") → ③태그 레지스트리(StoreCatalog.asset — 기존 에셋 재사용으로 guid 보존, 프리팹 직렬화 참조 유지) → ④InventoryCatalog_Demo에 상점 전용 키 additive 등록 → ⑤프리뷰 상세 카탈로그 2종(StoreDetailPoseCatalog.asset 포즈 3종 클립 / StoreDetailEffectCatalog.asset 이펙트 3종 파티클 프리팹 — Fx_LoveAura/CFXR4 Falling Stars/CFXR2 Shiny Item (Loop), 읽기 전용 참조) → ⑥NoImage 스프라이트 베이크(`EnsureNoImageSprite`).
   **additive 보존(관리 흐름의 핵심)**: 레지스트리(태그 행)/태그 카탈로그(상품)/상세 카탈로그(프리뷰 메타) 전부 **기존 엔트리 불변 + 누락 기본 키만 추가**한다 — 기본 태그 행의 catalog 참조가 비었으면 채우고, 기본 키의 **빈 값만 보충**한다(clip/effectPrefab 바인딩, File 행의 빈 icon, 빈 detailText). 인스펙터에서 사용자가 추가·수정한 상품/설정(iconType/icon/detailText/freeze 등)이 `Setup All` 재실행에도 보존된다.
   **스키마 이행**: 구 스키마(giftPoints 시절) 에셋은 iconType/icon/detailText가 File(0)/null/""로 로드되므로 이 빈 값 보충이 이행 경로가 된다 — 단 "File + 빈 icon"은 사용자 의도로 볼 수 없어, 기본이 Runtime인 키(포즈/이펙트)는 **Runtime으로 승격**해 캡처 대상으로 복귀시킨다. `EnsureNoImageSprite`/`EnsureRerollIcon`은 기존 파일을 재사용한다(재베이크 = PNG 삭제 후 재실행).
 - `[MenuItem("Tools/Store/2. Build UI Prefab")] BuildUiPrefab()` — **카탈로그 선행 보장**(레지스트리 존재 + `Tabs()` 비어있지 않음 — 미비 시 CreateCatalog) 후 임시 GO → `EditorSetConfirmPrefab` + `EditorSetRerollSprite(EnsureRerollIcon())` + `EditorSetCatalog(registry)` → `StoreView.EditorBuild(builtin UISprite, SUIT-Bold)` → **확인 팝업을 "StoreConfirm" 자식으로 인스턴스해 함께 베이크** → SaveAsPrefabAsset → finally DestroyImmediate
@@ -307,7 +307,7 @@ Start()에서 FindFirstObjectByType 폴백. Update()는 `Input.GetKeyDown`만 �
 - Main Camera(SolidColor 0.06,0.07,0.09) / EventSystem+StandaloneInputModule(pixelDragThreshold=5)
 - Canvas ScreenSpaceOverlay + CanvasScaler ScaleWithScreenSize **2560x1440 match 0.5** + GraphicRaycaster (InventoryPanel과 크기 호환)
 - GO "InventorySystemManager" + GO "EquipManager" + GO "StoreManager" (Awake에서 Resources 카탈로그 자동 로드; 캐릭터는 배치하지 않음. StoreManager는 없어도 플레이 중 자동 생성되지만 명시 배치)
-- `Assets/Prefabs/Assist/InventorySystem/InventoryPanel.prefab` 인스턴스 — MAIN 섹션, 우측(anchor/pivot (1,0.5), pos (-60,0)). **없으면 에러 로그로 Tools/InventorySystem 선실행 안내(직접 빌드하지 않음 — 약결합)**
+- `Assets/Prefabs/Assist/InventorySystem/InventoryPanel.prefab` 인스턴스 — MAIN 섹션, 우측(anchor/pivot (1,0.5), pos (-60,0)). **없으면 에러 로그로 안내하고 패널 없이 계속 빌드(직접 빌드하지 않음 — 약결합). InventoryPanel.prefab은 커밋된 베이크 산출물(생성 도구 Tools/InventorySystem은 삭제됨 — 리포지토리에서 복원)**
 - StorePanel.prefab 인스턴스 — 좌측(anchor/pivot (0,0.5), pos (60,0)). Show 상태로 배치하되 S로 토글
 - GO "StoreDemoController" — 위 참조 연결(에디터 전용 `EditorSet(...)` 세터)
 - InfoCanvas(레거시 UI Text, raycastTarget=false, GraphicRaycaster 없음): "S: 상점 / I: 인벤토리 / G: +500G / 1~4: 아이템 지급 / 5: 포즈 리롤 / 카드 클릭: 구매 / 슬롯→판매존 드래그: 판매"
