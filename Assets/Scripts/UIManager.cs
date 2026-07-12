@@ -19,8 +19,12 @@ public class UIManager : MonoBehaviour
     [SerializeField] public GameObject choiceInputImage; // APIInput
     [SerializeField] public GameObject pomodoro; // Pomodoro
     [SerializeField] public GameObject alarm; // Alarm
+    [SerializeField] public GameObject skill; // SkillView
+    [SerializeField] public GameObject mission; // MissionView
     [SerializeField] public GameObject todoList; // TODOList
     [SerializeField] public GameObject calendar; // Calendar
+    [SerializeField] public GameObject aiStatus; // AIStatusView
+    [SerializeField] public GameObject jukebox; // JukeboxView
     [SerializeField] public GameObject inventoryPanel; // InventorySystem 메인 패널 (프리팹 에셋 할당 시 canvasUI 아래 인스턴스화)
     [SerializeField] public GameObject inventoryPanelChar; // InventorySystem 캐릭터 패널 (프리팹 에셋 할당 시 canvasUI 아래 인스턴스화)
     [SerializeField] public AlarmMiniView alarmMiniPrefab; // AlarmMini prefab
@@ -68,8 +72,12 @@ public class UIManager : MonoBehaviour
         // Prefab 선언. 자체 함수로 비활성화
         pomodoro = ResolveManagedUI(pomodoro, "Pomodoro");
         alarm = ResolveManagedUI(alarm, "Alarm");
+        skill = ResolveManagedUI(skill, "SkillView");
+        mission = ResolveManagedUI(mission, "MissionView");
         todoList = ResolveManagedUI(todoList, "TODOList");
         calendar = ResolveManagedUI(calendar, "Calendar");
+        aiStatus = ResolveManagedUI(aiStatus, "AIStatusView");
+        jukebox = ResolveManagedUI(jukebox, "JukeboxView");
         characterDetail = ResolveManagedUI(characterDetail, "CharacterDetail");
         inventoryPanel = ResolveManagedUI(inventoryPanel, "InventoryPanel");
         inventoryPanelChar = ResolveManagedUI(inventoryPanelChar, "InventoryPanelChar");
@@ -86,8 +94,12 @@ public class UIManager : MonoBehaviour
         choiceInputImage.SetActive(false);
         SetInitialInactive(pomodoro);
         SetInitialInactive(alarm);
+        SetInitialInactive(skill);
+        SetInitialInactive(mission);
         SetInitialInactive(todoList);
         SetInitialInactive(calendar);
+        SetInitialInactive(aiStatus);
+        SetInitialInactive(jukebox);
         // InventoryView는 CanvasGroup으로 표시를 제어하므로 SetActive 대신 Hide로 초기 숨김
         HideInventoryViewIfPresent(inventoryPanel);
         HideInventoryViewIfPresent(inventoryPanelChar);
@@ -815,6 +827,75 @@ public class UIManager : MonoBehaviour
         }
     }
 
+    public void ShowSkill()
+    {
+        skill = ResolveManagedUI(skill, "SkillView");
+        bool wasActive = skill != null && skill.activeSelf;
+        ShowSimpleUI(skill, "skill");
+        if (wasActive)
+        {
+            SkillCatalogClient client = skill.GetComponent<SkillCatalogClient>();
+            if (client != null)
+            {
+                client.ReloadCatalog();
+            }
+        }
+    }
+
+    public void CloseSkill()
+    {
+        CloseSimpleUI(skill);
+    }
+
+    public void ToggleSkill()
+    {
+        if (skill != null && skill.activeSelf)
+        {
+            CloseSkill();
+        }
+        else
+        {
+            ShowSkill();
+        }
+    }
+
+    public void ShowMission()
+    {
+        mission = ResolveManagedUI(mission, "MissionView");
+        ShowSimpleUI(mission, "mission");
+
+        MissionView missionView = mission != null ? mission.GetComponent<MissionView>() : null;
+        if (missionView != null)
+        {
+            missionView.Show();
+        }
+    }
+
+    public void CloseMission()
+    {
+        MissionView missionView = mission != null ? mission.GetComponent<MissionView>() : null;
+        if (missionView != null)
+        {
+            missionView.Hide();
+        }
+        else
+        {
+            CloseSimpleUI(mission);
+        }
+    }
+
+    public void ToggleMission()
+    {
+        if (mission != null && mission.activeSelf)
+        {
+            CloseMission();
+        }
+        else
+        {
+            ShowMission();
+        }
+    }
+
     public void ShowTODOList()
     {
         ShowTODOList(System.DateTime.Now.Date);
@@ -875,6 +956,80 @@ public class UIManager : MonoBehaviour
         else
         {
             ShowCalendar();
+        }
+    }
+
+    public void ShowAIStatus()
+    {
+        aiStatus = ResolveManagedUI(aiStatus, "AIStatusView");
+        ShowSimpleUI(aiStatus, "aistatus");
+
+        AIStatusView view = aiStatus != null ? aiStatus.GetComponent<AIStatusView>() : null;
+        if (view != null)
+        {
+            view.Show();
+        }
+    }
+
+    public void CloseAIStatus()
+    {
+        AIStatusView view = aiStatus != null ? aiStatus.GetComponent<AIStatusView>() : null;
+        if (view != null)
+        {
+            view.Hide();
+        }
+        else
+        {
+            CloseSimpleUI(aiStatus);
+        }
+    }
+
+    public void ToggleAIStatus()
+    {
+        if (aiStatus != null && aiStatus.activeSelf)
+        {
+            CloseAIStatus();
+        }
+        else
+        {
+            ShowAIStatus();
+        }
+    }
+
+    public void ShowJukebox()
+    {
+        jukebox = ResolveManagedUI(jukebox, "JukeboxView");
+        ShowSimpleUI(jukebox, "jukebox");
+
+        JukeboxView view = jukebox != null ? jukebox.GetComponent<JukeboxView>() : null;
+        if (view != null)
+        {
+            view.Show();
+        }
+    }
+
+    public void CloseJukebox()
+    {
+        JukeboxView view = jukebox != null ? jukebox.GetComponent<JukeboxView>() : null;
+        if (view != null)
+        {
+            view.Hide();
+        }
+        else
+        {
+            CloseSimpleUI(jukebox);
+        }
+    }
+
+    public void ToggleJukebox()
+    {
+        if (jukebox != null && jukebox.activeSelf)
+        {
+            CloseJukebox();
+        }
+        else
+        {
+            ShowJukebox();
         }
     }
 

@@ -1,5 +1,6 @@
 // 대상에 TooltipTrigger 추가해야 함
 using DevionGames.UIWidgets;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -71,6 +72,8 @@ public class LanguageManager : MonoBehaviour
     public TooltipTrigger radialMenuActionGoRight;
     public TooltipTrigger radialMenuActionHide;
     public TooltipTrigger radialMenuActionIdle;
+    public Text[] languageDataTextTargets;
+    public TMP_Text[] languageDataTmpTextTargets;
 
     // idx에 맞는 서버타입에 관한 tooltip 갱신; 0: Auto, 1: Server, 2: Free(Gemini), 3: Free(OpenRouter), 4: Paid(Gemini)
     public void SetServerServerTypeInfoTooltip(int idx)
@@ -137,9 +140,35 @@ public class LanguageManager : MonoBehaviour
         radialMenuActionHide.tooltip = LanguageData.Translate(radialMenuActionHide.tooltip, targetLang);
         radialMenuActionIdle.tooltip = LanguageData.Translate(radialMenuActionIdle.tooltip, targetLang);
 
+        TranslateRegisteredTextTargets(targetLang);
 
         // 모든 TooltipTrigger 자동 번역
         TranslateAllTooltipTriggers(targetLang);
+    }
+
+    private void TranslateRegisteredTextTargets(string targetLang)
+    {
+        if (languageDataTextTargets != null)
+        {
+            foreach (var target in languageDataTextTargets)
+            {
+                if (target != null && !string.IsNullOrEmpty(target.text))
+                {
+                    target.text = LanguageData.Translate(target.text, targetLang);
+                }
+            }
+        }
+
+        if (languageDataTmpTextTargets != null)
+        {
+            foreach (var target in languageDataTmpTextTargets)
+            {
+                if (target != null && !string.IsNullOrEmpty(target.text))
+                {
+                    target.text = LanguageData.Translate(target.text, targetLang);
+                }
+            }
+        }
     }
 
 

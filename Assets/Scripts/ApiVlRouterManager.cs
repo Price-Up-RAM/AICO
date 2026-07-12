@@ -304,6 +304,14 @@ public class ApiVlRouterManager : MonoBehaviour
             return;
         }
 
+        // [독립 사건] 어떤 이벤트든 data.reply_list가 있으면 대사 출력 (python_direct, primitive_tool 등 무관)
+        var dataObj = eventData["data"] as JObject;
+        if (dataObj != null && dataObj["reply_list"] != null)
+        {
+            TryProcessReplyListFromRouterData(dataObj);
+            dataObj.Remove("reply_list"); // 하위 로직에서 중복 처리 방지
+        }
+
         ProcessRouterMessage($"[{kind}] {message}");
         UpdateRouterStatusBalloonByKind(kind);
 

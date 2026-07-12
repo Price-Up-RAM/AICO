@@ -140,10 +140,18 @@ public class UIPositionManager : MonoBehaviour
                 return canvas.transform.TransformPoint(new Vector3(250f, 50f, 0f));
             case "alarm":
                 return canvas.transform.TransformPoint(new Vector3(300f, 0f, 0f));
+            case "skill":
+                return canvas.transform.TransformPoint(new Vector3(300f, 0f, 0f));
+            case "mission":
+                return canvas.transform.TransformPoint(new Vector3(300f, 0f, 0f));
             case "calendar":
                 return canvas.transform.TransformPoint(new Vector3(40f, 0f, 0f));
             case "todolist":
                 return canvas.transform.TransformPoint(new Vector3(300f, 0f, 0f));
+            case "aistatus":
+                return canvas.transform.TransformPoint(new Vector3(-300f, 0f, 0f));
+            case "jukebox":
+                return canvas.transform.TransformPoint(new Vector3(-360f, 0f, 0f));
             case "alarmmini":
                 return canvas.transform.TransformPoint(new Vector3(520f, 180f, 0f));
             case "inventory":

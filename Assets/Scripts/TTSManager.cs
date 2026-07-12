@@ -325,6 +325,11 @@ public class TTSManager : MonoBehaviour
             { "speed", SettingManager.Instance.settings.sound_speedMaster.ToString()},
             { "chatIdx", chatIdx}
         };
+        string refId = ResolveCharacterDetailVoiceRefId(nickname);
+        if (!string.IsNullOrEmpty(refId))
+        {
+            requestData["ref_id"] = refId;
+        }
         string jsonData = JsonConvert.SerializeObject(requestData);
         byte[] byteArray = Encoding.UTF8.GetBytes(jsonData);
 
@@ -491,6 +496,11 @@ public class TTSManager : MonoBehaviour
             { "speed", SettingManager.Instance.settings.sound_speedMaster.ToString()},
             { "chatIdx", chatIdx}
         };
+        string refId = ResolveCharacterDetailVoiceRefId(nickname);
+        if (!string.IsNullOrEmpty(refId))
+        {
+            requestData["ref_id"] = refId;
+        }
         string jsonData = JsonConvert.SerializeObject(requestData);
         byte[] byteArray = Encoding.UTF8.GetBytes(jsonData);
 
@@ -649,6 +659,39 @@ public class TTSManager : MonoBehaviour
     #region 헬퍼 함수
 
     // 스트림을 바이트 배열로 변환하는 함수
+    private string ResolveCharacterDetailVoiceRefId(string nickname)
+    {
+        if (SettingCharManager.Instance == null)
+        {
+            return string.Empty;
+        }
+
+        GameObject currentCharacter = CharManager.Instance != null ? CharManager.Instance.GetCurrentCharacter() : null;
+        CharAttributes attributes = currentCharacter != null ? currentCharacter.GetComponent<CharAttributes>() : null;
+        if (attributes != null)
+        {
+            string refId = GetSavedVoiceId(attributes.charcode);
+            if (!string.IsNullOrEmpty(refId))
+            {
+                return refId;
+            }
+
+        }
+
+        return GetSavedVoiceId(nickname);
+    }
+
+    private string GetSavedVoiceId(string characterId)
+    {
+        if (string.IsNullOrEmpty(characterId) || SettingCharManager.Instance == null)
+        {
+            return string.Empty;
+        }
+
+        var setting = SettingCharManager.Instance.GetCharCodeSetting(characterId.ToLower());
+        return setting != null ? setting.voiceId : string.Empty;
+    }
+
     private byte[] ReadFully(Stream input)
     {
         using (MemoryStream ms = new MemoryStream())
