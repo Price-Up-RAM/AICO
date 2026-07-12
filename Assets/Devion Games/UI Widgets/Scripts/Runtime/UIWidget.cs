@@ -212,7 +212,8 @@ namespace DevionGames.UIWidgets
 		private IEnumerator OnDelayedStart ()
 		{
 			yield return null;
-			if (!IsVisible && m_DeactivateOnClose) {
+			// AICO fix: Show() 진행 중(m_IsShowing=true)에는 이월된 초기 자동 닫힘이 위젯을 끄지 않도록 가드
+			if (!IsVisible && !m_IsShowing && m_DeactivateOnClose) {
 				gameObject.SetActive (false);
 			}
 		}
@@ -229,11 +230,13 @@ namespace DevionGames.UIWidgets
 		/// </summary>
 		public virtual void Show ()
 		{
-            if (this.m_IsShowing) {
+            // AICO fix: 고착 상태(비활성인데 m_IsShowing=true) 복구 — 열림 도중 외부 SetActive(false)로 잠긴 경우 Show가 다시 동작해야 함
+            if (this.m_IsShowing && gameObject.activeSelf) {
                 return;
             }
-            this.m_IsShowing = true;
+			// AICO fix: 지연 실행된 Awake가 m_IsShowing(=IsVisible)을 덮어쓰지 않도록 활성화 후에 세팅
 			gameObject.SetActive (true);
+            this.m_IsShowing = true;
             if (this.m_Focus) {
 				Focus ();
 			}
