@@ -15,7 +15,7 @@ Store의 리소스 구조와 동일하게 **ItemCatalog(카테고리 레지스�
 | **ItemSystem (여기)** | `Prefabs/Assist/ItemSystem` | 아이템의 **정체**(key/displayName/icon/description/maxStack)와 **능력**(선물 인연도 상승량 등), **재화의 정의**(ItemCurrencyCatalog)의 단일 출처 |
 | **CurrencyManager (여기)** | `Prefabs/Assist/ItemSystem` | **재화 잔액·증감·누적의 공식 소유자** (전 재화 균일 처리 — 특정 재화 특례 없음). 저장: `persistentDataPath/ItemSystem/currency.json` |
 | InventorySystem | `Prefabs/Assist/InventorySystem` | **보관·스택** (MAIN/CHAR 스토어, 저장/이동) |
-| Mission InventoryManager | `Prefabs/UI/Mission` | **레거시 골드 지갑** (기존 UI/미션 집계의 결합 지점 — CurrencyManager와 양방향 동기화로 공존, 이관 후 골드 소유권 회수 대상). 4동사: EarnGold/AddGold/RefundGold/SpendGold. ※ 구 item1~3 수치 재화는 삭제됨(4장 4번) |
+| ~~Mission InventoryManager~~ | ~~`Prefabs/UI/Mission`~~ | **삭제됨 (골드 단일화 완료)** — 구 레거시 골드 지갑. 골드 콜사이트(Store/Mission/Affinity)가 전부 CurrencyManager 4동사로 이관됐고, 구 `inventory.json`은 currency.json이 없는 첫 부팅에 1회 이관된다(`ImportLegacyGoldIfNeeded`) |
 | Store | `Prefabs/UI/Store` | **상거래** (가격/구매/판매 UI — 가격은 Store 소유, 능력은 ItemSystem 소유) |
 | EquipSystem | `Prefabs/Assist/EquipSystem` | **장착 메카닉** (소켓/배치) |
 
@@ -32,7 +32,7 @@ Store의 리소스 구조와 동일하게 **ItemCatalog(카테고리 레지스�
 | `Scripts/ItemGiftCatalog.cs` | 선물 카테고리 — `ItemGiftEntry : ItemEntry{affinityPoints}`(증정 시 인연도 상승량) + `GetGift(key)`. 능력 필드는 이렇게 카테고리별 파생 엔트리가 확장한다. |
 | `Scripts/ItemCatalog.cs` | **카테고리 레지스트리**(`Resources/ItemCatalog.asset`) — `ItemCategoryEntry{category, catalog}` 리스트만 보유(자체 캐시 없음, 자식 lazy map에 위임). `Categories()`(빈/중복 스킵, 경고 1회 래치)/`CatalogForCategory`/`Get`(등록 순 자식 위임, 첫 히트)/`Contains`/`CategoryForKey`/`TryGetGiftPoints`(자식 중 ItemGiftCatalog 타입 조회). |
 | `Scripts/ItemCurrencyCatalog.cs` | 재화 카테고리 — `ItemCurrencyEntry : ItemEntry{premium}`(정의만: 이름/아이콘/설명/프리미엄 여부. maxStack은 재화에서 미사용) + `GetCurrency(key)`. "카탈로그 등재 = 존재하는 재화" 불변식의 원천. |
-| `Scripts/CurrencyManager.cs` | **재화 상시 관리 싱글톤** — 전 재화 잔액/누적(earned·spent)/저장의 공식 소유자. `GetBalance`/`Earn`(소득 — earned 집계)/`Add`(순수 잔액 변경)/`Refund`(실패 결제 되돌림 — spent 역가산)/`Spend`(소비)(전부 카탈로그 미등재 키 거부)/`GetEarnedTotal`/`Gold` 편의 접근자/`CurrencyChanged(key)` 이벤트. **레거시 골드 브리지 내장**: 레거시 지갑이 살아 있는 동안 골드 증감은 그쪽을 트랜잭션 실행자로 쓰고 결과를 즉시 채택(양방향 동기화 — 어느 경로로 바뀌어도 수렴, 기존 골드 UI·미션 집계 무손상). 저장은 **체크섬(salted SHA-256) + 원자적 쓰기(temp→교체)** — 캐주얼 변조/파일 손상 감지 시 경고 후 무시(빈 지갑 시작, 골드는 브리지가 복원). Gem 등 추가 방법은 파일 상단 주석 예시 참조. |
+| `Scripts/CurrencyManager.cs` | **재화 상시 관리 싱글톤** — 전 재화 잔액/누적(earned·spent)/저장의 공식 소유자. `GetBalance`/`Earn`(소득 — earned 집계)/`Add`(순수 잔액 변경)/`Refund`(실패 결제 되돌림 — spent 역가산)/`Spend`(소비)(전부 카탈로그 미등재 키 거부)/`GetEarnedTotal`/`Gold` 편의 접근자/`CurrencyChanged(key)` 이벤트. **골드 단일화 완료**: 구 레거시 브리지는 제거됐고 골드도 전 재화와 같은 네이티브 경로를 탄다. 구 지갑 저장분(`inventory.json`)은 currency.json이 없는 첫 부팅에 1회 이관(`ImportLegacyGoldIfNeeded`). 저장은 **체크섬(salted SHA-256) + 원자적 쓰기(temp→교체)** — 캐주얼 변조/파일 손상 감지 시 지갑 초기화(전 재화 0). Gem 등 추가 방법은 파일 상단 주석 예시 참조. |
 | `Scripts/ItemSystemManager.cs` | **상시 파사드 싱글톤**(StoreManager 패턴: 플레이 중 `Instance` 자동 생성 + DontDestroyOnLoad, 에디트 모드 null). 조회 `GetItem`/`Contains`/`CategoryForKey`/`GetGiftAffinityPoints` + 부여 `GrantItem`/`GrantItemToChar`(→InventorySystemManager). **돈 관리는 하지 않는다 — 재화는 CurrencyManager.** 위임 대상 부재 시 false/0 + 경고 1회 래치. |
 | `Editor/ItemSystemTools.cs` | `Tools/ItemSystem/1. Create Catalog` + batchmode 진입점 `BatchBuildAll`. **카탈로그 갱신은 전부 additive**(기존 엔트리/행 불변 + 누락 기본 키만 추가, 기본 키의 빈 icon·빈 affinityPoints·기본 카테고리 행의 빈 catalog만 보충 — 인스펙터 편집이 재실행에도 보존). 신규 행에는 플래그 5종을 카테고리 기본값으로 명시 기록. **예외(이번 라운드 한정)**: 플래그 1회 스키마 마이그레이션이 기존 행에도 기본값을 기록한다(5장 — 다음 라운드에 블록 제거로 불변 원칙 복귀). 재화 추가 예시(Gem)는 CreateCatalog 내 주석 참조. |
 | `Resources/ItemCatalog.asset` | 카테고리 레지스트리 — 6행(장착물/포즈/이펙트/선물/잡화 — Store 태그와 동일 이름 — + 재화. 생성물, 런타임 자동 로드). |
@@ -72,14 +72,13 @@ bool paid = CurrencyManager.Instance.Spend(CurrencyManager.GoldKey, 120); // 골
 int gold = CurrencyManager.Instance.Gold;                               // 잔액 편의 접근자 (= GetBalance(GoldKey))
 CurrencyManager.Instance.CurrencyChanged += key => { /* UI 갱신 */ };   // 잔액 변경 브로드캐스트
 ```
-레거시 공존: 골드는 기존 지갑(미션 InventoryManager) 경유로도 계속 바뀔 수 있고(상점/미션 보상),
-CurrencyManager가 이벤트로 즉시 채택하므로 어느 쪽에서 읽어도 같은 값이다.
+골드 단일화 완료: 상점 결제/판매, 미션 보상, 인연도 보상, 데모 충전까지 골드 콜사이트 전부가
+CurrencyManager 4동사를 직접 호출한다. 골드 UI/미션 집계는 `CurrencyChanged` 이벤트를 구독한다.
 
 ### B2. 재화 추가 (예: Gem)
 지갑/증감/저장은 키 기반이라 CurrencyManager 코드 수정이 거의 없다:
 ① `ItemSystemTools.CreateCatalog`의 재화 배열에 한 줄 추가(그 파일의 Gem 주석 예시) 또는 인스펙터에서
 `ItemCurrencyCatalog.asset`에 엔트리 직접 추가 → ② `CurrencyManager`의 `GemKey` 주석 상수 활성화 → 끝.
-신규 재화는 레거시 브리지와 무관하게 처음부터 CurrencyManager 지갑에 네이티브 저장된다.
 
 ### C. 아이템 추가
 1. 해당 카테고리의 하위 카탈로그 에셋(예: 잡화 = `Resources/ItemMiscCatalog.asset`)에 엔트리 1개 추가 —
@@ -93,21 +92,15 @@ CurrencyManager가 이벤트로 즉시 채택하므로 어느 쪽에서 읽어�
 
 이번 라운드는 기존 파일 무수정 원칙 — 아래는 정찰로 확인한 이관 후보다.
 
-1. **콜사이트 이관 — "출입 한 문" 완성.** 정찰 결과 골드 변경 5곳 / 아이템 지급 3곳이 파사드 밖에 있다.
-   - 골드 변경: `Store/Scripts/StoreView.cs` 3곳(구매 결제 SpendGold / 지급 실패 환불 **RefundGold** / 판매 대금 **EarnGold**),
-     `Store/Scripts/StoreDemoController.cs` 1곳(G키 +500 **AddGold** — 순수 잔액 충전),
-     `Mission/MissionView/Scripts/InventoryManager.cs` 1곳(AddReward의 미션 보상 가산 — Earn 의미, 지갑 소유자 내부라 이관 제외 검토).
-     ※ 레거시 지갑은 **4동사로 분리됨**: `EarnGold`(소득 — goldEarnedTotal 집계) / `AddGold`(순수 잔액
-     변경 — 집계 무반응) / `RefundGold`(실패 결제 되돌림 — goldSpentTotal 역가산) / `SpendGold`(소비).
-     CurrencyManager에도 `Earn/Add/Refund/Spend` 4동사가 대칭 구현됐다.
-   - 아이템 지급: `StoreView.cs`(구매 AddToMain) / `StoreDemoController.cs`(데모 지급) /
+1. **콜사이트 이관 — "출입 한 문" 완성.**
+   - ~~골드 변경~~ — **이관 완료 (골드 단일화).** StoreView(구매 `Spend` / 환불 `Refund` / 판매 `Earn`),
+     StoreConfirmView(잔액 판정 `Gold`), StoreDemoController(G키 +500 `Add`), MissionList(보상 지급
+     양수=`Earn`/음수=`Add`, CH0001/CH0007 집계 `GetEarnedTotal/GetSpentTotal` + `CurrencyChanged` 구독),
+     AffinityRewardModalView(`Earn`)가 전부 CurrencyManager 직결. 레거시 지갑(Mission InventoryManager)과
+     CurrencyManager의 브리지는 **삭제 완료** — 동사 매핑은 판매=Earn / 환불=Refund / 보상=Earn / 데모 충전=Add.
+   - 아이템 지급(미완): `StoreView.cs`(구매 AddToMain) / `StoreDemoController.cs`(데모 지급) /
      `InventorySystem/Scripts/InventoryDemoController.cs`(데모 지급) — 전부 `AddToMain` 직호출.
-   - → 아이템은 `GrantItem`, 골드는 `CurrencyManager.Earn/Add/Refund/Spend` 경유로 순차 교체.
-     **이관 시 반드시 동사 의미를 보존할 것: 판매=Earn / 환불=Refund / 보상=Earn / 데모 충전=Add.**
-     Store 쪽은 "Store 내부만 수정" 원칙에 따라 별도 라운드.
-   - **브리지 제거 조건**: 골드 콜사이트가 전부 CurrencyManager로 이관되고 미션 집계(CH0001/CH0007)가
-     `CurrencyChanged` + `GetEarnedTotal/GetSpentTotal`을 구독하게 되면, CurrencyManager의 레거시 골드
-     브리지(레거시 지갑 통과 + 채택)를 제거하고 골드도 네이티브 경로로 일원화한다.
+     → 아이템은 `GrantItem` 경유로 순차 교체. Store 쪽은 "Store 내부만 수정" 원칙에 따라 별도 라운드.
 2. **StoreView 판매 차감의 캡슐화 우회 해소.** 현행 `StoreView.ExecuteSale`은 MAIN 스토어의 스택을
    직접 차감/제거하고 `SaveStore` + `OnStoreChanged` 발화까지 자기가 한다 — InventorySystemManager에
    차감 공개 API가 없어 생긴 우회. → 파사드에 차감 API(예: `ConsumeItem(key, amount)`, 내부는

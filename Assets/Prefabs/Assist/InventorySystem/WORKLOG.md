@@ -14,10 +14,10 @@
 
 | 파일 | 역할 |
 |---|---|
-| `Scripts/InventoryModel.cs` | 순수 데이터: `InvItemStack{key,count,slot}`, `InvStore{ownerId,stacks}` + Add/Remove/CountOf/FindBySlot/FirstFreeSlot/NormalizeSlots. **slot = 그리드 칸 위치**(드래그 배치·페이지 기준, 저장됨). JsonUtility 직렬화. |
+| `Scripts/InventoryModel.cs` | 순수 데이터: `InvItemStack{key,count,slot}`, `InvStore{ownerId,stacks,equippedKeys}` + Add/Remove/CountOf/FindBySlot/FirstFreeSlot/NormalizeSlots. **slot = 그리드 칸 위치**(드래그 배치·페이지 기준, 저장됨). **equippedKeys = 착용 중 key 목록**(§2 착용 영속화). JsonUtility 직렬화. |
 | `Scripts/InventoryEvents.cs` | 정적 이벤트 허브: `OnActiveOwnerChanged`(캐릭터 전환), `OnStoreChanged`(스토어 변경/장착 토글). |
 | `Scripts/InventoryCatalog.cs` | 아이템 **표시 메타** SO (`displayName`/`icon`/`maxStack`/`category`). EquipCatalog과 동일 구조, key 문자열 공간 공유. |
-| `Scripts/InventorySystemManager.cs` | 싱글톤. MAIN + 캐릭터별 스토어, JSON 저장/로드, 이동(MoveMainToChar/MoveCharToMain), 장착(EquipKey 멱등 / ToggleEquip) + 표시용 장착 미러, 정렬(SortStore: 종류→이름). (주의: `InventoryManager`라는 이름은 미션 재화 시스템 `Assets/Prefabs/UI/Mission/MissionView/Scripts/InventoryManager.cs`가 이미 전역으로 사용 중이라 충돌 회피를 위해 이 이름을 쓴다.) |
+| `Scripts/InventorySystemManager.cs` | 싱글톤. MAIN + 캐릭터별 스토어, JSON 저장/로드, 이동(MoveMainToChar/MoveCharToMain), 장착(EquipKey 멱등 / ToggleEquip) + 표시용 장착 미러, 정렬(SortStore: 종류→이름). (이름 유래: 명명 당시 미션 재화 시스템이 `InventoryManager`를 전역으로 쓰고 있어 충돌 회피로 이 이름을 택했다 — 그 클래스는 이후 골드 단일화로 삭제됐지만 이름은 유지.) |
 | `Scripts/InventoryView.cs` | UI 창 컨트롤러(**베이크 전용**: Awake가 `BindExisting`으로 참조만 연결 — 베이크 계층이 없으면 에러 로그 + 무동작). **창 1개 = 스토어 1개**(`InventorySection.Main/Char`, `ConfigureSection`으로 지정). 헤더 바(타이틀+정렬/닫기) + **8x6=48칸 고정 그리드(빈 칸 포함)** + 푸터 바(`<` 페이지 `>`). 드롭 해석(`HandleSlotDrop`): 칸=위치 이동/스왑/병합, 반대 창=이동, 캐릭터(3D, 렌더러 바운드 스크린 투영)=이동+장착. 우클릭=컨텍스트 메뉴. CanvasGroup 토글 + `IsVisible`(외부 토글 판정용 공개 프로퍼티). |
 | `Scripts/InventorySlotView.cs` | 그리드 셀 1칸(64px): **빈 칸/아이템 칸** 표시(아이콘·이름·수량·장착 하이라이트). 좌클릭(퀵액션)/우클릭(메뉴)/**아이템 드래그**(고스트 추종, 빈 칸은 드래그 불가·드롭 타깃만). |
 | `Scripts/InventoryMenu.cs` | 우클릭 컨텍스트 메뉴(상세/장착·해제/**CHAR·MAIN으로 이동**) + 상세 팝업 (Devion UIWidgets ContextMenu 참고, 서브메뉴 없음). 코드 런타임 생성, 백드롭 클릭 닫기, 동시 1개. 폰트는 뷰의 SUIT-Bold를 물려받음. |
@@ -46,9 +46,21 @@
 
 ### 소유(인벤토리) vs 착용(EquipSystem)의 분리
 - 인벤토리는 "무엇을 **소유**하는가"만 관리. **장착해도 스토어에서 빠지지 않는다.**
-- "무엇을 **착용** 중인가"의 진실은 EquipSystem(소켓 하위 `EquipMarker`)이 갖고, `InventorySystemManager`는
-  UI 하이라이트용 **런타임 미러**(charcode→slotId→key, 저장 안 함)만 유지.
-- 같은 슬롯에 다른 아이템 장착 시 EquipManager가 기존 장착물을 교체하며, 미러도 함께 갱신.
+- "무엇을 **착용** 중인가"의 씬 실체는 EquipSystem(소켓 하위 `EquipMarker`)이 갖고,
+  **영속 진실은 스토어의 `equippedKeys`(착용 key 목록, char_{charcode}.json에 저장)** (2026-07-12 도입).
+  `InventorySystemManager`의 미러(charcode→slotId→key)는 여전히 UI 하이라이트용 런타임 캐시(저장 안 함).
+- 같은 슬롯에 다른 아이템 장착 시 EquipManager가 기존 장착물을 교체하며, 미러·착용 기록도 함께 갱신.
+
+### 착용 영속화 (2026-07-12)
+- **저장 데이터는 key 목록뿐** (`InvStore.equippedKeys`) — 슬롯(slotId)은 저장하지 않는다.
+  복원 시 `EquipManager.Equip`의 해석 사다리가 현재 소켓 구성 기준으로 재해석하므로
+  소켓 리네임/재저작에 강건. 구버전 세이브는 필드가 없어도 로드 무해(빈 목록).
+- **기록 시점 3곳** (즉시 저장, `PersistEquipped`): ① `EquipKey` 성공(같은 슬롯 교체 시 이전 key 기록 제거 포함)
+  ② `ToggleEquip` 해제 ③ `UnequipIfMirrored`(이동으로 강제 해제 — 비활성 캐릭터 포함).
+- **복원**: `SetActiveOwner` → `RestoreEquips` — 플레이 중에만(origin 주입과 동일 게이트),
+  보유 검증(미보유 key는 기록 정리) 후 `Equip` 직접 호출(EquipKey 미경유 — 토글/재기록과 분리),
+  성공 시 해석된 슬롯으로 미러 재구성, 실패(소켓 없음)는 경고 후 **기록 유지**(소켓 저작 후 자연 복원).
+- 앱 배선은 `CharManager.setInventoryVar`가 스폰/전환 3지점에서 `SetActiveOwner` 호출 — 이미 연결됨.
 
 ### key 규약 — 카탈로그 2개의 관계
 - `InventoryCatalog`(표시 메타)와 `EquipCatalog`(장착 물리정보)는 **같은 key 문자열 공간**을 쓴다.

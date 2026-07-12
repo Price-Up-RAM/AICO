@@ -10,12 +10,10 @@ using UnityEngine;
 //   - CurrencyManager(여기): 잔액·누적(earned/spent)·저장(persistentDataPath/ItemSystem/currency.json).
 //     특정 재화만 다른 시스템에 위탁하는 특례는 두지 않는다 — 전 재화가 같은 코드 경로를 탄다.
 //
-// 레거시 골드 브리지 (공존용 — 제거 대상):
-//   기존 골드는 Mission의 InventoryManager(inventory.json)가 저장해 왔고, 상점 골드 라벨과
-//   미션 집계(CH0001/CH0007)가 그 잔액·누적·InventoryChanged 이벤트에 결합돼 있다.
-//   그래서 레거시 지갑이 살아 있는 동안에는 골드 증감을 레거시 지갑에 통과시키고(트랜잭션 실행자),
-//   그 결과를 이 지갑이 즉시 채택(양방향 동기화)한다 — 어느 쪽 경로로 골드가 바뀌어도 두 지갑은 수렴한다.
-//   골드 콜사이트가 전부 이 매니저로 이관되고 미션 집계가 여기를 구독하게 되면 브리지를 제거한다.
+// 골드 단일화 완료 (구 레거시 브리지 제거됨):
+//   구 Mission InventoryManager(inventory.json) 지갑은 삭제됐고, 골드도 다른 재화와 같은
+//   네이티브 경로를 탄다. 구 저장분은 currency.json이 아직 없는 첫 부팅에만 1회 이관된다
+//   (ImportLegacyGoldIfNeeded — 브리지 시절을 거친 기기는 매 세션 동기화로 이미 값이 넘어와 있다).
 public class CurrencyManager : MonoBehaviour
 {
     // ── 재화 키 (ItemCurrencyCatalog 등재 키와 동일 문자열) ──
@@ -88,7 +86,6 @@ public class CurrencyManager : MonoBehaviour
 
     private CurrencySaveData data = new CurrencySaveData();
     private ItemCurrencyCatalog catalog;          // 재화 정의 카탈로그 (Resources)
-    private InventoryManager subscribedLegacyWallet;  // 브리지 구독 당시 참조 (OnDestroy 해제용)
 
     private bool warnedNoCatalog;  // 카탈로그 부재 경고 1회 래치
 
@@ -114,28 +111,11 @@ public class CurrencyManager : MonoBehaviour
 
         catalog = Resources.Load<ItemCurrencyCatalog>("ItemCurrencyCatalog");
         Load();
-
-        // 레거시 골드 브리지: 지갑 이벤트 구독 + 부팅 시점 채택 (레거시 저장이 골드의 기존 진실)
-        if (Application.isPlaying)
-        {
-            subscribedLegacyWallet = InventoryManager.Instance;
-            if (subscribedLegacyWallet != null)
-            {
-                subscribedLegacyWallet.InventoryChanged += OnLegacyWalletChanged;
-                SyncFromLegacyWallet();
-            }
-        }
+        ImportLegacyGoldIfNeeded();
     }
 
     private void OnDestroy()
     {
-        // 종료 중 Instance getter를 부르면 지갑이 재생성될 수 있어, 구독 당시 참조로만 해제한다
-        if (subscribedLegacyWallet != null)
-        {
-            subscribedLegacyWallet.InventoryChanged -= OnLegacyWalletChanged;
-            subscribedLegacyWallet = null;
-        }
-
         if (_instance == this)
         {
             _instance = null;
@@ -169,15 +149,6 @@ public class CurrencyManager : MonoBehaviour
             return false;
         }
 
-        // 레거시 브리지: 골드는 레거시 지갑이 살아 있는 동안 그쪽을 트랜잭션 실행자로 쓴다
-        // (미션 집계·기존 UI가 그 이벤트에 결합) — 결과는 이벤트 → SyncFromLegacyWallet 으로 채택된다
-        InventoryManager legacy = ResolveLegacyWalletForGold(currencyKey);
-        if (legacy != null)
-        {
-            legacy.EarnGold(amount);
-            return true;
-        }
-
         CurrencyState state = FindOrCreate(currencyKey);
         state.balance = state.balance + amount;
         state.earnedTotal = state.earnedTotal + amount;
@@ -192,13 +163,6 @@ public class CurrencyManager : MonoBehaviour
         if (amount <= 0 || IsKnownCurrency(currencyKey) == false)
         {
             return false;
-        }
-
-        InventoryManager legacy = ResolveLegacyWalletForGold(currencyKey);
-        if (legacy != null)
-        {
-            legacy.RefundGold(amount);
-            return true;
         }
 
         CurrencyState state = FindOrCreate(currencyKey);
@@ -217,14 +181,6 @@ public class CurrencyManager : MonoBehaviour
             return false;
         }
 
-        // 레거시 브리지: 골드는 레거시 지갑의 순수 변경 경로로 위임 (집계 무반응 유지)
-        InventoryManager legacy = ResolveLegacyWalletForGold(currencyKey);
-        if (legacy != null)
-        {
-            legacy.AddGold(amount);
-            return true;
-        }
-
         CurrencyState state = FindOrCreate(currencyKey);
         state.balance = Mathf.Max(0, state.balance + amount);
         Persist(currencyKey);
@@ -237,12 +193,6 @@ public class CurrencyManager : MonoBehaviour
         if (amount <= 0 || IsKnownCurrency(currencyKey) == false)
         {
             return false;
-        }
-
-        InventoryManager legacy = ResolveLegacyWalletForGold(currencyKey);
-        if (legacy != null)
-        {
-            return legacy.SpendGold(amount);
         }
 
         CurrencyState state = Find(currencyKey);
@@ -270,46 +220,52 @@ public class CurrencyManager : MonoBehaviour
         return state != null ? state.spentTotal : 0;
     }
 
-    // ── 레거시 골드 브리지 ──
+    // ── 레거시 골드 1회 이관 ──
 
-    // 골드이고 레거시 지갑이 살아 있으면 그 지갑을 반환 (그 외 null = 네이티브 경로)
-    private InventoryManager ResolveLegacyWalletForGold(string currencyKey)
+    // inventory.json(구 Mission InventoryManager) 판독용 미러 — 이관 후에도 파일은 지우지 않는다(무해한 잔존물)
+    [Serializable]
+    private class LegacyInventoryData
     {
-        if (currencyKey != GoldKey)
-        {
-            return null;
-        }
-
-        // 매 호출 조회 — 씬 전환으로 사라질 수 있다 (사라지면 네이티브 경로로 자연 전환)
-        return Application.isPlaying ? InventoryManager.Instance : null;
+        public int gold;
+        public int goldEarnedTotal;
+        public int goldSpentTotal;
     }
 
-    private void OnLegacyWalletChanged()
+    // currency.json이 아직 없는 첫 부팅에만 구 지갑(inventory.json)의 골드를 채택한다.
+    // 브리지 시절을 거친 기기는 매 세션 동기화로 currency.json에 이미 값이 있어 이 경로를 타지 않는다.
+    // (currency.json 존재 = 이관 완료로 간주 — 체크섬 불일치로 지갑이 초기화된 경우에도 재이관하지 않는다)
+    private void ImportLegacyGoldIfNeeded()
     {
-        SyncFromLegacyWallet();
-    }
-
-    // 레거시 지갑의 골드 잔액·누적을 이 지갑에 채택 (값이 같으면 무동작 — 이벤트 루프 없음)
-    private void SyncFromLegacyWallet()
-    {
-        InventoryManager legacy = subscribedLegacyWallet != null ? subscribedLegacyWallet : InventoryManager.Instance;
-        if (legacy == null)
+        if (Application.isPlaying == false || File.Exists(SavePath))
         {
             return;
         }
 
-        CurrencyState state = FindOrCreate(GoldKey);
-        if (state.balance == legacy.Gold
-            && state.earnedTotal == legacy.GoldEarnedTotal
-            && state.spentTotal == legacy.GoldSpentTotal)
+        string legacyPath = Path.Combine(Application.persistentDataPath, "inventory.json");
+        if (File.Exists(legacyPath) == false)
         {
             return;
         }
 
-        state.balance = legacy.Gold;
-        state.earnedTotal = legacy.GoldEarnedTotal;
-        state.spentTotal = legacy.GoldSpentTotal;
-        Persist(GoldKey);
+        try
+        {
+            LegacyInventoryData legacy = JsonUtility.FromJson<LegacyInventoryData>(File.ReadAllText(legacyPath));
+            if (legacy == null)
+            {
+                return;
+            }
+
+            CurrencyState state = FindOrCreate(GoldKey);
+            state.balance = Mathf.Max(0, legacy.gold);
+            state.earnedTotal = Mathf.Max(0, legacy.goldEarnedTotal);
+            state.spentTotal = Mathf.Max(0, legacy.goldSpentTotal);
+            Persist(GoldKey);
+            Debug.Log($"[ItemSystem][CurrencyManager] 레거시 골드 지갑(inventory.json) 이관: {state.balance} G (earned {state.earnedTotal} / spent {state.spentTotal})");
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[ItemSystem][CurrencyManager] 레거시 골드 이관 실패: " + e.Message);
+        }
     }
 
     // ── 내부 ──
@@ -420,8 +376,7 @@ public class CurrencyManager : MonoBehaviour
                 return;
             }
 
-            // 체크섬 불일치 = 변조 또는 손상 — 로그 후 지갑을 명시적으로 초기화한다.
-            // (골드는 부팅 시 레거시 지갑 브리지가 채택하므로 실손실 없음. 네이티브 재화만 0이 된다)
+            // 체크섬 불일치 = 변조 또는 손상 — 로그 후 지갑을 명시적으로 초기화한다(전 재화 0).
             if (ComputeChecksum(file.payload) != file.checksum)
             {
                 Debug.Log("[ItemSystem][CurrencyManager] 저장 파일 체크섬 불일치 — 변조/손상. 지갑을 초기화합니다: " + path);

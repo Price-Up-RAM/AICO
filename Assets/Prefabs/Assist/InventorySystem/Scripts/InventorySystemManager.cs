@@ -98,6 +98,10 @@ public class InventorySystemManager : MonoBehaviour
                     {
                         loaded.stacks = new List<InvItemStack>();
                     }
+                    if (loaded.equippedKeys == null)
+                    {
+                        loaded.equippedKeys = new List<string>();
+                    }
 
                     // 칸 미배정(-1)/중복 보정 (slot 필드가 없던 구버전 세이브 대응)
                     loaded.NormalizeSlots();
@@ -194,7 +198,83 @@ public class InventorySystemManager : MonoBehaviour
         // 스토어 로드 보장
         GetCharStore(charcode);
 
+        // 저장된 착용 목록 재장착 (플레이 중에만 — 에디트 모드 Instantiate 방지, origin 주입과 동일 게이트)
+        if (Application.isPlaying)
+        {
+            RestoreEquips(charcode, target);
+        }
+
         InventoryEvents.OnActiveOwnerChanged?.Invoke(charcode);
+    }
+
+    // 저장된 착용 목록(equippedKeys)을 재장착 — 슬롯은 저장하지 않았으므로 EquipManager의
+    // 해석 사다리가 현재 소켓 구성 기준으로 재해석한다 (소켓 리네임/재저작 내성).
+    // EquipKey를 거치지 않고 Equip 직접 호출 — 토글 판정·저장 재기록과 섞이지 않는 전용 경로.
+    private void RestoreEquips(string charcode, GameObject target)
+    {
+        // 미러 초기화가 먼저 — 새로 스폰된 인스턴스의 진실은 "무장착"이다. 이전 세션/이전 인스턴스의
+        // 스테일 미러가 남으면 EquipKey가 거짓 멱등 성공을 반환(재장착 불가)하고 ToggleEquip이
+        // 실제로 입지 않은 기록을 삭제한다. 기록이 비어 있어도(early-return 케이스) 초기화는 필요.
+        if (equipMirror.TryGetValue(charcode, out Dictionary<string, string> stale))
+        {
+            stale.Clear();
+        }
+
+        if (EquipManager.Instance == null || equipCatalog == null)
+        {
+            return;
+        }
+
+        InvStore store = GetCharStore(charcode);
+        if (store == null || store.equippedKeys == null || store.equippedKeys.Count == 0)
+        {
+            return;
+        }
+
+        Dictionary<string, string> slots = GetActiveMirror();
+        List<string> keys = new List<string>(store.equippedKeys);  // 순회 중 기록 정리 대비 복사
+        bool dirty = false;
+
+        foreach (string key in keys)
+        {
+            // 소유 검증: 보유하지 않은 키는 착용 불가 (세이브 수동 편집/불일치 방어) — 기록 정리
+            if (store.CountOf(key) <= 0)
+            {
+                store.equippedKeys.Remove(key);
+                dirty = true;
+                Debug.LogWarning($"[InventorySystemManager] 착용 복원 스킵(미보유): '{key}' — 기록 정리");
+                continue;
+            }
+
+            string reason;
+            bool ok = EquipManager.Instance.Equip(target, key, out reason);
+            if (ok == false)
+            {
+                // 기록은 유지 — 소켓을 저작하고 나면 다음 전환/재시작 때 자연 복원된다
+                Debug.LogWarning($"[InventorySystemManager] 착용 복원 실패: '{key}' — {reason} (기록 유지)");
+                continue;
+            }
+
+            // 미러 기록: Equip과 동일 사다리로 해석된 실제 슬롯
+            EquipEntry entry = equipCatalog.Get(key);
+            string slotId;
+            int priority;
+            if (entry != null && EquipSlotResolver.Resolve(target, entry, out slotId, out priority) != null)
+            {
+                // 두 기록 키가 같은 슬롯으로 재해석되면(소켓 재저작으로 폴백 충돌) 앞서 입힌 키는
+                // 방금 Equip이 교체·파괴했다 — 밀려난 키의 기록도 제거 (EquipKey의 교체 처리와 동일 불변식)
+                if (slots.TryGetValue(slotId, out string prevKey) && prevKey != key)
+                {
+                    PersistEquipped(charcode, prevKey, false);
+                }
+                slots[slotId] = key;
+            }
+        }
+
+        if (dirty)
+        {
+            SaveStore(store);
+        }
     }
 
     // 인벤토리 카탈로그에 등록된 키인지
@@ -491,9 +571,47 @@ public class InventorySystemManager : MonoBehaviour
         return true;
     }
 
-    // 미러에 해당 키가 장착 중으로 기록되어 있으면 Unequip + 미러 제거
+    // 착용 기록(스토어 equippedKeys) 갱신 + 즉시 저장 — 착용이 바뀌는 3지점(EquipKey/ToggleEquip 해제/UnequipIfMirrored) 공용.
+    // 저장 데이터는 key 목록뿐 — 슬롯은 복원 시 해석 사다리가 재해석한다.
+    private void PersistEquipped(string charcode, string key, bool equipped)
+    {
+        InvStore store = GetCharStore(charcode);
+        if (store == null || string.IsNullOrEmpty(key))
+        {
+            return;
+        }
+        if (store.equippedKeys == null)
+        {
+            store.equippedKeys = new List<string>();
+        }
+
+        bool changed = false;
+        if (equipped)
+        {
+            if (store.equippedKeys.Contains(key) == false)
+            {
+                store.equippedKeys.Add(key);
+                changed = true;
+            }
+        }
+        else
+        {
+            changed = store.equippedKeys.Remove(key);
+        }
+
+        if (changed)
+        {
+            SaveStore(store);
+        }
+    }
+
+    // 미러에 해당 키가 장착 중으로 기록되어 있으면 Unequip + 미러 제거. 착용 영속 기록은 미러와 무관하게 정리.
     private void UnequipIfMirrored(string charcode, string key)
     {
+        // 영속 기록 정리는 무조건 — 이번 세션에 활성화된 적 없는 캐릭터(미러 없음)도 아이템이 스토어를
+        // 떠나면 착용 기록을 유지할 수 없다. PersistEquipped는 멱등이라 기록이 없으면 no-op.
+        PersistEquipped(charcode, key, false);
+
         if (equipMirror.TryGetValue(charcode, out Dictionary<string, string> slots) == false)
         {
             return;
@@ -583,7 +701,14 @@ public class InventorySystemManager : MonoBehaviour
             Debug.LogWarning($"[InventorySystemManager] EquipKey: 장착 실패 — {reason}");
             return false;
         }
+
+        // 착용 기록: 같은 슬롯에서 교체된 이전 아이템 기록 제거 + 새 아이템 기록 (즉시 저장)
+        if (string.IsNullOrEmpty(equippedKey) == false && equippedKey != key)
+        {
+            PersistEquipped(ActiveCharcode, equippedKey, false);
+        }
         slots[slotId] = key;
+        PersistEquipped(ActiveCharcode, key, true);
 
         InventoryEvents.OnStoreChanged?.Invoke(ActiveCharcode);
         return true;
@@ -629,6 +754,7 @@ public class InventorySystemManager : MonoBehaviour
 
             EquipManager.Instance.Unequip(ActiveTarget, resolvedSlotId);
             slots.Remove(resolvedSlotId);
+            PersistEquipped(ActiveCharcode, key, false);  // 착용 기록 제거 (즉시 저장)
             InventoryEvents.OnStoreChanged?.Invoke(ActiveCharcode);
             return true;
         }

@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 
 // 인벤토리 순수 데이터 모델 (JsonUtility 직렬화 호환 POCO).
-// 스토어는 "소유"만 추적한다 — 장착 상태의 진실은 EquipSystem에 있음.
+// 스토어는 "소유"(stacks) + "착용 사실"(equippedKeys)을 추적한다.
+// 착용의 씬 실체는 EquipSystem(EquipMarker)이고, equippedKeys는 재시작/전환 시 재장착할 key 목록.
 // 각 스택은 그리드 칸 위치(slot)를 가진다 (드래그 앤 드롭 배치/페이지의 기준).
 
 // 아이템 스택: 키 + 개수 + 칸 위치
@@ -20,6 +21,7 @@ public class InvStore
 {
     public string ownerId;                                          // "MAIN" 또는 charcode
     public List<InvItemStack> stacks = new List<InvItemStack>();    // 보유 스택 목록
+    public List<string> equippedKeys = new List<string>();          // 착용 중 key 목록 — 슬롯은 저장 안 함(복원 시 해석 사다리가 재해석). 구버전 세이브에는 없던 필드(JsonUtility가 무시 → 빈 목록)
 
     // 키로 스택 조회 (없으면 null)
     public InvItemStack Find(string key)
