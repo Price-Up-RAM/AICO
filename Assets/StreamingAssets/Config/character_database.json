@@ -3,6 +3,12 @@
     {
       "id": 0,
       "name": "AICO",
+      "source": "오리지널",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "AICO",
@@ -17,6 +23,13 @@
     {
       "id": 1,
       "name": "ARONA",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "감정표현",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -32,7 +45,11 @@
           "spriteAddress": "arona_2d_sprite",
           "prefabAddress": "arona_2d",
           "isLocal": true,
-          "isSelectable": false
+          "isSelectable": false,
+          "featureTagsOverride": [
+            "AI 대화",
+            "친밀도 보유"
+          ]
         },
         {
           "name": "AI",
@@ -48,7 +65,12 @@
           "spriteAddress": "arona_ball_sprite",
           "prefabAddress": "arona_ball",
           "isLocal": true,
-          "isSelectable": true
+          "isSelectable": true,
+          "featureTagsOverride": [
+            "AI 대화",
+            "친밀도 보유",
+            "머리쓰다듬기"
+          ]
         },
         {
           "name": "koi",
@@ -63,6 +85,13 @@
     {
       "id": 2,
       "name": "Plana",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "감정표현",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -78,13 +107,24 @@
           "spriteAddress": "plana_ball_sprite",
           "prefabAddress": "plana_ball",
           "isLocal": true,
-          "isSelectable": false
+          "isSelectable": false,
+          "featureTagsOverride": [
+            "AI 대화",
+            "친밀도 보유",
+            "머리쓰다듬기"
+          ]
         }
       ]
     },
     {
       "id": 3,
       "name": "Mari",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -93,7 +133,7 @@
           "prefabAddress": "mari",
           "isLocal": true,
           "isSelectable": false
-        },        
+        },
         {
           "name": "Sportswear",
           "text": "Sportswear",
@@ -148,6 +188,12 @@
     {
       "id": 4,
       "name": "Nagisa",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -170,6 +216,12 @@
     {
       "id": 5,
       "name": "Mika",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -193,13 +245,25 @@
           "spriteAddress": "mika_sprite",
           "prefabAddress": "mika_3d",
           "isLocal": true,
-          "isSelectable": false
+          "isSelectable": false,
+          "featureTagsOverride": [
+            "AI 대화",
+            "감정표현",
+            "친밀도 보유",
+            "머리쓰다듬기"
+          ]
         }
       ]
     },
     {
       "id": 6,
       "name": "Seia",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -222,6 +286,12 @@
     {
       "id": 7,
       "name": "Aris",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -252,6 +322,12 @@
     {
       "id": 8,
       "name": "Kei",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -266,6 +342,12 @@
     {
       "id": 9,
       "name": "Yuzu",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -304,6 +386,12 @@
     {
       "id": 10,
       "name": "Momoi",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -334,6 +422,12 @@
     {
       "id": 11,
       "name": "Midori",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -364,6 +458,12 @@
     {
       "id": 12,
       "name": "Yuuka",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -419,6 +519,12 @@
     {
       "id": 13,
       "name": "Noa",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -441,6 +547,12 @@
     {
       "id": 14,
       "name": "Koyuki",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -480,6 +592,12 @@
     {
       "id": 15,
       "name": "Kisaki",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -494,6 +612,12 @@
     {
       "id": 16,
       "name": "Kokona",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -508,6 +632,12 @@
     {
       "id": 17,
       "name": "Shun Kid",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -522,6 +652,12 @@
     {
       "id": 18,
       "name": "Miyako",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -567,8 +703,14 @@
       ]
     },
     {
-      "id": 18,
+      "id": 19,
       "name": "Ui",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "Basic",
@@ -589,8 +731,14 @@
       ]
     },
     {
-      "id": 19,
+      "id": 20,
       "name": "Hifumi",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "2D",
@@ -620,8 +768,14 @@
       ]
     },
     {
-      "id": 20,
+      "id": 21,
       "name": "Hina",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "2D(Dress)",
@@ -651,8 +805,14 @@
       ]
     },
     {
-      "id": 21,
+      "id": 22,
       "name": "Hoshino",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "2D",
@@ -682,8 +842,14 @@
       ]
     },
     {
-      "id": 22,
+      "id": 23,
       "name": "Iori",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "2D",
@@ -713,8 +879,14 @@
       ]
     },
     {
-      "id": 23,
+      "id": 24,
       "name": "Iroha",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "2D",
@@ -744,8 +916,14 @@
       ]
     },
     {
-      "id": 24,
+      "id": 25,
       "name": "Nonomi",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "2D",
@@ -775,8 +953,14 @@
       ]
     },
     {
-      "id": 25,
+      "id": 26,
       "name": "Shiroko",
+      "source": "블루아카이브",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "2D",
@@ -806,8 +990,15 @@
       ]
     },
     {
-      "id": 26,
+      "id": 27,
       "name": "Miku",
+      "source": "VOCALOID",
+      "featureTags": [
+        "감정표현",
+        "친밀도 보유",
+        "머리쓰다듬기",
+        "음악재생"
+      ],
       "clothesList": [
         {
           "name": "miku",
@@ -820,8 +1011,14 @@
       ]
     },
     {
-      "id": 27,
+      "id": 28,
       "name": "Kkum",
+      "source": "꿈씨패밀리",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "꿈돌이",
@@ -834,8 +1031,14 @@
       ]
     },
     {
-      "id": 28,
+      "id": 29,
       "name": "Amber",
+      "source": "원신",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "amber",
@@ -848,8 +1051,15 @@
       ]
     },
     {
-      "id": 29,
+      "id": 30,
       "name": "Jonryo",
+      "source": "원신",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기",
+        "커피끓여주기"
+      ],
       "clothesList": [
         {
           "name": "jonryo",
@@ -862,8 +1072,14 @@
       ]
     },
     {
-      "id": 30,
+      "id": 31,
       "name": "Diana",
+      "source": "오리지널",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기"
+      ],
       "clothesList": [
         {
           "name": "diana_legacy",
