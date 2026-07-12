@@ -38,6 +38,11 @@ public class ChillModeManager : MonoBehaviour
     [Header("에디터 튜닝")]
     public bool applyOffsetEveryFrame = true;  // 인스펙터에서 값 바꿀 때 즉시 확인용, UI 연동 시에는 꺼두고 Set 함수로 1회씩 적용
 
+    [Header("데모/테스트")]
+    public GameObject overrideCharacter;  // CharManager가 없는 데모씬 등에서 착석 대상을 직접 지정 (null이면 CharManager의 현재 캐릭터)
+
+    public bool IsChillMode { get { return isChillMode; } }  // 외부(UI)에서 현재 모드 확인용
+
     private bool isChillMode = false;  // 현재 칠윗유 모드 여부
     private GameObject chillCharacter;  // 칠윗유 모드에 들어간 캐릭터
     private float lookAroundTimer;  // 다음 LookAround 트리거까지 남은 시간
@@ -75,7 +80,11 @@ public class ChillModeManager : MonoBehaviour
             return;
         }
 
-        GameObject character = CharManager.Instance.GetCurrentCharacter();
+        GameObject character = overrideCharacter;
+        if (character == null && CharManager.Instance != null)
+        {
+            character = CharManager.Instance.GetCurrentCharacter();
+        }
         if (character == null)
         {
             Debug.Log("No ChillModeManager target: current character is null");
@@ -92,6 +101,11 @@ public class ChillModeManager : MonoBehaviour
         }
 
         Debug.Log($"[ChillMode] 대상 캐릭터: {character.name}, charcode={attrs.charcode}");
+
+        // 책상 공통 배치는 ChillSitData가 단일 출처 (데모 [데이터 저장]으로 영속되어 본편과 공유)
+        deskPositionOffset = chillSitData.deskPositionOffset;
+        deskRotationOffset = chillSitData.deskRotationOffset;
+        deskScaleMultiplier = chillSitData.deskScaleMultiplier;
 
         // 원본 상태 저장
         chillCharacter = character;
@@ -110,8 +124,12 @@ public class ChillModeManager : MonoBehaviour
         }
 
         // 좌우 이동 로직도 Chill 모드 동안 정지 (씬 단일 인스턴스, 현재 캐릭터를 참조로 주입받는 구조)
-        PhysicsManager.Instance.StopAllAnimations();
-        PhysicsManager.Instance.enabled = false;
+        // 데모씬 등 매니저 부재 환경 대비 null 가드
+        if (PhysicsManager.Instance != null)
+        {
+            PhysicsManager.Instance.StopAllAnimations();
+            PhysicsManager.Instance.enabled = false;
+        }
 
         // Desk_Set 원본 상태 저장 (오프셋은 이 값 기준으로 더해짐)
         if (deskSetRoot != null)
@@ -214,8 +232,11 @@ public class ChillModeManager : MonoBehaviour
             fallingObject.enabled = true;
         }
 
-        // 좌우 이동 로직 복원
-        PhysicsManager.Instance.enabled = true;
+        // 좌우 이동 로직 복원 (데모씬 등 매니저 부재 환경 대비 null 가드)
+        if (PhysicsManager.Instance != null)
+        {
+            PhysicsManager.Instance.enabled = true;
+        }
 
         // Desk_Set 원본 상태 복원
         if (deskSetRoot != null)

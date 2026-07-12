@@ -19,6 +19,12 @@ public class ChillSitData : ScriptableObject
     public CharacterSitOffset defaultOffset;  // charcode 매칭 실패 시 사용
     public List<CharacterSitOffset> perCharacterOffsets = new List<CharacterSitOffset>();
 
+    [Header("책상 공통 배치 (캐릭터 무관 — ChillModeManager가 진입 시 로드)")]
+    // 기본값은 기존 ChillModeManager 프리팹 튜닝값과 동일 (기존 에셋 역직렬화 시 동작 불변)
+    public Vector3 deskPositionOffset = new Vector3(703.3f, -493f, -355.4f);
+    public Vector3 deskRotationOffset = new Vector3(0f, 40.423f, 0f);
+    public float deskScaleMultiplier = 250f;
+
     // charcode에 해당하는 오프셋 반환, 없으면 defaultOffset 반환
     public CharacterSitOffset GetOffset(string charcode)
     {
