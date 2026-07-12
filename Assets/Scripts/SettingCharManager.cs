@@ -58,8 +58,9 @@ public class SettingCharManager : MonoBehaviour
     public class CharCodeSetting
     {
         public float char_size;
-        public int affinityPoints = 0;                                    // 인연도 포인트 (0~1000) — 구 affection(0~300) 대체, 마이그레이션 없음
-        public List<int> affinityClaimedLevels = new List<int>();         // 수령 완료한 인연도 레벨 보상
+        public int affinityPoints = 0;                                    // 친밀도 포인트 (0~1000) — 구 affection(0~300) 대체, 마이그레이션 없음
+        public List<int> affinityClaimedLevels = new List<int>();         // 수령 완료한 친밀도 레벨 보상
+        public List<string> affinityUnlockedIds = new List<string>();     // 해금물 id (카드 테두리/호칭 등 — AffinityRewardType.Border/Title)
         public string voiceId = "";
     }
 
@@ -218,6 +219,8 @@ public class SettingCharManager : MonoBehaviour
     public void AddAffinityPoints(string charCode, int amount) { var setting = GetCharCodeSetting(charCode); if (setting != null) { setting.affinityPoints = Mathf.Clamp(setting.affinityPoints + amount, 0, AffinityData.MaxPoints); SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); } }
     public bool IsAffinityRewardClaimed(string charCode, int level) { var setting = GetCharCodeSetting(charCode); return setting != null && setting.affinityClaimedLevels != null && setting.affinityClaimedLevels.Contains(level); }
     public bool ClaimAffinityReward(string charCode, int level) { var setting = GetCharCodeSetting(charCode); if (setting == null) return false; if (setting.affinityClaimedLevels == null) setting.affinityClaimedLevels = new List<int>(); if (setting.affinityClaimedLevels.Contains(level)) return false; setting.affinityClaimedLevels.Add(level); SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); return true; }
+    public bool IsAffinityRewardUnlocked(string charCode, string unlockId) { var setting = GetCharCodeSetting(charCode); return setting != null && setting.affinityUnlockedIds != null && setting.affinityUnlockedIds.Contains(unlockId); }
+    public bool UnlockAffinityReward(string charCode, string unlockId) { if (string.IsNullOrEmpty(unlockId)) return false; var setting = GetCharCodeSetting(charCode); if (setting == null) return false; if (setting.affinityUnlockedIds == null) setting.affinityUnlockedIds = new List<string>(); if (setting.affinityUnlockedIds.Contains(unlockId)) return false; setting.affinityUnlockedIds.Add(unlockId); SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); return true; }
     public void SetVoice(string charCode, string voiceId) { var setting = GetCharCodeSetting(charCode); if (setting != null) { setting.voiceId = voiceId; SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); } }
 
     public CharSetting GetCharSetting(string charName)

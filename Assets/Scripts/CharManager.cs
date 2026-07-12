@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Cleverous.VaultInventory;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -44,9 +43,6 @@ public class CharManager : MonoBehaviour
 
     // 오류시 보낼 기본 값
     public Sprite sampleSprite;
-
-    // 캐릭터에 부착할 인벤토리 설정 (슬롯 개수 등)
-    public InventoryConfig playerInventoryConfig;
 
     private async void Awake()
     {
@@ -591,6 +587,40 @@ public class CharManager : MonoBehaviour
         ChangeCharacterFromDLC(prefab);
     }
 
+    // characterId(BuildCharacterId 규칙: charAttr_charcode 소문자, 없으면 캐릭터 이름 소문자)로
+    // character_database.json의 캐릭터 엔트리를 조회 — CharacterDetail의 출전/기능 태그 소스
+    public ChangeCharInfo FindCharacterInfoByCharacterId(string characterId)
+    {
+        if (string.IsNullOrEmpty(characterId) || _characterDatabaseData == null || _characterDatabaseData.characters == null)
+        {
+            return null;
+        }
+
+        // BuildCharacterId와 같은 우선순위: charcode 일치를 전 캐릭터에서 먼저 찾고, 없을 때만 이름 폴백
+        foreach (var charInfo in _characterDatabaseData.characters)
+        {
+            if (charInfo == null || charInfo.clothesList == null) continue;
+            foreach (var clothes in charInfo.clothesList)
+            {
+                if (clothes != null && !string.IsNullOrEmpty(clothes.charAttr_charcode) && clothes.charAttr_charcode.ToLower() == characterId)
+                {
+                    return charInfo;
+                }
+            }
+        }
+
+        foreach (var charInfo in _characterDatabaseData.characters)
+        {
+            if (charInfo == null) continue;
+            if (!string.IsNullOrEmpty(charInfo.name) && charInfo.name.ToLower() == characterId)
+            {
+                return charInfo;
+            }
+        }
+
+        return null;
+    }
+
     private ChangeCharClothesInfo FindDlcClothesByCharCode(string charCode)
     {
         if (string.IsNullOrEmpty(charCode) || _characterDatabaseData == null || _characterDatabaseData.characters == null)
@@ -1058,20 +1088,18 @@ public class CharManager : MonoBehaviour
     {
         StatusManager.Instance.characterTransform = charObj.GetComponent<RectTransform>();
     }
-    // 캐릭터에 Inventory + CharInventoryOwner가 없으면 붙여서 인벤토리를 사용할 수 있게 함
+    // 신규 InventorySystem에 활성 캐릭터 소유자를 지정 (구 Vault 인벤토리 컴포넌트 부착 방식 대체)
     public void setInventoryVar(GameObject charObj)
     {
-        Inventory inventory = charObj.GetComponent<Inventory>();
-        if (inventory == null)
+        if (InventorySystemManager.Instance == null)
         {
-            inventory = charObj.AddComponent<Inventory>();
+            Debug.LogWarning("[CharManager] InventorySystemManager가 없어 인벤토리 소유자 지정을 건너뜁니다.");
+            return;
         }
-        inventory.Configuration = playerInventoryConfig;
 
-        if (charObj.GetComponent<CharInventoryOwner>() == null)
-        {
-            charObj.AddComponent<CharInventoryOwner>();
-        }
+        CharAttributes attrs = charObj.GetComponent<CharAttributes>();
+        string charcode = (attrs != null && string.IsNullOrEmpty(attrs.charcode) == false) ? attrs.charcode : "arona";
+        InventorySystemManager.Instance.SetActiveOwner(charcode, charObj);
     }
     public void setEmotionFaceController(GameObject charObj)
     {

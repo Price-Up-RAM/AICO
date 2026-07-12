@@ -92,6 +92,25 @@ public class CharacterDetailStateManager : MonoBehaviour
             state.featureTags = new List<string>(attr.featureTags);
         }
 
+        // 출전/기능 태그는 character_database.json(마스터)이 우선 — CharAttributes 값은 폴백
+        // (프리팹 61개 전부가 코드 기본값을 상속하고 있어, 캐릭터별 실데이터는 JSON에서 관리한다)
+        if (CharManager.Instance != null)
+        {
+            ChangeCharInfo dbCharacter = CharManager.Instance.FindCharacterInfoByCharacterId(characterId);
+            if (dbCharacter != null)
+            {
+                if (!string.IsNullOrEmpty(dbCharacter.source))
+                {
+                    state.source = dbCharacter.source;
+                }
+
+                if (dbCharacter.featureTags != null && dbCharacter.featureTags.Count > 0)
+                {
+                    state.featureTags = new List<string>(dbCharacter.featureTags);
+                }
+            }
+        }
+
         var setting = SettingCharManager.Instance.GetCharCodeSetting(characterId);
         if (setting != null)
         {

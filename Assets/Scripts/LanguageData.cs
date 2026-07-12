@@ -80,6 +80,7 @@ public static class LanguageData
 
         // Util submenu
         new Dictionary<string, string> { { "ko", "알람" }, { "jp", "アラーム" }, { "en", "Alarm" } },
+        new Dictionary<string, string> { { "ko", "인벤토리" }, { "jp", "インベントリ" }, { "en", "Inventory" } },
         new Dictionary<string, string> { { "ko", "미니게임1" }, { "jp", "ミニゲーム1" }, { "en", "Minigame1" } },
         new Dictionary<string, string> { { "ko", "실험" }, { "jp", "実験" }, { "en", "Experiment" } },
         new Dictionary<string, string> { { "ko", "스무고개게임" }, { "jp", "20Qゲーム" }, { "en", "20 Questions Game" } },
@@ -449,7 +450,57 @@ public static class LanguageData
         new Dictionary<string, string> { { "ko", "모든 문장 끝에 \"~다냥\" 어미 사용" }, { "jp", "すべての文の終わりに\"〜だにゃ\"語尾を使用" }, { "en", "Use \"~danya\" ending at the end of every sentence" } },
         new Dictionary<string, string> { { "ko", "답변할 때마다 관련된 고사성어나 속담 인용" }, { "jp", "回答するたびに関連する四字熟語やことわざを引用" }, { "en", "Quote related idioms or proverbs in every answer" } },
         new Dictionary<string, string> { { "ko", "답변 시작을 항상 \"흠... 그렇다면\"으로 시작" }, { "jp", "回答の開始を常に\"うーん...それなら\"で始める" }, { "en", "Always start answers with \"Hmm... then\"" } },
-        new Dictionary<string, string> { { "ko", "어떠한 경우에도 한국어를 유지해야 함" }, { "jp", "いかなる場合でも韓国語を維持しなければならない" }, { "en", "Must maintain Korean language in any case" } }
+        new Dictionary<string, string> { { "ko", "어떠한 경우에도 한국어를 유지해야 함" }, { "jp", "いかなる場合でも韓国語を維持しなければならない" }, { "en", "Must maintain Korean language in any case" } },
+
+        // CharacterDetail 관련 다국어 지원
+        // 라벨
+        new Dictionary<string, string> { { "ko", "상태" }, { "jp", "状態" }, { "en", "Status" } },
+        new Dictionary<string, string> { { "ko", "사용가능" }, { "jp", "使用可能" }, { "en", "Available" } },
+        new Dictionary<string, string> { { "ko", "다운로드필요" }, { "jp", "ダウンロード必要" }, { "en", "Download Required" } },
+        new Dictionary<string, string> { { "ko", "사용가능 기능 태그" }, { "jp", "使用可能な機能タグ" }, { "en", "Available Features" } },
+        new Dictionary<string, string> { { "ko", "프롬프트 영역" }, { "jp", "プロンプト領域" }, { "en", "Prompt Area" } },
+        new Dictionary<string, string> { { "ko", "기본 알람 음성" }, { "jp", "基本アラーム音声" }, { "en", "Default Alarm Voice" } },
+        new Dictionary<string, string> { { "ko", "샘플듣기" }, { "jp", "サンプル再生" }, { "en", "Play Sample" } },
+        new Dictionary<string, string> { { "ko", "생성" }, { "jp", "生成" }, { "en", "Generate" } },
+        new Dictionary<string, string> { { "ko", "생성된것 듣기" }, { "jp", "生成済みを再生" }, { "en", "Play Generated" } },
+        new Dictionary<string, string> { { "ko", "캐릭터 이름" }, { "jp", "キャラクター名" }, { "en", "Character Name" } },
+        new Dictionary<string, string> { { "ko", "출전" }, { "jp", "出典" }, { "en", "Source" } },
+        new Dictionary<string, string> { { "ko", "형태" }, { "jp", "形態" }, { "en", "Form" } },
+        new Dictionary<string, string> { { "ko", "대화횟수" }, { "jp", "会話回数" }, { "en", "Conversations" } },
+        new Dictionary<string, string> { { "ko", "복장 수" }, { "jp", "衣装数" }, { "en", "Costumes" } },
+        new Dictionary<string, string> { { "ko", "로딩 중..." }, { "jp", "読み込み中..." }, { "en", "Loading..." } },
+        new Dictionary<string, string> { { "ko", "초기화 중..." }, { "jp", "初期化中..." }, { "en", "Resetting..." } },
+        // 기능 태그
+        new Dictionary<string, string> { { "ko", "AI 대화" }, { "jp", "AI会話" }, { "en", "AI Chat" } },
+        new Dictionary<string, string> { { "ko", "감정표현" }, { "jp", "感情表現" }, { "en", "Emotion" } },
+        new Dictionary<string, string> { { "ko", "친밀도 보유" }, { "jp", "親密度あり" }, { "en", "Affinity" } },
+        new Dictionary<string, string> { { "ko", "머리쓰다듬기" }, { "jp", "頭なでなで" }, { "en", "Head Pat" } },
+        new Dictionary<string, string> { { "ko", "볼당기기" }, { "jp", "ほっぺ引っ張り" }, { "en", "Cheek Pull" } },
+        new Dictionary<string, string> { { "ko", "음악재생" }, { "jp", "音楽再生" }, { "en", "Music Player" } },
+        new Dictionary<string, string> { { "ko", "커피끓여주기" }, { "jp", "コーヒー淹れ" }, { "en", "Coffee Brewing" } },
+        new Dictionary<string, string> { { "ko", "화초관리" }, { "jp", "植物の世話" }, { "en", "Plant Care" } },
+        new Dictionary<string, string> { { "ko", "전원키기" }, { "jp", "電源オン" }, { "en", "Power On" } },
+        // 출전
+        new Dictionary<string, string> { { "ko", "블루아카이브" }, { "jp", "ブルーアーカイブ" }, { "en", "Blue Archive" } },
+        new Dictionary<string, string> { { "ko", "원신" }, { "jp", "原神" }, { "en", "Genshin Impact" } },
+        new Dictionary<string, string> { { "ko", "꿈씨패밀리" }, { "jp", "クムシファミリー" }, { "en", "Kkumssi Family" } },
+        new Dictionary<string, string> { { "ko", "오리지널" }, { "jp", "オリジナル" }, { "en", "Original" } },
+        // 친밀도
+        new Dictionary<string, string> { { "ko", "낯선 사이" }, { "jp", "見知らぬ仲" }, { "en", "Stranger" } },
+        new Dictionary<string, string> { { "ko", "아는 사이" }, { "jp", "顔見知り" }, { "en", "Acquaintance" } },
+        new Dictionary<string, string> { { "ko", "친한 사이" }, { "jp", "親しい仲" }, { "en", "Friend" } },
+        new Dictionary<string, string> { { "ko", "허물없는 사이" }, { "jp", "気の置けない仲" }, { "en", "True Friend" } },
+        new Dictionary<string, string> { { "ko", "마음이 통하는 사이" }, { "jp", "心が通じ合う仲" }, { "en", "Kindred Spirits" } },
+        new Dictionary<string, string> { { "ko", "둘도 없는 사이" }, { "jp", "かけがえのない仲" }, { "en", "One and Only" } },
+        new Dictionary<string, string> { { "ko", "친밀도 보상" }, { "jp", "親密度報酬" }, { "en", "Affinity Rewards" } },
+        new Dictionary<string, string> { { "ko", "전부 수령" }, { "jp", "一括受取" }, { "en", "Claim All" } },
+        new Dictionary<string, string> { { "ko", "수령" }, { "jp", "受取" }, { "en", "Claim" } },
+        new Dictionary<string, string> { { "ko", "수령 완료" }, { "jp", "受取済み" }, { "en", "Claimed" } },
+        new Dictionary<string, string> { { "ko", "미도달" }, { "jp", "未到達" }, { "en", "Locked" } },
+        new Dictionary<string, string> { { "ko", "100G + 전용 장신구 (후속)" }, { "jp", "100G + 専用アクセサリー(後続)" }, { "en", "100G + Signature Accessory (TBD)" } },
+        new Dictionary<string, string> { { "ko", "100G + 카드 동테 (후속)" }, { "jp", "100G + カード銅枠(後続)" }, { "en", "100G + Bronze Border (TBD)" } },
+        new Dictionary<string, string> { { "ko", "100G + 카드 은테 (후속)" }, { "jp", "100G + カード銀枠(後続)" }, { "en", "100G + Silver Border (TBD)" } },
+        new Dictionary<string, string> { { "ko", "200G + 카드 금테 + 명칭 커스텀 (후속)" }, { "jp", "200G + カード金枠 + 名称カスタム(後続)" }, { "en", "200G + Gold Border + Custom Title (TBD)" } }
     };
 
 

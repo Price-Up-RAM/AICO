@@ -56,15 +56,21 @@ public class ChangeCharClothesInfo
 
     // Collider/DragHandler 주입값 (0이면 프리팹 기본값 유지)
     public float  headPatThreshold;       // DragHandler.headPatThreshold
+
+    // 의상별 기능 태그 오버라이드 — 비어있지 않으면 캐릭터 공통 featureTags 대신 이걸 표시
+    // (예: 아로나 2D 의상은 감정표현 미지원이라 캐릭터 공통 태그에서 제외)
+    public List<string> featureTagsOverride = new List<string>();
 }
 
 [Serializable]
 public class ChangeCharInfo
 {
-    public int id;                // sort용
+    public int id;                // 예약 — 표시 순서는 JSON 배열 순서를 따름 (id를 읽는 코드 없음)
     public string name;           // 캐릭터 이름 (예: "ARONA")
     public bool isFavorite;       // 즐겨찾기 여부 (저장 연동 예정)
-    public List<ChangeCharClothesInfo> clothesList = new List<ChangeCharClothesInfo>(); 
+    public string source = "";    // 출전 (예: "블루아카이브") — CharacterDetail 표시용, 마스터는 character_database.json
+    public List<string> featureTags = new List<string>();  // 기능 태그 (캐릭터 공통) — CharacterDetail 칩 표시용
+    public List<ChangeCharClothesInfo> clothesList = new List<ChangeCharClothesInfo>();
 }
 
 public enum CharacterFilterType

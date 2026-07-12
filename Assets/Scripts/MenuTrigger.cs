@@ -273,6 +273,7 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             (LanguageData.Translate("AlarmMini", targetLang), delegate { UIManager.Instance.ShowAlarmMini(); }),
             (LanguageData.Translate("Calendar", targetLang), delegate { UIManager.Instance.ShowCalendar(); }),
             (LanguageData.Translate("TODOList", targetLang), delegate { UIManager.Instance.ShowTODOList(); }),
+            (LanguageData.Translate("Inventory", targetLang), delegate { UIManager.Instance.ToggleInventory(); }),
         });
 
 

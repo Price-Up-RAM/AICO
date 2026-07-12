@@ -146,6 +146,10 @@ public class UIPositionManager : MonoBehaviour
                 return canvas.transform.TransformPoint(new Vector3(300f, 0f, 0f));
             case "alarmmini":
                 return canvas.transform.TransformPoint(new Vector3(520f, 180f, 0f));
+            case "inventory":
+                return canvas.transform.TransformPoint(new Vector3(420f, 0f, 0f)); // 메인 인벤토리는 우측
+            case "inventoryChar":
+                return canvas.transform.TransformPoint(new Vector3(-180f, 0f, 0f)); // 캐릭터 인벤토리는 좌측
             case "choiceInput":
                 return GetCanvasPositionCenter(); // 중앙 배치
             default:

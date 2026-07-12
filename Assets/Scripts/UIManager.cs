@@ -21,6 +21,8 @@ public class UIManager : MonoBehaviour
     [SerializeField] public GameObject alarm; // Alarm
     [SerializeField] public GameObject todoList; // TODOList
     [SerializeField] public GameObject calendar; // Calendar
+    [SerializeField] public GameObject inventoryPanel; // InventorySystem 메인 패널 (프리팹 에셋 할당 시 canvasUI 아래 인스턴스화)
+    [SerializeField] public GameObject inventoryPanelChar; // InventorySystem 캐릭터 패널 (프리팹 에셋 할당 시 canvasUI 아래 인스턴스화)
     [SerializeField] public AlarmMiniView alarmMiniPrefab; // AlarmMini prefab
 
     [SerializeField] public GameObject debugBalloon2; // VL, Web 등 정보 보여주기
@@ -30,6 +32,12 @@ public class UIManager : MonoBehaviour
     private string alarmMiniAlarmId = string.Empty;
     private float alarmMiniRefreshProgress;
     private bool alarmMiniPositionInitialized;
+
+    // 인벤토리 패널 상태 플래그 (최초 표시 위치 지정 / 캐릭터 섹션 지정 1회 / 미할당 경고 1회)
+    private bool inventoryPositionInitialized;
+    private bool inventoryCharPositionInitialized;
+    private bool inventoryCharSectionConfigured;
+    private bool inventoryMissingWarned;
 
     private static UIManager instance;
     public static UIManager Instance
@@ -63,6 +71,8 @@ public class UIManager : MonoBehaviour
         todoList = ResolveManagedUI(todoList, "TODOList");
         calendar = ResolveManagedUI(calendar, "Calendar");
         characterDetail = ResolveManagedUI(characterDetail, "CharacterDetail");
+        inventoryPanel = ResolveManagedUI(inventoryPanel, "InventoryPanel");
+        inventoryPanelChar = ResolveManagedUI(inventoryPanelChar, "InventoryPanelChar");
 
         charChange.SetActive(false);
         SetInitialInactive(characterDetail);
@@ -78,6 +88,9 @@ public class UIManager : MonoBehaviour
         SetInitialInactive(alarm);
         SetInitialInactive(todoList);
         SetInitialInactive(calendar);
+        // InventoryView는 CanvasGroup으로 표시를 제어하므로 SetActive 대신 Hide로 초기 숨김
+        HideInventoryViewIfPresent(inventoryPanel);
+        HideInventoryViewIfPresent(inventoryPanelChar);
         debugBalloon2.SetActive(false);
 
         // UIWidget 존재하면 Close
@@ -179,6 +192,21 @@ public class UIManager : MonoBehaviour
         if (target != null)
         {
             target.SetActive(false);
+        }
+    }
+
+    // InventoryView가 붙어 있으면 CanvasGroup 관례에 따라 Hide()로 초기 숨김
+    private void HideInventoryViewIfPresent(GameObject target)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        InventoryView view = target.GetComponent<InventoryView>();
+        if (view != null)
+        {
+            view.Hide();
         }
     }
 
@@ -657,6 +685,110 @@ public class UIManager : MonoBehaviour
         else
         {
             ShowPomodoro();
+        }
+    }
+
+    public void ShowInventory()
+    {
+        inventoryPanel = ResolveManagedUI(inventoryPanel, "InventoryPanel");
+        inventoryPanelChar = ResolveManagedUI(inventoryPanelChar, "InventoryPanelChar");
+
+        if ((inventoryPanel == null || inventoryPanelChar == null) && inventoryMissingWarned == false)
+        {
+            Debug.LogWarning("[UIManager] Inventory 패널 프리팹이 할당되지 않았습니다. inventoryPanel/inventoryPanelChar를 확인하세요.");
+            inventoryMissingWarned = true;
+        }
+
+        if (inventoryPanel != null)
+        {
+            if (inventoryPositionInitialized == false && UIPositionManager.Instance != null)
+            {
+                RepositionSimpleUI(inventoryPanel, "inventory");
+                inventoryPositionInitialized = true;
+            }
+
+            if (inventoryPanel.activeSelf == false)
+            {
+                inventoryPanel.SetActive(true);
+            }
+
+            InventoryView mainView = inventoryPanel.GetComponent<InventoryView>();
+            if (mainView != null)
+            {
+                mainView.Show();
+            }
+        }
+
+        if (inventoryPanelChar != null)
+        {
+            if (inventoryCharPositionInitialized == false && UIPositionManager.Instance != null)
+            {
+                RepositionSimpleUI(inventoryPanelChar, "inventoryChar");
+                inventoryCharPositionInitialized = true;
+            }
+
+            InventoryView charView = inventoryPanelChar.GetComponent<InventoryView>();
+
+            // 섹션 지정은 SetActive(true)보다 먼저 — 활성화 시 OnEnable→Rebuild가
+            // 프리팹 기본값(Main)으로 그려버리는 최초 오픈 버그 방지 (캐릭터 창은 최초 1회만 지정)
+            if (charView != null && inventoryCharSectionConfigured == false)
+            {
+                charView.ConfigureSection(InventorySection.Char);
+                inventoryCharSectionConfigured = true;
+            }
+
+            if (inventoryPanelChar.activeSelf == false)
+            {
+                inventoryPanelChar.SetActive(true);
+            }
+
+            if (charView != null)
+            {
+                charView.Show();
+            }
+        }
+    }
+
+    public void CloseInventory()
+    {
+        if (inventoryPanel != null)
+        {
+            InventoryView mainView = inventoryPanel.GetComponent<InventoryView>();
+            if (mainView != null)
+            {
+                mainView.Hide();
+            }
+        }
+
+        if (inventoryPanelChar != null)
+        {
+            InventoryView charView = inventoryPanelChar.GetComponent<InventoryView>();
+            if (charView != null)
+            {
+                charView.Hide();
+            }
+        }
+    }
+
+    public void ToggleInventory()
+    {
+        bool isVisible = false;
+        if (inventoryPanel != null)
+        {
+            InventoryView mainView = inventoryPanel.GetComponent<InventoryView>();
+            if (mainView != null && mainView.IsVisible == true)
+            {
+                isVisible = true;
+            }
+        }
+
+        if (isVisible == true)
+        {
+            CloseInventory();
+        }
+        else
+        {
+            ShowInventory();
         }
     }
 
