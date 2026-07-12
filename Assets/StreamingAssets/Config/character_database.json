@@ -1098,6 +1098,27 @@
           "isSelectable": true
         }
       ]
+    },
+    {
+      "id": 31,
+      "name": "Kkum2",
+      "source": "꿈씨패밀리",
+      "featureTags": [
+        "AI 대화",
+        "친밀도 보유",
+        "머리쓰다듬기",
+        "볼당기기"
+      ],
+      "clothesList": [
+        {
+          "name": "꿈돌이",
+          "text": "3D",
+          "spriteAddress": "kkum_sprite",
+          "prefabAddress": "kkum2",
+          "isLocal": true,
+          "isSelectable": true
+        }
+      ]
     }
   ]
 }
