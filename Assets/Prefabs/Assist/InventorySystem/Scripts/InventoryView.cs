@@ -11,8 +11,8 @@ public enum InventorySection
     Char    // 활성 캐릭터 스토어
 }
 
-// InventorySystem UI 창 (이중 모드). 창 1개가 스토어 1개(MAIN 또는 활성 캐릭터)를 표시한다.
-// - 베이크된 프리팹 계층이 있으면 BindExisting으로 참조만 연결하고, 없으면 코드로 자가 구축
+// InventorySystem UI 창. 창 1개가 스토어 1개(MAIN 또는 활성 캐릭터)를 표시한다.
+// - 베이크된 프리팹(InventoryPanel.prefab) 전용: BindExisting으로 참조만 연결한다 (런타임 자가 구축 없음)
 // - 표시·숨김은 반드시 CanvasGroup(alpha/interactable/blocksRaycasts)만 조작한다 (SetActive 금지)
 // - 그리드: 8열 x 6행 = 48칸 고정 (빈 칸 포함), 푸터의 < > 로 페이지 이동
 // - 드래그 앤 드롭: 칸 = 위치 이동/스왑/병합, 반대 섹션 창 = 이동, 캐릭터(3D) = 이동 + 장착
@@ -23,12 +23,6 @@ public class InventoryView : MonoBehaviour
     private const int Columns = 8;                       // 가로 칸 수
     private const int Rows = 6;                          // 세로 칸 수
     private const int PageSize = Columns * Rows;         // 페이지당 칸 수 (48)
-
-    // ── 다크 팔레트 ──────────────────────────────────────────────
-    private static readonly Color PanelBg = new Color(0.09f, 0.09f, 0.11f, 0.96f);   // 패널 배경
-    private static readonly Color HeaderBg = new Color(0.055f, 0.055f, 0.07f, 1f);   // 헤더/푸터 바 (더 어두운 스트립)
-    private static readonly Color ButtonBg = new Color(0.16f, 0.16f, 0.20f, 1f);     // 바 버튼 배경
-    private static readonly Color TextWhite = new Color(0.92f, 0.93f, 0.95f, 1f);    // 본문 텍스트
 
     // ── 직렬화 참조 (베이크된 프리팹에서 연결됨) ─────────────────
     [SerializeField] private InventorySection section = InventorySection.Main;  // 이 창이 표시하는 스토어
@@ -52,10 +46,22 @@ public class InventoryView : MonoBehaviour
         }
     }
 
-    // 섹션 지정 (데모씬 빌더 등 외부에서 인스턴스별 오버라이드)
+    // 섹션 지정 (데모씬 빌더 등 외부에서 인스턴스별 오버라이드).
+    // 이미 활성 상태에서 바뀌면 즉시 다시 그린다 — 활성화 후 섹션 지정 시 구 섹션 잔상 방지
     public void ConfigureSection(InventorySection newSection)
     {
+        if (section == newSection)
+        {
+            return;
+        }
+
         section = newSection;
+
+        // 에디터 빌더 경로에서는 다시 그리지 않는다 (셀 인스턴스가 씬에 직렬화되는 사고 방지)
+        if (Application.isPlaying && isActiveAndEnabled)
+        {
+            Rebuild();
+        }
     }
 
     // 이 창의 스토어 ownerId ("MAIN" 또는 활성 charcode. 활성 캐릭터 없으면 null)
@@ -70,30 +76,16 @@ public class InventoryView : MonoBehaviour
         return manager != null ? manager.ActiveCharcode : null;
     }
 
-    // 전체 계층을 코드로 생성하고 모든 참조를 할당해 반환 (베이크 툴 + 런타임 폴백 공유)
-    public static InventoryView BuildHierarchy(Transform parent)
-    {
-        GameObject panelGo = new GameObject("InventoryPanel", typeof(RectTransform));
-        panelGo.layer = 5; // UI 레이어
-
-        if (parent != null)
-        {
-            panelGo.transform.SetParent(parent, false);
-        }
-
-        InventoryView view = panelGo.AddComponent<InventoryView>();
-        view.BuildInternal();
-        return view;
-    }
-
-    // 참조가 비어 있으면 이름 기반 바인딩 → 그래도 계층이 없으면 자가 구축 → 버튼 배선
+    // 참조가 비어 있으면 이름 기반 바인딩 → 버튼 배선 (베이크된 프리팹 전용)
     private void Awake()
     {
         BindExisting();
 
-        if (slotTemplate == null && transform.childCount == 0)
+        if (slotTemplate == null)
         {
-            BuildInternal();
+            // 런타임 코드 조립은 하지 않는다 — UI는 베이크된 프리팹이 완결 상태여야 한다.
+            // 참조가 비면 이후 로직은 전부 null 가드로 무동작한다.
+            Debug.LogError("[InventorySystem][InventoryView] 베이크된 UI 계층이 없습니다. InventoryPanel.prefab을 사용하세요.");
         }
 
         // 버튼은 런타임 리스너로 배선 (베이크 프리팹에는 퍼시스턴트 리스너가 없음)
@@ -150,6 +142,9 @@ public class InventoryView : MonoBehaviour
     }
 
     // ── 표시/숨김 (CanvasGroup만 조작) ───────────────────────────
+
+    // 현재 표시 상태 (UIManager 등 외부의 토글 판정용)
+    public bool IsVisible => canvasGroup != null && canvasGroup.alpha > 0.5f;
 
     // 패널 표시
     public void Show()
@@ -785,211 +780,5 @@ public class InventoryView : MonoBehaviour
     {
         Transform found = FindDeepChild(transform, name);
         return found != null ? found.GetComponent<T>() : null;
-    }
-
-    // ── 코드 자가 구축 (베이크 툴 + 런타임 폴백 공유) ────────────
-
-    // 창 전체 계층 생성 + 모든 참조 할당 (이미 구축돼 있으면 무시).
-    // 창(window) 구조: 헤더 바(타이틀 + 정렬/닫기) + Body(8x6 그리드) + 푸터 바(< 페이지 >).
-    private void BuildInternal()
-    {
-        if (slotTemplate != null)
-        {
-            return; // 이미 구축됨 (Awake 폴백 → BuildHierarchy 중복 호출 방지)
-        }
-
-        gameObject.layer = 5; // UI 레이어
-
-        // 루트 RectTransform: 오른쪽 앵커.
-        // 폭 = 좌우 패딩 32 + 8열(64*8 + 간격 8*7) = 600
-        // 높이 = 헤더 36 + 상하 패딩 24 + 6행(64*6 + 간격 8*5 = 424) + 푸터 28 = 512
-        RectTransform rt = GetComponent<RectTransform>();
-        if (rt == null)
-        {
-            rt = gameObject.AddComponent<RectTransform>();
-        }
-
-        rt.anchorMin = new Vector2(1f, 0.5f);
-        rt.anchorMax = new Vector2(1f, 0.5f);
-        rt.pivot = new Vector2(1f, 0.5f);
-        rt.anchoredPosition = new Vector2(-24f, 0f);
-        rt.sizeDelta = new Vector2(600f, 512f);
-
-        // 다크 배경 (raycastTarget 유지 — 창 전역 드래그의 히트 영역)
-        Image bg = GetComponent<Image>();
-        if (bg == null)
-        {
-            bg = gameObject.AddComponent<Image>();
-        }
-
-        bg.color = PanelBg;
-
-        // 표시/숨김용 CanvasGroup
-        canvasGroup = GetComponent<CanvasGroup>();
-        if (canvasGroup == null)
-        {
-            canvasGroup = gameObject.AddComponent<CanvasGroup>();
-        }
-
-        // 창 전역 드래그 핸들러 (빈 영역을 잡고 창 이동. 아이템 셀 위 드래그는 아이템 드래그가 우선)
-        if (GetComponent<InventoryWindowDragHandler>() == null)
-        {
-            gameObject.AddComponent<InventoryWindowDragHandler>();
-        }
-
-        // 루트 세로 레이아웃: 헤더/푸터 바를 가장자리에 밀착시키기 위해 패딩 없음
-        VerticalLayoutGroup layout = GetComponent<VerticalLayoutGroup>();
-        if (layout == null)
-        {
-            layout = gameObject.AddComponent<VerticalLayoutGroup>();
-        }
-
-        layout.padding = new RectOffset(0, 0, 0, 0);
-        layout.spacing = 0f;
-        layout.childAlignment = TextAnchor.UpperLeft;
-        layout.childControlWidth = true;
-        layout.childControlHeight = true;
-        layout.childForceExpandWidth = true;
-        layout.childForceExpandHeight = false;
-
-        // ── 헤더 바 (어두운 스트립 + 자간 벌린 중앙 타이틀 + 우측 버튼) ──
-        GameObject headerBar = new GameObject("HeaderBar", typeof(RectTransform));
-        headerBar.layer = 5;
-        headerBar.transform.SetParent(transform, false);
-
-        Image headerBg = headerBar.AddComponent<Image>();
-        headerBg.color = HeaderBg;
-
-        LayoutElement headerLe = headerBar.AddComponent<LayoutElement>();
-        headerLe.preferredHeight = 36f;
-
-        headerText = CreateText(headerBar.transform, "Header", "INVENTORY", 17f, FontStyles.Bold, TextWhite);
-        headerText.alignment = TextAlignmentOptions.Center;
-        headerText.characterSpacing = 10f;  // 타이틀 자간 (원본 헤더 느낌)
-        StretchRect(headerText.rectTransform, 0f);
-
-        // 우측 버튼: [정렬] [X]
-        closeButton = CreateBarButton(headerBar.transform, "CloseButton", "X", true, -6f, new Vector2(26f, 26f));
-        sortButton = CreateBarButton(headerBar.transform, "SortButton", "정렬", true, -38f, new Vector2(44f, 26f));
-
-        // ── Body (8x6 그리드) ──
-        GameObject body = new GameObject("Body", typeof(RectTransform));
-        body.layer = 5;
-        body.transform.SetParent(transform, false);
-
-        VerticalLayoutGroup bodyLayout = body.AddComponent<VerticalLayoutGroup>();
-        bodyLayout.padding = new RectOffset(16, 16, 12, 12);
-        bodyLayout.spacing = 0f;
-        bodyLayout.childAlignment = TextAnchor.UpperCenter;
-        bodyLayout.childControlWidth = true;
-        bodyLayout.childControlHeight = true;
-        bodyLayout.childForceExpandWidth = true;
-        bodyLayout.childForceExpandHeight = false;
-
-        LayoutElement bodyLe = body.AddComponent<LayoutElement>();
-        bodyLe.flexibleHeight = 1f;
-
-        grid = CreateGrid(body.transform, "Grid");
-
-        // ── 푸터 바 (< 페이지 라벨 >) ──
-        GameObject footerBar = new GameObject("FooterBar", typeof(RectTransform));
-        footerBar.layer = 5;
-        footerBar.transform.SetParent(transform, false);
-
-        Image footerBg = footerBar.AddComponent<Image>();
-        footerBg.color = HeaderBg;
-
-        LayoutElement footerLe = footerBar.AddComponent<LayoutElement>();
-        footerLe.preferredHeight = 28f;
-
-        pageLabel = CreateText(footerBar.transform, "PageLabel", "1 / 1", 13f, FontStyles.Bold, TextWhite);
-        pageLabel.alignment = TextAlignmentOptions.Center;
-        StretchRect(pageLabel.rectTransform, 0f);
-
-        prevButton = CreateBarButton(footerBar.transform, "PrevButton", "<", false, 8f, new Vector2(26f, 22f));
-        nextButton = CreateBarButton(footerBar.transform, "NextButton", ">", true, -8f, new Vector2(26f, 22f));
-
-        // 슬롯 템플릿 (비활성, 그리드 밖 = 루트 아래라 ClearGrid에 안전)
-        slotTemplate = InventorySlotView.BuildTemplate(transform);
-    }
-
-    // TMP 텍스트 생성 (배치는 호출자가 결정)
-    private TMP_Text CreateText(Transform parent, string name, string content, float fontSize, FontStyles style, Color color)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform));
-        go.layer = 5;
-        go.transform.SetParent(parent, false);
-
-        TextMeshProUGUI text = go.AddComponent<TextMeshProUGUI>();
-        text.text = content;
-        text.fontSize = fontSize;
-        text.fontStyle = style;
-        text.color = color;
-        text.alignment = TextAlignmentOptions.MidlineLeft;
-        text.raycastTarget = false;
-
-        return text;
-    }
-
-    // 바(헤더/푸터) 버튼 생성. anchorRight = true면 우측 기준, false면 좌측 기준. offset = 그 기준에서의 X 오프셋.
-    private Button CreateBarButton(Transform parent, string name, string label, bool anchorRight, float offset, Vector2 size)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform));
-        go.layer = 5;
-        go.transform.SetParent(parent, false);
-
-        float anchorX = anchorRight ? 1f : 0f;
-        RectTransform brt = (RectTransform)go.transform;
-        brt.anchorMin = new Vector2(anchorX, 0.5f);
-        brt.anchorMax = new Vector2(anchorX, 0.5f);
-        brt.pivot = new Vector2(anchorX, 0.5f);
-        brt.anchoredPosition = new Vector2(offset, 0f);
-        brt.sizeDelta = size;
-
-        Image img = go.AddComponent<Image>();
-        img.color = ButtonBg;
-        img.raycastTarget = true;
-
-        Button btn = go.AddComponent<Button>();
-        btn.targetGraphic = img;
-
-        TMP_Text btnLabel = CreateText(go.transform, "Label", label, 12f, FontStyles.Bold, TextWhite);
-        btnLabel.alignment = TextAlignmentOptions.Center;
-        StretchRect(btnLabel.rectTransform, 0f);
-
-        return btn;
-    }
-
-    // 슬롯 그리드 생성 (8열 고정, 셀 64x64, 간격 8)
-    private Transform CreateGrid(Transform parent, string name)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform));
-        go.layer = 5;
-        go.transform.SetParent(parent, false);
-
-        GridLayoutGroup gridLayout = go.AddComponent<GridLayoutGroup>();
-        gridLayout.cellSize = new Vector2(64f, 64f);
-        gridLayout.spacing = new Vector2(8f, 8f);
-        gridLayout.startCorner = GridLayoutGroup.Corner.UpperLeft;
-        gridLayout.startAxis = GridLayoutGroup.Axis.Horizontal;
-        gridLayout.childAlignment = TextAnchor.UpperLeft;
-        gridLayout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        gridLayout.constraintCount = Columns;
-
-        // 6행 고정 높이 (64*6 + 8*5 = 424)
-        LayoutElement le = go.AddComponent<LayoutElement>();
-        le.minHeight = 424f;
-        le.preferredHeight = 424f;
-
-        return go.transform;
-    }
-
-    // RectTransform을 부모 전체에 맞춰 늘리기 (inset = 사방 여백)
-    private static void StretchRect(RectTransform rt, float inset)
-    {
-        rt.anchorMin = Vector2.zero;
-        rt.anchorMax = Vector2.one;
-        rt.offsetMin = new Vector2(inset, inset);
-        rt.offsetMax = new Vector2(-inset, -inset);
     }
 }

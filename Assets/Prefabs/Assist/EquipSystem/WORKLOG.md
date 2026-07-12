@@ -11,7 +11,8 @@
 - 크기 기준 = **refDist 단독** (본→표면 거리의 부모-로컬 베이크 — 캐릭터가 커지면 lossy를 타고
   악세서리도 같이 커진다). 미베이크(0)면 장착 거부+경고. 캡슐/볼륨-핏 경로는 완전 삭제됨.
 - 장착 해석 사다리 (`EquipSlotResolver`, 런타임·현황판 공용):
-  ① 아이템 key와 같은 이름의 소켓 ② `targetSlotId` ③ `fallbackSlotIds` 순서대로 ④ 거부+사유.
+  ① 아이템 key와 같은 이름의 소켓 ② `targetSlotId` ③ `fallbackSlotIds` 순서대로
+  ④ 예약 소켓 `origin`(임시 안전망) ⑤ 거부+사유.
 - 배치 규약 = `contactAnchor`: Pivot(원점=부착점, 기본)/Center/BottomAlign.
   고스트(Socket Maker)와 실장착(`EquipPlacement.FitToPlaceholder`)이 동일 수식 (WYSIWYG).
 - 배치 시 소켓에 `EquipPlacementRecord`(악세서리 key + 소켓-로컬 TRS) 기록 — [기록 재현] 버튼으로 검증.
@@ -44,6 +45,26 @@
   **전부 "사유 있는 거부" 상태 — 신규 소켓 재저작 대기** (에러 아님, 정상)
 - 카탈로그 YAML의 구필드 잔값(fitMode 등)은 로드 시 무시되고 다음 저장에서 자동 소멸
 - 고스트/실장착 수식 단일화(2차분), P3 전파 재구축
+
+## origin 임시 안전망 — 소켓 0개 캐릭터의 전면 장착 불가 방지 (2026-07-12)
+
+**동작 (2겹)**
+- **리졸버 4단** (`EquipSlotResolver.Resolve`): ①key ②targetSlotId ③fallback 전부 실패하면
+  예약 소켓 `origin`을 마지막으로 탐색 (priority=4). **읽기 전용** — 생성 부작용 없음
+  (Socket Maker 현황판이 GUI 프레임마다 호출하는 함수라 생성은 구조적으로 금지).
+- **origin 주입** (런타임 한정): 캐릭터 활성화(`InventorySystemManager.SetActiveOwner`)와 장착 진입
+  (`EquipManager.Equip` — 워크벤치 직접 호출 커버)에서 캐릭터에 `EquipSocket`이 0개면
+  `EquipSocketController`를 붙여 `CreateOriginSocket()` 실행 (멱등 — 이미 있으면 보존).
+  두 지점 모두 경고 로그로 "정식 소켓 재저작 필요"를 알린다.
+- 현황판(Socket Maker)은 priority 4를 **노란 ⚠ "임시 안전망 — 소켓 재저작 필요"** 행으로 구분 표시
+  — 초록(정식 연결/폴백)으로 흡수하지 않아 재저작 대상이 한눈에 남는다.
+
+**임시성** — 소켓을 정식으로 재저작하면 ①~③이 origin보다 앞 순위로 잡혀 안전망은 자연 무력화된다
+(코드 되돌림 불필요, 카탈로그 후보에 origin이 없으므로 origin이 정식 연결을 가로채는 일도 없음).
+
+**저장 무오염 근거** — 주입은 `Application.isPlaying` 게이트로 플레이 중에만, 씬 인스턴스(메모리)에만
+일어난다. 플레이 중 AddComponent/GameObject 생성은 에셋(프리팹/카탈로그)에 기록되지 않고 플레이 종료 시
+소멸하며, 에디트 모드에서는 생성 경로가 아예 돌지 않는다 (리졸버 4단은 탐색만).
 
 ## Socket Maker 2단계 배치 + 고스트 재조정 (2026-07-11)
 

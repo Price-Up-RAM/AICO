@@ -13,10 +13,9 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
     // ── 다크 팔레트 ──────────────────────────────────────────────
     private static readonly Color SlotBg = new Color(0.16f, 0.16f, 0.20f, 1f);        // 아이템 칸 배경
     private static readonly Color SlotEmptyBg = new Color(0.12f, 0.12f, 0.15f, 1f);   // 빈 칸 배경
-    private static readonly Color TextWhite = new Color(0.92f, 0.93f, 0.95f, 1f);     // 이름/수량 텍스트
     private static readonly Color EquippedCyan = new Color(0.25f, 0.85f, 0.90f, 1f);  // 장착 표시(시안)
 
-    // ── 직렬화 참조 (BuildTemplate/베이크 프리팹에서 연결됨) ─────
+    // ── 직렬화 참조 (베이크 프리팹에서 연결됨) ───────────────────
     [SerializeField] private Image background;    // "Background" 칸 배경 (레이캐스트 수신)
     [SerializeField] private Image iconImage;     // "Icon" 아이콘 (없으면 비활성)
     [SerializeField] private TMP_Text nameText;   // "Name" 아이콘 없을 때만 활성
@@ -250,102 +249,5 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
         dragGhost.sizeDelta = new Vector2(56f, 56f);
         dragGhost.SetAsLastSibling();
         dragGhost.position = eventData.position;
-    }
-
-    // ── 템플릿 자가 구축 ─────────────────────────────────────────
-
-    // 비활성 셀 템플릿을 코드로 생성 (같은 클래스라 private 직렬화 필드 직접 할당 가능).
-    // InventoryView.BuildHierarchy에서 호출된다.
-    public static InventorySlotView BuildTemplate(Transform parent)
-    {
-        GameObject go = new GameObject("SlotTemplate", typeof(RectTransform));
-        go.layer = 5; // UI 레이어
-
-        if (parent != null)
-        {
-            go.transform.SetParent(parent, false);
-        }
-
-        ((RectTransform)go.transform).sizeDelta = new Vector2(64f, 64f);
-
-        InventorySlotView slot = go.AddComponent<InventorySlotView>();
-
-        // Background: 전체 채움 + 레이캐스트 수신 (클릭/드롭 진입점)
-        slot.background = CreateImage(go.transform, "Background", SlotEmptyBg);
-        Stretch(slot.background.rectTransform, 0f);
-        slot.background.raycastTarget = true;
-
-        // Icon: 여백 두고 채움 (스프라이트 지정 전까지 비활성)
-        slot.iconImage = CreateImage(go.transform, "Icon", Color.white);
-        Stretch(slot.iconImage.rectTransform, 7f);
-        slot.iconImage.raycastTarget = false;
-        slot.iconImage.preserveAspect = true;
-        slot.iconImage.enabled = false;
-
-        // Name: 아이콘 없을 때만 활성 (중앙 정렬)
-        slot.nameText = CreateText(go.transform, "Name", 11f, TextAlignmentOptions.Center, TextWhite);
-        Stretch(slot.nameText.rectTransform, 3f);
-        slot.nameText.enabled = false;
-
-        // Count: 우하단 수량
-        slot.countText = CreateText(go.transform, "Count", 12f, TextAlignmentOptions.BottomRight, TextWhite);
-        RectTransform countRt = slot.countText.rectTransform;
-        countRt.anchorMin = new Vector2(1f, 0f);
-        countRt.anchorMax = new Vector2(1f, 0f);
-        countRt.pivot = new Vector2(1f, 0f);
-        countRt.anchoredPosition = new Vector2(-3f, 3f);
-        countRt.sizeDelta = new Vector2(36f, 18f);
-        slot.countText.enabled = false;
-
-        // EquippedMark: 좌상단 작은 시안색 점 (기본 비활성)
-        slot.equippedMark = CreateImage(go.transform, "EquippedMark", EquippedCyan);
-        RectTransform markRt = slot.equippedMark.rectTransform;
-        markRt.anchorMin = new Vector2(0f, 1f);
-        markRt.anchorMax = new Vector2(0f, 1f);
-        markRt.pivot = new Vector2(0f, 1f);
-        markRt.anchoredPosition = new Vector2(3f, -3f);
-        markRt.sizeDelta = new Vector2(10f, 10f);
-        slot.equippedMark.raycastTarget = false;
-        slot.equippedMark.enabled = false;
-
-        // 템플릿은 비활성 상태로 대기 (그리드에 Instantiate 후 활성화)
-        go.SetActive(false);
-        return slot;
-    }
-
-    // 자식 Image 생성 헬퍼
-    private static Image CreateImage(Transform parent, string name, Color color)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform));
-        go.layer = 5;
-        go.transform.SetParent(parent, false);
-
-        Image image = go.AddComponent<Image>();
-        image.color = color;
-        return image;
-    }
-
-    // 자식 TMP 텍스트 생성 헬퍼
-    private static TMP_Text CreateText(Transform parent, string name, float fontSize, TextAlignmentOptions alignment, Color color)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform));
-        go.layer = 5;
-        go.transform.SetParent(parent, false);
-
-        TextMeshProUGUI text = go.AddComponent<TextMeshProUGUI>();
-        text.fontSize = fontSize;
-        text.alignment = alignment;
-        text.color = color;
-        text.raycastTarget = false;
-        return text;
-    }
-
-    // RectTransform을 부모 전체에 맞춰 늘리기 (inset = 사방 여백)
-    private static void Stretch(RectTransform rt, float inset)
-    {
-        rt.anchorMin = Vector2.zero;
-        rt.anchorMax = Vector2.one;
-        rt.offsetMin = new Vector2(inset, inset);
-        rt.offsetMax = new Vector2(-inset, -inset);
     }
 }

@@ -171,6 +171,20 @@ public class InventorySystemManager : MonoBehaviour
             return;
         }
 
+        // 임시 안전망: 소켓이 하나도 없는 캐릭터는 origin 소켓을 주입해 장착이 전면 차단되지 않게 한다.
+        // 씬 인스턴스 메모리 전용(Application.isPlaying 게이트) — 에셋/프리팹에 기록되지 않아 저장 오염 없음.
+        if (Application.isPlaying && target.GetComponentsInChildren<EquipSocket>(true).Length == 0)
+        {
+            EquipSocketController ctrl = target.GetComponent<EquipSocketController>();
+            if (ctrl == null)
+            {
+                ctrl = target.AddComponent<EquipSocketController>();
+            }
+
+            ctrl.CreateOriginSocket();
+            Debug.LogWarning($"[InventorySystemManager] '{target.name}'에 소켓이 없어 origin 임시 소켓 주입 — 정식 소켓 재저작 필요");
+        }
+
         // 전환 전 현재 상태 저장
         SaveAll();
 

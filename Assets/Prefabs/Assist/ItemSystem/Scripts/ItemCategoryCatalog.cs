@@ -12,6 +12,16 @@ public class ItemEntry
     [TextArea] public string description;  // 설명
     public int maxStack = 99;       // 스택 상한 — 후속 이관 전까지 런타임 클램프는 InventoryCatalog 값이 적용된다
                                     // (이관 계획: WORKLOG 후속 — InventorySystem이 이 값을 따르게)
+
+    // ── 최상위 메타데이터 플래그 5종 — 아직 소비자 없음. Store/Inventory가 단계적으로 이 플래그를
+    //    따르게 이관 예정 (현행 판별은 Store 태그/InventoryCatalog.category에 흩어져 있음 — WORKLOG 검토 절 참조).
+    //    bool 신필드는 구 직렬화 데이터에서 전부 false로 로드되므로 기존 행은 ItemSystemTools의
+    //    1회 스키마 마이그레이션이 기본값을 기록한다. ──
+    public bool isBuyable = true;    // 상점 구매 가능
+    public bool isSellable = true;   // 상점 판매 가능
+    public bool isCountable = true;  // 여러 개 보유 가능 (false = 1개 한정)
+    public bool isEquipable;         // 장착 가능 (EquipSystem 대상)
+    public bool isSpendable;         // 사용 시 소모 (소모품/증정품)
 }
 
 // 카테고리 카탈로그 공통 베이스 — 레지스트리(ItemCatalog)가 이 타입으로 하위를 참조한다

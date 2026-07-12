@@ -63,7 +63,21 @@ public class EquipManager : MonoBehaviour
             return false;
         }
 
-        // 소켓 해석 사다리: ① key와 같은 이름 ② targetSlotId ③ fallbackSlotIds 순서대로 ④ 장착 불가
+        // 임시 안전망: 소켓 0개 캐릭터는 origin 소켓 주입 — 워크벤치 등 직접 호출 커버 (멱등이라 중복 무해).
+        // 씬 인스턴스 메모리 전용(Application.isPlaying 게이트) — 에디트 모드에서는 절대 생성하지 않는다.
+        if (Application.isPlaying && target.GetComponentsInChildren<EquipSocket>(true).Length == 0)
+        {
+            EquipSocketController ctrl = target.GetComponent<EquipSocketController>();
+            if (ctrl == null)
+            {
+                ctrl = target.AddComponent<EquipSocketController>();
+            }
+
+            ctrl.CreateOriginSocket();
+            Debug.LogWarning($"[EquipManager] '{target.name}'에 소켓이 없어 origin 임시 소켓 주입 — 정식 소켓 재저작 필요");
+        }
+
+        // 소켓 해석 사다리: ① key와 같은 이름 ② targetSlotId ③ fallbackSlotIds ④ 예약 origin(임시 안전망) ⑤ 장착 불가
         string slotId;
         int priority;
         EquipSocket socket = EquipSlotResolver.Resolve(target, entry, out slotId, out priority);

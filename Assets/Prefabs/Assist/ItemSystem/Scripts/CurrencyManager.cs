@@ -28,8 +28,10 @@ public class CurrencyManager : MonoBehaviour
     //   ② 아래 키 상수를 활성화하고 호출부에서 사용.
     // public const string GemKey = "currency_gem";
     // 사용 예:
-    //   CurrencyManager.Instance.Add(CurrencyManager.GemKey, 10);
-    //   CurrencyManager.Instance.Spend(CurrencyManager.GemKey, 3);
+    //   CurrencyManager.Instance.Earn(CurrencyManager.GemKey, 10);    // 소득 — earnedTotal 집계
+    //   CurrencyManager.Instance.Spend(CurrencyManager.GemKey, 3);    // 소비 — spentTotal 집계
+    //   CurrencyManager.Instance.Refund(CurrencyManager.GemKey, 3);   // 실패 결제 되돌림 — spentTotal 역가산
+    //   CurrencyManager.Instance.Add(CurrencyManager.GemKey, -2);     // 순수 잔액 변경(보정) — 집계 무반응
     //   int gems = CurrencyManager.Instance.GetBalance(CurrencyManager.GemKey);
     // (신규 재화는 레거시 브리지와 무관 — 처음부터 이 지갑에 네이티브 저장된다)
 
@@ -158,8 +160,9 @@ public class CurrencyManager : MonoBehaviour
         }
     }
 
-    // 재화 적립. 카탈로그 미등재 키는 거부(오타 키로 잔액이 생기는 사고 차단).
-    public bool Add(string currencyKey, int amount)
+    // 재화 소득(적립) — earnedTotal 집계 경로. "번 돈"으로 취급되는 수입만 이걸 쓴다.
+    // 양수만 허용, 카탈로그 미등재 키는 거부(오타 키로 잔액이 생기는 사고 차단).
+    public bool Earn(string currencyKey, int amount)
     {
         if (amount <= 0 || IsKnownCurrency(currencyKey) == false)
         {
@@ -171,13 +174,59 @@ public class CurrencyManager : MonoBehaviour
         InventoryManager legacy = ResolveLegacyWalletForGold(currencyKey);
         if (legacy != null)
         {
-            legacy.AddGold(amount);
+            legacy.EarnGold(amount);
             return true;
         }
 
         CurrencyState state = FindOrCreate(currencyKey);
         state.balance = state.balance + amount;
         state.earnedTotal = state.earnedTotal + amount;
+        Persist(currencyKey);
+        return true;
+    }
+
+    // 실패 결제 되돌림 — 잔액 복원 + spentTotal 역가산(하한 0). "쓴 돈 취소"에만 쓴다.
+    // (Spend 성공 후 후속 처리가 실패했을 때의 짝 — 미션류 소비 집계가 함께 되돌아간다)
+    public bool Refund(string currencyKey, int amount)
+    {
+        if (amount <= 0 || IsKnownCurrency(currencyKey) == false)
+        {
+            return false;
+        }
+
+        InventoryManager legacy = ResolveLegacyWalletForGold(currencyKey);
+        if (legacy != null)
+        {
+            legacy.RefundGold(amount);
+            return true;
+        }
+
+        CurrencyState state = FindOrCreate(currencyKey);
+        state.balance = state.balance + amount;
+        state.spentTotal = Mathf.Max(0, state.spentTotal - amount);
+        Persist(currencyKey);
+        return true;
+    }
+
+    // 순수 잔액 변경 — 소득/소비 누적(earned/spent)에 반영되지 않는다(보정/치트성 조정용 — 환불은 Refund).
+    // 음수 허용, 잔액은 0 밑으로 내려가지 않는다. 카탈로그 미등재 키는 거부.
+    public bool Add(string currencyKey, int amount)
+    {
+        if (amount == 0 || IsKnownCurrency(currencyKey) == false)
+        {
+            return false;
+        }
+
+        // 레거시 브리지: 골드는 레거시 지갑의 순수 변경 경로로 위임 (집계 무반응 유지)
+        InventoryManager legacy = ResolveLegacyWalletForGold(currencyKey);
+        if (legacy != null)
+        {
+            legacy.AddGold(amount);
+            return true;
+        }
+
+        CurrencyState state = FindOrCreate(currencyKey);
+        state.balance = Mathf.Max(0, state.balance + amount);
         Persist(currencyKey);
         return true;
     }

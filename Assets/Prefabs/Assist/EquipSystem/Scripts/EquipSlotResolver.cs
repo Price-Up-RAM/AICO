@@ -5,11 +5,12 @@ using UnityEngine;
 // 1순위: 아이템 key와 같은 이름의 소켓 (예: 아이템 cat_ears ↔ 소켓 cat_ears)
 // 2순위: targetSlotId (예: hairpin — 아이템 부류의 특정 자리)
 // 3순위: fallbackSlotIds 순서대로 (예: head, chest, origin — 웬만한 모델이 갖는 범용 자리)
-// 4순위: 없음(null) = 장착 불가.
+// 4순위: 예약 소켓 origin (임시 안전망 — 카탈로그 후보에 없어도 마지막으로 시도)
+// 5순위: 없음(null) = 장착 불가.
 // 런타임 장착(EquipManager)과 에디터 현황판(Socket Maker)이 이 한 곳을 같이 쓴다.
 public static class EquipSlotResolver
 {
-    // 사다리 순서로 소켓 탐색. priority: 1=key 일치, 2=targetSlotId, 3=폴백. 못 찾으면 null/0.
+    // 사다리 순서로 소켓 탐색. priority: 1=key 일치, 2=targetSlotId, 3=폴백, 4=origin(임시 안전망). 못 찾으면 null/0.
     public static EquipSocket Resolve(GameObject character, EquipEntry entry, out string matchedSlotId, out int priority)
     {
         matchedSlotId = null;
@@ -48,6 +49,16 @@ public static class EquipSlotResolver
                     return socket;
                 }
             }
+        }
+
+        // 4단(임시 안전망): 예약 소켓 origin — 카탈로그 후보에 없어도 마지막으로 탐색.
+        // 반드시 읽기 전용 — 생성 부작용 절대 금지 (에디터 현황판이 GUI 프레임마다 이 함수를 호출).
+        EquipSocket origin = EquipSocket.Find(character, "origin");
+        if (origin != null)
+        {
+            matchedSlotId = "origin";
+            priority = 4;
+            return origin;
         }
 
         return null;

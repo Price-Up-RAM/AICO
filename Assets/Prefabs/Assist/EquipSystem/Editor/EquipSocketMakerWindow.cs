@@ -186,7 +186,7 @@ public class EquipSocketMakerWindow : EditorWindow
                     continue;
                 }
 
-                // 해석 사다리(런타임과 동일 코드): ① key 이름 소켓 ② targetSlotId ③ 폴백 ④ 장착 불가
+                // 해석 사다리(런타임과 동일 코드): ① key 이름 소켓 ② targetSlotId ③ 폴백 ④ 예약 origin(임시 안전망) ⑤ 장착 불가
                 string state;
                 Color rowColor;
                 string matched;
@@ -194,20 +194,29 @@ public class EquipSocketMakerWindow : EditorWindow
                 EquipSocket linked = EquipSlotResolver.Resolve(target, entry, out matched, out priority);
                 if (linked != null)
                 {
-                    rowColor = new Color(0.6f, 1f, 0.7f);
-                    if (priority == 1)
+                    if (priority == 4)
                     {
-                        state = "→ " + matched + "  ✓ (키 이름 소켓)";
+                        // origin 임시 안전망 — 정식 연결(초록)로 흡수하지 않고 노란 경고로 구분 표시
+                        rowColor = new Color(1f, 0.85f, 0.4f);
+                        state = "→ " + matched + "  ⚠ (임시 안전망 — 소켓 재저작 필요)";
                     }
                     else
                     {
-                        if (priority == 2)
+                        rowColor = new Color(0.6f, 1f, 0.7f);
+                        if (priority == 1)
                         {
-                            state = "→ " + matched + "  ✓";
+                            state = "→ " + matched + "  ✓ (키 이름 소켓)";
                         }
                         else
                         {
-                            state = "→ " + matched + "  ✓ (폴백)";
+                            if (priority == 2)
+                            {
+                                state = "→ " + matched + "  ✓";
+                            }
+                            else
+                            {
+                                state = "→ " + matched + "  ✓ (폴백)";
+                            }
                         }
                     }
                 }
