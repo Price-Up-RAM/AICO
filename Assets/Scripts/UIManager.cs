@@ -82,15 +82,18 @@ public class UIManager : MonoBehaviour
         inventoryPanel = ResolveManagedUI(inventoryPanel, "InventoryPanel");
         inventoryPanelChar = ResolveManagedUI(inventoryPanelChar, "InventoryPanelChar");
 
-        charChange.SetActive(false);
+        // UIWidget 패널은 Awake 실행 순서와 무관하게 동일한 닫힘 상태(inactive+alpha0)로 강제 리셋
+        // — SetActive(false) 후 Close() 방식은 위젯 Awake 선행 여부에 따라 초기 alpha가 0/1로 갈라져,
+        //   최초 Show 때 이월된 OnDelayedStart가 패널을 꺼버리는 고착(m_IsShowing 잠김)의 원인이 됨
+        ForceResetWidget(charChange);
         SetInitialInactive(characterDetail);
-        charSummon.SetActive(false);
-        version.SetActive(false);
-        settings.SetActive(false);
-        chatHistory.SetActive(false);
+        ForceResetWidget(charSummon);
+        ForceResetWidget(version);
+        ForceResetWidget(settings);
+        ForceResetWidget(chatHistory);
         // guideLine.SetActive(false);
         // situation.SetActive(false);
-        ocrAutoMapper.SetActive(false);
+        ForceResetWidget(ocrAutoMapper);
         choiceInputImage.SetActive(false);
         SetInitialInactive(pomodoro);
         SetInitialInactive(alarm);
@@ -105,16 +108,10 @@ public class UIManager : MonoBehaviour
         HideInventoryViewIfPresent(inventoryPanelChar);
         debugBalloon2.SetActive(false);
 
-        // UIWidget 존재하면 Close
-        TryCloseWidget(charChange);
+        // UIWidget 존재하면 Close (ForceResetWidget 미적용 패널만 — guideLine/situation은 시작 시 활성 유지가 기존 의도)
         TryCloseWidget(characterDetail);
-        TryCloseWidget(charSummon);
-        TryCloseWidget(version);
-        TryCloseWidget(settings);
-        TryCloseWidget(chatHistory);
         TryCloseWidget(guideLine);
         TryCloseWidget(situation);
-        TryCloseWidget(ocrAutoMapper);
 
         //         // 안드로이드 or 테스트용
         // #if UNITY_ANDROID || UNITY_EDITOR
@@ -196,6 +193,30 @@ public class UIManager : MonoBehaviour
         {
             widget.Close();
         }
+    }
+
+    // 시작 시 위젯을 트윈/이월된 자동 닫힘에 의존하지 않고 즉시 닫힘 상태로 강제 리셋
+    private void ForceResetWidget(GameObject target)
+    {
+        if (target == null) return;
+
+        UIWidget widget = target.GetComponent<UIWidget>();
+        if (widget != null)
+        {
+            widget.Close(); // 위젯 Awake가 이미 돌았다면 m_IsShowing 리셋 (아니면 no-op)
+
+            CanvasGroup canvasGroup = target.GetComponent<CanvasGroup>();
+            if (canvasGroup != null)
+            {
+                canvasGroup.alpha = 0f;
+                canvasGroup.interactable = false;
+                canvasGroup.blocksRaycasts = false;
+            }
+
+            target.transform.localScale = Vector3.zero;
+        }
+
+        target.SetActive(false);
     }
 
     // charChange-UIWidget의 Show 작동
@@ -316,9 +337,12 @@ public class UIManager : MonoBehaviour
     }
 
     // charChange-UIWidget의 Toggle 작동
+    // activeSelf 판정은 닫힘 트윈(0.7초) 동안 무반응이 되므로 위젯의 표시 의도(m_IsShowing) 기준으로 판정
     public void ToggleCharChange()
     {
-        if (charChange.activeSelf)
+        UIWidget uIWidget = charChange.GetComponent<UIWidget>();
+        bool isShowing = uIWidget != null ? uIWidget.IsM_IsShowing : charChange.activeSelf;
+        if (isShowing)
         {
             CloseCharChange();
         }
