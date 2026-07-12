@@ -5,7 +5,7 @@
 포즈/이펙트 리얼타임 프리뷰 아이콘(Runtime/File 소스 · 포즈 리롤 · NoImage 폴백).
 기존 시스템과는 문자열 key + 공개 API + 이벤트로만 연결되는 약결합 구조다.
 
-- 지갑: 미션 재화 `InventoryManager`(Prefabs/UI/Mission)의 Gold.
+- 지갑: `CurrencyManager`(Prefabs/Assist/ItemSystem)의 골드(`currency_gold`).
 - 아이템 보관/지급: `InventorySystemManager`(Prefabs/Assist/InventorySystem).
 - 상세 설계: `Store_Design.md` / 작동 원리·프로토콜: `WORKLOG.md` / 포즈 상품 검토: `Store_PoseAnimation_Review.md`
 
@@ -68,9 +68,9 @@ batchmode 일괄 빌드(에디터 GUI가 닫혀 있어야 함):
   랜덤이라 리롤마다 다른 포즈가 나온다.
 - **NoImage 폴백** — 실아이콘이 없는 카드/모달은 베이크된 'NO IMAGE' 플레이스홀더를 우선 표시하고
   캡처가 끝나면 교체한다. 플레이스홀더 PNG가 없으면 아이콘을 숨기고 이름 텍스트만 남는다.
-- **재화/미션 연동** — 구매 = `SpendGold` → `AddToMain`(지급 실패 시 `RefundGold`로 전액 환불 —
-  실패 결제 되돌림, 누적 소비 역가산), 판매 = 스택 차감 → `EarnGold`(소득 — 누적 획득 집계).
-  장착물 태그 구매 시 AF0005 미션 보고(`TagForKey` 판정), CH0007(골드 소비)은 SpendGold만으로
+- **재화/미션 연동** — 구매 = `Spend`(골드) → `AddToMain`(지급 실패 시 `Refund`로 전액 환불 —
+  실패 결제 되돌림, 누적 소비 역가산), 판매 = 스택 차감 → `Earn`(소득 — 누적 획득 집계).
+  장착물 태그 구매 시 AF0005 미션 보고(`TagForKey` 판정), CH0007(골드 소비)은 Spend만으로
   자동 진행.
 
 ## 3. 카탈로그 관리

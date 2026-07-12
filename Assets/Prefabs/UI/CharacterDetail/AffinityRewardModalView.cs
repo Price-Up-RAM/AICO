@@ -222,7 +222,7 @@ public class AffinityRewardModalView : MonoBehaviour
     }
 
     // 보상 지급 라우터 — 타입별 지급 경로.
-    // Currency: CurrencyManager(골드는 내부에서 레거시 지갑에 위임 — 미션 집계 유지) / Item: ItemSystemManager /
+    // Currency: CurrencyManager(골드 포함 전 재화 단일 지갑 — 미션 집계는 CurrencyChanged 구독) / Item: ItemSystemManager /
     // Border·Title: 캐릭터 단위 해금(settings_char.json의 affinityUnlockedIds).
     private void GrantRewards(System.Collections.Generic.List<AffinityRewardDef> rewards)
     {
@@ -233,13 +233,8 @@ public class AffinityRewardModalView : MonoBehaviour
             switch (def.type)
             {
                 case AffinityRewardType.Currency:
-                    // Earn은 실패할 수 있다(재화 카탈로그 부재/미등재 키) — 골드는 레거시 지갑으로 폴백, 그래도 실패면 유실 경고
+                    // Earn은 실패할 수 있다(재화 카탈로그 부재/미등재 키) — 실패면 유실 경고
                     bool earned = CurrencyManager.Instance != null && CurrencyManager.Instance.Earn(def.id, def.amount);
-                    if (!earned && def.id == AffinityData.CurrencyGoldKey && InventoryManager.Instance != null)
-                    {
-                        InventoryManager.Instance.EarnGold(def.amount);
-                        earned = true;
-                    }
                     if (!earned)
                     {
                         Debug.LogError("[CharacterDetail][AffinityModal] 재화 지급 실패(유실) — key=" + def.id + " amount=" + def.amount);

@@ -16,11 +16,11 @@ using UnityEngine.UI;
 /// 페이징: 그리드는 페이지당 6장(3x2) 고정, 하단 [ &lt; n / m &gt; ] 페이지바로 이동 (InventoryView 방식).
 ///
 /// 재화 루프
-///  - 구매: 카드 클릭 → StoreConfirmView(Buy 모드, 수량/최종금액 확인 팝업) → 확인 시 SpendGold → AddToMain(key, 수량).
+///  - 구매: 카드 클릭 → StoreConfirmView(Buy 모드, 수량/최종금액 확인 팝업) → 확인 시 Spend(골드) → AddToMain(key, 수량).
 ///          AddToMain 실패 시 전액 환불. 장착물 탭 구매 성공 시 MissionList.Report("AF0005", 수량).
 ///  - 판매: StoreSellZone(IDropHandler)이 드롭 검증 후 RequestSell 호출 → StoreConfirmView(Sell 모드,
-///          수량 선택) → 확인 시 ExecuteSale(스택 차감 + EarnGold) → NotifySold.
-///  - 골드 표시: InventoryManager.InventoryChanged 구독. 보유 수: InventoryEvents.OnStoreChanged 구독.
+///          수량 선택) → 확인 시 ExecuteSale(스택 차감 + Earn(골드)) → NotifySold.
+///  - 골드 표시: CurrencyManager.CurrencyChanged 구독. 보유 수: InventoryEvents.OnStoreChanged 구독.
 /// </summary>
 public class StoreView : MonoBehaviour
 {
@@ -79,7 +79,7 @@ public class StoreView : MonoBehaviour
     private int currentPage;
     private Sprite roundedSprite;
     private TMP_FontAsset boundFont;
-    private InventoryManager subscribedWallet;
+    private CurrencyManager subscribedWallet;
     private StoreManager subscribedStoreManager;
 
     private CanvasGroup canvasGroup;
@@ -145,10 +145,10 @@ public class StoreView : MonoBehaviour
 
         if (Application.isPlaying)
         {
-            subscribedWallet = InventoryManager.Instance;
+            subscribedWallet = CurrencyManager.Instance;
             if (subscribedWallet != null)
             {
-                subscribedWallet.InventoryChanged += HandleWalletChanged;
+                subscribedWallet.CurrencyChanged += HandleWalletChanged;
             }
         }
 
@@ -164,14 +164,17 @@ public class StoreView : MonoBehaviour
 
         if (subscribedWallet != null)
         {
-            subscribedWallet.InventoryChanged -= HandleWalletChanged;
+            subscribedWallet.CurrencyChanged -= HandleWalletChanged;
             subscribedWallet = null;
         }
     }
 
-    private void HandleWalletChanged()
+    private void HandleWalletChanged(string currencyKey)
     {
-        RefreshGold();
+        if (currencyKey == CurrencyManager.GoldKey)
+        {
+            RefreshGold();
+        }
     }
 
     // MAIN 스토어 변경 → 보유 수 갱신 (구매/판매/이동 모두)
@@ -362,7 +365,7 @@ public class StoreView : MonoBehaviour
         confirmView.Open(StoreConfirmMode.Buy, entry.key, displayName, icon, entry.price, Mathf.Min(99, room), qty => ExecutePurchase(captured, qty));
     }
 
-    // 결제 실행: SpendGold(총액) → AddToMain(key, 수량). 지급 실패 시 전액 환불.
+    // 결제 실행: Spend(골드 총액) → AddToMain(key, 수량). 지급 실패 시 전액 환불.
     private void ExecutePurchase(StoreEntry entry, int quantity)
     {
         if (entry == null || quantity < 1 || Application.isPlaying == false)
@@ -370,7 +373,7 @@ public class StoreView : MonoBehaviour
             return;
         }
 
-        InventoryManager wallet = InventoryManager.Instance;
+        CurrencyManager wallet = CurrencyManager.Instance;
         if (wallet == null)
         {
             return;
@@ -387,7 +390,7 @@ public class StoreView : MonoBehaviour
         }
 
         int total = entry.price * quantity;
-        if (wallet.SpendGold(total) == false)
+        if (wallet.Spend(CurrencyManager.GoldKey, total) == false)
         {
             ShowToast("골드가 부족합니다");
             FlashGoldRed();
@@ -398,8 +401,8 @@ public class StoreView : MonoBehaviour
         if (manager == null || manager.AddToMain(entry.key, quantity) == false)
         {
             // 지급 실패 → 전액 환불 (AddToMain이 카탈로그 검증/최대 스택에서 거부할 수 있다)
-            // 실패한 결제의 되돌림이라 RefundGold — earned/spent 누적을 펌핑하지 않는다
-            wallet.RefundGold(total);
+            // 실패한 결제의 되돌림이라 Refund — earned/spent 누적을 펌핑하지 않는다
+            wallet.Refund(CurrencyManager.GoldKey, total);
             ShowToast("아이템 지급에 실패해 환불되었습니다");
             Debug.LogWarning($"[Store][StoreView] AddToMain 실패로 환불: {entry.key} x{quantity} ({total} G)");
             return;
@@ -407,7 +410,7 @@ public class StoreView : MonoBehaviour
 
         ShowToast($"{ResolveDisplayName(entry, ResolveMeta(entry.key))} x{quantity} 구매 -{total:N0} G");
 
-        // 장착물(액세서리) 구매 미션 (CH0007 골드 소비는 SpendGold만으로 자동 진행).
+        // 장착물(액세서리) 구매 미션 (CH0007 골드 소비는 Spend만으로 자동 진행).
         // StoreEntry는 태그를 갖지 않으므로 레지스트리에서 키의 소속 태그를 역조회한다.
         if (catalog != null && catalog.TagForKey(entry.key) == TabEquip && MissionList.Instance != null)
         {
@@ -460,7 +463,7 @@ public class StoreView : MonoBehaviour
         }
 
         InventorySystemManager manager = InventorySystemManager.Instance;
-        InventoryManager wallet = InventoryManager.Instance;
+        CurrencyManager wallet = CurrencyManager.Instance;
         if (manager == null || wallet == null)
         {
             Debug.LogWarning("[Store][StoreView] 매니저/지갑 참조가 없어 판매를 처리할 수 없습니다.");
@@ -490,7 +493,7 @@ public class StoreView : MonoBehaviour
         InventoryEvents.OnStoreChanged?.Invoke(InventorySystemManager.MainOwnerId);
 
         int total = GetSellPrice(key) * quantity;
-        wallet.EarnGold(total);
+        wallet.Earn(CurrencyManager.GoldKey, total);
         NotifySold(ResolveSellDisplayName(key), quantity, total);
         Debug.Log($"[Store][StoreView] 판매: {key} x{quantity} → +{total}G");
     }
@@ -564,9 +567,9 @@ public class StoreView : MonoBehaviour
         }
 
         int gold = 0;
-        if (Application.isPlaying && InventoryManager.Instance != null)
+        if (Application.isPlaying && CurrencyManager.Instance != null)
         {
-            gold = InventoryManager.Instance.Gold;
+            gold = CurrencyManager.Instance.Gold;
         }
 
         goldText.text = $"{gold:N0} G";

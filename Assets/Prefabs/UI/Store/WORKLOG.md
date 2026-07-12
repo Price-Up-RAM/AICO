@@ -4,7 +4,8 @@ Affinity_Plan(친밀도)의 재화 루프를 검증하는 상점 프로토타입
 + 페이징 + **인벤토리 슬롯 → 판매 존 드래그앤드롭 → 수량 선택 판매**. 기존 시스템과의 연결은 전부
 **문자열 key + 공개 API + 이벤트**뿐이라 약결합을 유지한다. 설계 문서: `Store_Design.md`.
 
-- 지갑은 기존 미션 재화 시스템 `InventoryManager`(Prefabs/UI/Mission)의 Gold를 그대로 사용.
+- 지갑은 `CurrencyManager`(Prefabs/Assist/ItemSystem)의 골드(`CurrencyManager.GoldKey`)를 사용.
+  (구 미션 지갑 InventoryManager는 골드 단일화로 삭제됨 — ItemSystem WORKLOG 참조)
 - 아이템 보관/지급은 `InventorySystemManager`(Prefabs/Assist/InventorySystem)에 위임.
 
 ---
@@ -136,18 +137,18 @@ Affinity_Plan(친밀도)의 재화 루프를 검증하는 상점 프로토타입
 - **한계**: MagicaCloth 스트립으로 머리카락/치마는 바인드 포즈, 배경은 단색(투명 아님), 포즈는 랜덤
   정지 위치·이펙트는 파티클 랜덤 시드 때문에 캡처마다 그림이 달라진다.
 
-### 구매 흐름 (지갑 = 미션 InventoryManager)
+### 구매 흐름 (지갑 = CurrencyManager)
 - 카드 클릭 → `StoreConfirmView.Open(Buy 모드, 키, 이름, 아이콘, 단가, 최대수량, 콜백)` — 수량과
   **최종금액(합계 N G)**을 보여주고 "정말 계산하시겠습니까?" 확인. 합계가 보유 골드 초과면 합계 텍스트 빨강.
 - **수량 상한 = 남은 적재 가능량**(스택 잔여 공간): 무조건 1~99가 아니라 인벤토리에 더 담을 수 있는
   만큼만 올라가고, 수량 표시는 **"n / max"** 형식.
-- "계산하기" → `InventoryManager.Instance.SpendGold(총액)` 성공 시
-  `InventorySystemManager.Instance.AddToMain(key, 수량)`. AddToMain 실패 시 `RefundGold(총액)`로 전액
-  환불(실패 결제 되돌림 — 누적 소비(goldSpentTotal)를 역가산, 소득/소비 집계를 펌핑하지 않는다).
+- "계산하기" → `CurrencyManager.Instance.Spend(GoldKey, 총액)` 성공 시
+  `InventorySystemManager.Instance.AddToMain(key, 수량)`. AddToMain 실패 시 `Refund(GoldKey, 총액)`로
+  전액 환불(실패 결제 되돌림 — 누적 소비(spentTotal)를 역가산, 소득/소비 집계를 펌핑하지 않는다).
 - 골드 부족: 토스트 "골드가 부족합니다" + GoldText 빨강 플래시(0.5초).
-- 골드 표시는 `InventoryManager.InventoryChanged`, 보유 수("보유 n")는
+- 골드 표시는 `CurrencyManager.CurrencyChanged`(GoldKey 필터), 보유 수("보유 n")는
   `InventoryEvents.OnStoreChanged` 구독으로 갱신.
-- **미션 연동**: CH0007(골드 소비)은 `SpendGold` 내부 집계만으로 자동 진행(상점 측 코드 불필요).
+- **미션 연동**: CH0007(골드 소비)은 `Spend` 내부 집계만으로 자동 진행(상점 측 코드 불필요).
   구매 키의 소속 태그가 `"장착물"`이면(`catalog.TagForKey(key)` 판정 — StoreEntry에 tab 필드가 없어
   레지스트리에서 역조회) `MissionList.Instance.Report("AF0005", 수량)` 호출
   (주의: `MissionList.Instance` getter는 플레이 중 자동 생성되므로 데모 구매도 실제 미션 저장에 반영된다).
@@ -172,8 +173,8 @@ Affinity_Plan(친밀도)의 재화 루프를 검증하는 상점 프로토타입
   1. 슬롯 인덱스 + key로 스택을 **재조회** — 모달이 떠 있는 동안 인벤토리가 바뀌었을 수 있으므로,
      스택이 사라졌거나 key가 다르면 토스트로 안내하고 판매 취소.
   2. 부분 판매(수량 < 보유): `stack.count`에서 수량만 차감. 전량 판매: 스택 자체를 제거.
-  3. `SaveStore` → `InventoryEvents.OnStoreChanged?.Invoke(MainOwnerId)` → `InventoryManager.EarnGold(총액)`
-     (판매 대금은 소득 — 누적 획득(goldEarnedTotal) 집계) → `NotifySold(...)` 토스트 "이름 xN 판매 +NG".
+  3. `SaveStore` → `InventoryEvents.OnStoreChanged?.Invoke(MainOwnerId)` → `CurrencyManager.Earn(GoldKey, 총액)`
+     (판매 대금은 소득 — 누적 획득(earnedTotal) 집계) → `NotifySold(...)` 토스트 "이름 xN 판매 +NG".
 
 ### InventorySlotView 최소 패치 (유일한 기존 코드 수정)
 `Prefabs/Assist/InventorySystem/Scripts/InventorySlotView.cs`에만 최소 패치:
@@ -234,8 +235,8 @@ int sell = storeView.GetSellPrice(key);   // 판매가 질의 (카탈로그 밖�
 
 ## 4. 독립성
 
-- **의존하는 것**: ① 골드 지갑 `InventoryManager`(Mission)의 4동사
-  `EarnGold(소득)/AddGold(순수 변경)/RefundGold(환불)/SpendGold(소비)` + `InventoryChanged`,
+- **의존하는 것**: ① 골드 지갑 `CurrencyManager`(Prefabs/Assist/ItemSystem)의 4동사
+  `Earn(소득)/Add(순수 변경)/Refund(환불)/Spend(소비)` + `CurrencyChanged` + `Gold`,
   ② InventorySystem 공개 API(`AddToMain`/`GetMainStore`/`SaveStore`/`Catalog`/`InventoryEvents`)
   + 위 최소 슬롯 패치, ③ InventoryCatalog/EquipCatalog와 공유하는 문자열 key 공간,
   ④ `MissionList.Report` — AF0005 보고용(플레이 중 자동 생성 싱글톤).

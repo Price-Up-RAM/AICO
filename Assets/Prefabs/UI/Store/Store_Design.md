@@ -6,11 +6,12 @@
 ## 1. 범위
 
 - 탭이 있는 상점 창(구매) + **인벤토리 → 상점 드래그앤드롭 판매**.
-- 재화는 기존 지갑 `InventoryManager`(Prefabs/UI/Mission/MissionView/Scripts/InventoryManager.cs)의 Gold를 그대로 사용.
-  - 구매: `InventoryManager.Instance.SpendGold(price)` → 성공 시 `InventorySystemManager.Instance.AddToMain(key, 1)`. AddToMain 실패 시 `RefundGold(price)`로 환불(실패 결제 되돌림 — 누적 소비 역가산).
-  - 판매: 아래 SellZone 참조. `EarnGold(총액)`(소득 — 누적 획득 집계).
-  - 골드 표시: `InventoryManager.InventoryChanged` 구독.
-  - CH0007(골드 소비) 미션은 SpendGold만으로 자동 진행. 구매 키의 소속 태그가 "장착물"이면(`StoreCatalog.TagForKey(key)` 판정 — 엔트리에 tab 필드가 없어 레지스트리 역조회) `MissionList.Instance.Report("AF0005", 수량)` 호출(널가드).
+- 재화는 `CurrencyManager`(Prefabs/Assist/ItemSystem)의 골드(`CurrencyManager.GoldKey`)를 사용.
+  (설계 당시의 미션 지갑 InventoryManager는 골드 단일화로 삭제됨 — 4동사 대응: SpendGold→Spend / RefundGold→Refund / EarnGold→Earn / AddGold→Add)
+  - 구매: `CurrencyManager.Instance.Spend(GoldKey, price)` → 성공 시 `InventorySystemManager.Instance.AddToMain(key, 1)`. AddToMain 실패 시 `Refund(GoldKey, price)`로 환불(실패 결제 되돌림 — 누적 소비 역가산).
+  - 판매: 아래 SellZone 참조. `Earn(GoldKey, 총액)`(소득 — 누적 획득 집계).
+  - 골드 표시: `CurrencyManager.CurrencyChanged` 구독(GoldKey 필터).
+  - CH0007(골드 소비) 미션은 Spend만으로 자동 진행. 구매 키의 소속 태그가 "장착물"이면(`StoreCatalog.TagForKey(key)` 판정 — 엔트리에 tab 필드가 없어 레지스트리 역조회) `MissionList.Instance.Report("AF0005", 수량)` 호출(널가드).
 - 친밀도 연동(선물 → 포인트)은 이번 범위 밖. WORKLOG에 남은 일로 기록. 연동 설계 소유는 `../CharacterDetail/Affinity_Store_Integration.md`로 이관.
 
 ## 2. 폴더/파일
@@ -259,7 +260,7 @@ public class StoreSellZone : MonoBehaviour, IDropHandler, IPointerEnterHandler, 
 
 1. `GetMainStore().FindBySlot(슬롯 인덱스)`로 스택 **재조회**. 모달이 떠 있는 동안 인벤토리가 바뀔 수 있으므로(다른 판매/장착/이동), **스택이 없거나 key가 예약 시점과 다르면 토스트로 안내하고 판매 취소**(slot+key 이중 검증).
 2. 수량 처리: 선택 수량 < `stack.count` → `stack.count`에서 수량만 차감(부분 판매). 선택 수량 == `stack.count` → `store.stacks.Remove(stack)`(전량 판매, 같은 키 중복 스택 대비 키가 아닌 스택 자체를 제거).
-3. `InventorySystemManager.Instance.SaveStore(store); InventoryEvents.OnStoreChanged?.Invoke(InventorySystemManager.MainOwnerId); InventoryManager.Instance.EarnGold(판매가 x 수량);` — 판매 대금은 소득(EarnGold — 누적 획득 집계).
+3. `InventorySystemManager.Instance.SaveStore(store); InventoryEvents.OnStoreChanged?.Invoke(InventorySystemManager.MainOwnerId); CurrencyManager.Instance.Earn(CurrencyManager.GoldKey, 판매가 x 수량);` — 판매 대금은 소득(Earn — 누적 획득 집계).
 4. `NotifySold(표시이름, 수량, 총액)` → 토스트 "이름 xN 판매 +NG".
 
 호버 시 SellZone 배경을 AccentBlue로 하이라이트(Enter/Exit)는 기존과 동일.
@@ -284,7 +285,7 @@ Store 방향 참조 없음 — InventorySystem은 "누군가 드롭을 소비했
 [SerializeField] InventoryView inventoryView;  // I: inventoryView.Toggle()
 [SerializeField] KeyCode toggleStoreKey = KeyCode.S;
 [SerializeField] KeyCode toggleInventoryKey = KeyCode.I;
-[SerializeField] KeyCode grantGoldKey = KeyCode.G;   // +500G (InventoryManager.AddGold)
+[SerializeField] KeyCode grantGoldKey = KeyCode.G;   // +500G (CurrencyManager.Add — 집계 무반응 데모 충전)
 [SerializeField] KeyCode rerollPoseKey = KeyCode.Alpha5;  // 포즈 프리뷰 리롤 (StoreManager.RerollPoses)
 // 1~4: InventorySystemManager.AddToMain(각 데모 키 1개) — 판매 시연용
 ```

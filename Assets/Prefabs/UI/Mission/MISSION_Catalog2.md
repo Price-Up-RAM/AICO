@@ -194,7 +194,7 @@ _주요 훅: MissionList.UpdateDerived()에 SetCurrent(id, InventoryManager.Inst
 ## 배선 가이드 / 다음 액션
 
 ### 즉시 배선 (🟢 = 이벤트 존재)
-구독만 하면 되는 것들: 알람(`AlarmManager.AlarmsChanged/AlarmRang`), 할일(`JarvisTodoStore.Changed`), 인벤토리(`InventoryManager.InventoryChanged`), 메타/카테고리 완료(`MissionList.UpdateDerived` 자동).
+구독만 하면 되는 것들: 알람(`AlarmManager.AlarmsChanged/AlarmRang`), 할일(`JarvisTodoStore.Changed`), 재화(`CurrencyManager.CurrencyChanged`), 메타/카테고리 완료(`MissionList.UpdateDerived` 자동).
 
 ### Report 한 줄 (🟡)
 실행 지점에 `MissionList.Instance.Report("ID")` / `ReportFlag` / `ReportBest` 추가. 표의 '주요 훅' 참고.

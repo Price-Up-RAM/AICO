@@ -38,6 +38,7 @@ public class MissionList : MonoBehaviour
     private bool updatingDerived;
     private bool suppressNotify;   // claim 중 중간 알림 억제(클릭 1회=알림 1회)
     private string language = "ko";
+    private CurrencyManager subscribedWallet;  // 구독 당시 참조 (종료 중 Instance getter가 지갑을 재생성하는 것 방지)
 
     private void RaiseChanged()
     {
@@ -75,12 +76,13 @@ public class MissionList : MonoBehaviour
         BuildMissions();
         LoadProgress(); // 저장된 진행도 적용(정의는 코드, 상태만 JSON)
 
-        if (InventoryManager.Instance != null)
+        subscribedWallet = CurrencyManager.Instance;
+        if (subscribedWallet != null)
         {
-            InventoryManager.Instance.InventoryChanged += OnInventoryChanged;
+            subscribedWallet.CurrencyChanged += OnCurrencyChanged;
         }
 
-        UpdateDerived(); // 인벤토리 기반 도전은 현재 보유/누적치에서 재산출
+        UpdateDerived(); // 재화 기반 도전은 현재 보유/누적치에서 재산출
     }
 
     private string SavePath => Path.Combine(Application.persistentDataPath, "missions.json");
@@ -145,9 +147,10 @@ public class MissionList : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (_instance == this && InventoryManager.Instance != null)
+        if (subscribedWallet != null)
         {
-            InventoryManager.Instance.InventoryChanged -= OnInventoryChanged;
+            subscribedWallet.CurrencyChanged -= OnCurrencyChanged;
+            subscribedWallet = null;
         }
     }
 
@@ -271,13 +274,22 @@ public class MissionList : MonoBehaviour
 
         MissionReward reward = info.RewardForLevel(info.claimedTiers);
 
-        // 보상 적립(→InventoryChanged) + 단계 증가 + 파생 갱신을 묶고, 알림은 마지막에 1회만.
+        // 보상 적립(→CurrencyChanged) + 단계 증가 + 파생 갱신을 묶고, 알림은 마지막에 1회만.
         suppressNotify = true;
         try
         {
-            if (InventoryManager.Instance != null)
+            // 양수 골드 = 소득(Earn — 누적 획득 집계), 음수 = 집계 무반응 잔액 보정(Add — 0 하한).
+            // 구 InventoryManager.AddReward와 동일한 의미.
+            if (reward != null && reward.gold != 0 && CurrencyManager.Instance != null)
             {
-                InventoryManager.Instance.AddReward(reward);
+                if (reward.gold > 0)
+                {
+                    CurrencyManager.Instance.Earn(CurrencyManager.GoldKey, reward.gold);
+                }
+                else
+                {
+                    CurrencyManager.Instance.Add(CurrencyManager.GoldKey, reward.gold);
+                }
             }
 
             info.claimedTiers++;
@@ -311,8 +323,14 @@ public class MissionList : MonoBehaviour
         RaiseChanged();
     }
 
-    private void OnInventoryChanged()
+    private void OnCurrencyChanged(string currencyKey)
     {
+        // 골드 파생 도전(CH0001/CH0007)만 재계산 대상 — 다른 재화 변경은 무시
+        if (currencyKey != CurrencyManager.GoldKey)
+        {
+            return;
+        }
+
         UpdateDerived();
         RaiseChanged();
     }
@@ -328,11 +346,11 @@ public class MissionList : MonoBehaviour
         updatingDerived = true;
         try
         {
-            InventoryManager inv = InventoryManager.Instance;
-            if (inv != null)
+            CurrencyManager wallet = CurrencyManager.Instance;
+            if (wallet != null)
             {
-                SetCurrent("CH0001", inv.GoldEarnedTotal);
-                SetCurrent("CH0007", inv.GoldSpentTotal);
+                SetCurrent("CH0001", wallet.GetEarnedTotal(CurrencyManager.GoldKey));
+                SetCurrent("CH0007", wallet.GetSpentTotal(CurrencyManager.GoldKey));
             }
 
             SetCurrent("CH0003", AllTabDone(MissionTab.Onboarding) ? 1 : 0);

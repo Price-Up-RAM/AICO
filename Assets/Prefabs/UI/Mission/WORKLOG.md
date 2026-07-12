@@ -10,15 +10,16 @@
     **MissionInfo(정의+런타임 상태 통합)** + 단계 계산 헬퍼(`NextTarget`/`Claimable`/`Progress01`/`AllDone`).
   - `MissionList.cs` — **싱글톤. `List<MissionInfo>`를 코드(`BuildMissions`)로 1줄씩 보유(38개)**.
     `GetByTab/GetById/Report/ReportFlag/ClaimReward/TestIncrement/ResetAllProgress/GetTabCounts/IsClaimable`,
-    인벤토리 연동(보상 적립), **메타/도전 파생 진행도 자동 계산**. 저장 없음(메모리). 재진입 가드.
-  - `InventoryManager.cs` — **gold 단일 재화** 싱글톤(`inventory.json` 영속). 아이템(i1~3) 재화는 폐지.
-    `EarnGold/AddGold/RefundGold/SpendGold/AddReward/ResetAll` + `InventoryChanged`, 누적 획득/소비 통계.
-    - **Earn/Add/Refund 의미론**:
-      - `EarnGold` = 소득. 잔액 + 누적 획득(`goldEarnedTotal`) 동시 가산 → CH0001(골드 모으기) 반응.
-      - `AddGold` = 순수 잔액 변경(0 하한). 누적 집계 무반응 — 미션류에 잡히지 않는 db성 변경(치트/데모 지급 등).
-      - `RefundGold` = 실패한 결제 되돌림. 잔액 복구 + 누적 소비(`goldSpentTotal`) 차감.
+    재화 연동(보상 지급 + CH0001/CH0007 집계는 `CurrencyManager.CurrencyChanged` 구독 + `GetEarnedTotal/GetSpentTotal`),
+    **메타/도전 파생 진행도 자동 계산**. 재진입 가드.
+  - ~~`InventoryManager.cs`~~ — **삭제됨 (골드 단일화)**: 골드 지갑은 `CurrencyManager`
+    (Prefabs/Assist/ItemSystem, `currency.json`)로 일원화. 구 `inventory.json`은 currency.json이 없는
+    첫 부팅에 1회 이관된다. Earn/Add/Refund/Spend 의미론은 CurrencyManager에 그대로 계승:
+      - `Earn` = 소득. 잔액 + 누적 획득(`earnedTotal`) 동시 가산 → CH0001(골드 모으기) 반응.
+      - `Add` = 순수 잔액 변경(0 하한). 누적 집계 무반응 — 미션류에 잡히지 않는 db성 변경(치트/데모 지급 등).
+      - `Refund` = 실패한 결제 되돌림. 잔액 복구 + 누적 소비(`spentTotal`) 차감.
         **환불 시 CH0007(골드 소비하기) 진행 후퇴는 의도된 동작**(실패 결제는 소비가 아님).
-      - `AddReward`(미션 보상)의 gold는 Earn 의미(양수면 누적 획득 가산).
+      - 미션 보상 gold는 MissionList.ClaimReward가 직접 지급 — 양수=Earn / 음수=Add(구 AddReward와 동일 의미).
 - **UI (이중 모드: Build/BindExisting)**
   - `MissionUi.cs` — 공통 팩토리/다크 팔레트(SkillView 차용).
   - `MissionTabButton.cs` — 좌측 카테고리 탭(선택 강조 + `달성/전체` 뱃지).

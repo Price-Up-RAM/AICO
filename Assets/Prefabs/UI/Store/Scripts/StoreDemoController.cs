@@ -50,9 +50,9 @@ public class StoreDemoController : MonoBehaviour
 
         if (Input.GetKeyDown(grantGoldKey))
         {
-            if (InventoryManager.Instance != null)
+            if (CurrencyManager.Instance != null)
             {
-                InventoryManager.Instance.AddGold(500);
+                CurrencyManager.Instance.Add(CurrencyManager.GoldKey, 500);
                 Debug.Log("[Store][StoreDemoController] +500G");
             }
         }

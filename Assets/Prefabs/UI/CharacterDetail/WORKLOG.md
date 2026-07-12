@@ -96,7 +96,7 @@ Mission이 보상을 gold 단일 성분으로 단순화(`MissionReward.gold`)했
   Lv.10은 `친밀도 Lv.MAX`만 표시(숫자 없음), 게이지 만땅.
 - **게이지**: 무지개 그라데이션(좌 빨강 → 우 보라) 단일 바 — Image Filled(Horizontal)라 진행할수록 색이 드러난다.
 - **보상 모달**: 친밀도 블록(카드) 클릭 → 모달. 레벨별 행 = 보상 표기 + 상태(수령/수령 완료/미도달).
-  수령 시 골드는 Mission 지갑(`InventoryManager.EarnGold` — 보상은 소득이라 누적 획득 집계)으로 지급,
+  수령 시 골드는 `CurrencyManager.Earn`(보상은 소득이라 누적 획득 집계)으로 지급,
   수령 상태는 `settings_char.json`
   (`affinityClaimedLevels`)에 charCode 단위 저장. 장신구/카드 테두리/명칭 커스텀은 **표기만** (후속 구현).
 - **레벨업 미션**: 레벨 상승 시 `MissionList.Report("AF0004")` 자동 보고.

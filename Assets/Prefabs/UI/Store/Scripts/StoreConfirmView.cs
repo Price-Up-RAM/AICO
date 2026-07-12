@@ -204,9 +204,9 @@ public class StoreConfirmView : MonoBehaviour
             // Buy: 보유 골드로 감당 불가하면 빨강 (결제 시도는 StoreView가 최종 판정)
             // Sell: 수입이므로 항상 노랑
             bool affordable = true;
-            if (mode == StoreConfirmMode.Buy && Application.isPlaying && InventoryManager.Instance != null)
+            if (mode == StoreConfirmMode.Buy && Application.isPlaying && CurrencyManager.Instance != null)
             {
-                affordable = InventoryManager.Instance.Gold >= total;
+                affordable = CurrencyManager.Instance.Gold >= total;
             }
 
             totalText.color = affordable ? GoldYellow : TotalRed;
