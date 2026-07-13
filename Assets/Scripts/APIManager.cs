@@ -2351,6 +2351,7 @@ public class APIManager : MonoBehaviour
             { "ai_language", ai_language }, // 추론언어로 한입, 영입영출 등 조절(normal, prefer, ko, en, jp)
             { "ai_language_in", ai_language_in }, // 추론언어로 한입, 영입영출 등 조절(ko, en, jp)
             { "ai_language_out", ai_language_out }, // 추론언어로 한출, 영입영출 등 조절(ko, en, jp)
+            { "sound_language", SettingManager.Instance.settings.sound_language ?? "ko" }, // TTS 언어 (서버가 번역 스킵 판단에 사용)
             { "ai_emotion", ai_emotion},
             { "ai_think_mode", ai_think_mode},
             { "api_key_Gemini", ""},
