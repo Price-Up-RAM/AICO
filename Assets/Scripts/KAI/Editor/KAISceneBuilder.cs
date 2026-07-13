@@ -48,6 +48,10 @@ public static class KAISceneBuilder
         managerGo.AddComponent<KAIManager>();
         managerGo.transform.SetSiblingIndex(0);
 
+        // KAI 씬은 채팅 입력(Enter)을 VL Router로 보낸다 — 원본(SampleScene)에는 없는
+        // KAI 전용 직렬화 오버라이드라서 재생성 때마다 빌더가 다시 적용한다.
+        ApplyVlRouterSubmitOverride();
+
         EditorSceneManager.MarkSceneDirty(scene);
         if (EditorSceneManager.SaveScene(scene))
         {
@@ -56,6 +60,28 @@ public static class KAISceneBuilder
         else
         {
             Debug.LogError("[KAI] SampleSceneKAI 저장 실패");
+        }
+    }
+
+    // 씬 내 모든 ChatHandler(비활성 포함)의 useVlRouterForSubmit을 true로 설정
+    private static void ApplyVlRouterSubmitOverride()
+    {
+        ChatHandler[] handlers = Object.FindObjectsByType<ChatHandler>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (ChatHandler handler in handlers)
+        {
+            SerializedObject so = new SerializedObject(handler);
+            SerializedProperty prop = so.FindProperty("useVlRouterForSubmit");
+            if (prop != null && !prop.boolValue)
+            {
+                prop.boolValue = true;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                Debug.Log($"[KAI] useVlRouterForSubmit=true 적용: {handler.gameObject.name}");
+            }
+        }
+
+        if (handlers.Length == 0)
+        {
+            Debug.LogWarning("[KAI] ChatHandler를 찾지 못해 useVlRouterForSubmit을 적용하지 못했습니다.");
         }
     }
 }

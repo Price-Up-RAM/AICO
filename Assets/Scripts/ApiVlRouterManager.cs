@@ -39,6 +39,7 @@ public class ApiVlRouterManager : MonoBehaviour
     private bool isVerbose = true;  // 디버그/상세 로그
     private string currentQuery = "";  // 현재 Router 요청 원문
     private string currentChatIdx = "-1";  // 현재 대화 번호
+    private string currentIntentImage = "off";  // 이번 run의 이미지 전송 모드 (off/auto/force)
     private Action<JObject> currentOnEvent = null;  // 이벤트 콜백
     private Action<bool, string> currentOnComplete = null;  // 완료 콜백
     private AIChatSession routerConversationSession = null;  // Router conversation 세션
@@ -79,6 +80,7 @@ public class ApiVlRouterManager : MonoBehaviour
 
         currentQuery = query;
         currentChatIdx = GameManager.Instance.chatIdx.ToString();
+        currentIntentImage = ResolveIntentImage();
 
         GameObject targetCharacter = CharManager.Instance.GetActiveCharacter();
         string targetNickname = CharManager.Instance.GetNickname(targetCharacter);
@@ -97,6 +99,31 @@ public class ApiVlRouterManager : MonoBehaviour
         pendingThinkLog = null;
         pendingCaptureDelaySec = 1.0f;
         Debug.Log("[VlRouterRun] 취소 요청됨");
+    }
+
+    // 이미지 전송 모드 결정 - conversation 경로(APIManager)와 동일 기준
+    // 채팅창 호출이면 말풍선 이미지 토글, 직접 호출이면 SettingManager 설정값을 따른다
+    private string ResolveIntentImage()
+    {
+        if (StatusManager.Instance.IsChatting)
+        {
+            string balloonImageInfo = ChatBalloonManager.Instance.GetUseImageInfo();
+            Debug.Log($"[VlRouterRun] Image Info - ChatBalloon (IsChatting=true): intent_image={balloonImageInfo}");
+            return balloonImageInfo;
+        }
+
+        int aiUseImageIdx = SettingManager.Instance.settings.ai_use_image_idx;
+        string intentImage = "off";
+        if (aiUseImageIdx == 1)
+        {
+            intentImage = "auto";
+        }
+        else if (aiUseImageIdx == 2)
+        {
+            intentImage = "force";
+        }
+        Debug.Log($"[VlRouterRun] Image Info - Direct call (IsChatting=false): ai_use_image_idx={aiUseImageIdx}, intent_image={intentImage}");
+        return intentImage;
     }
 
     // think_log 포함 재요청
@@ -122,39 +149,47 @@ public class ApiVlRouterManager : MonoBehaviour
         int captureOffsetX = 0;
         int captureOffsetY = 0;
 
-        // 화면 캡처 및 offset 확보
-        yield return CaptureScreenToMemoryWithOffset(
-            (bytes, x, y) =>
-            {
-                imageBytes = bytes;
-                captureOffsetX = x;
-                captureOffsetY = y;
-            },
-            (failMsg) =>
-            {
-                Debug.LogError($"[VlRouterRun] {failMsg}");
-                onComplete?.Invoke(false, "화면 캡처 실패");
-            },
-            "[VlRouterRun]"
-        );
-
-        if (imageBytes == null || imageBytes.Length == 0)
-        {
-            Debug.LogError("[VlRouterRun] 화면 캡처 실패");
-            onComplete?.Invoke(false, "화면 캡처 실패");
-            yield break;
-        }
-
-        currentOffsetX = captureOffsetX;
-        currentOffsetY = captureOffsetY;
-
         bool isResume = thinkLog != null && thinkLog.Count > 0;
         string requestTypeText = "첫 요청";
         if (isResume)
         {
             requestTypeText = "재요청";
         }
-        Debug.Log($"[VlRouterRun] 캡처 완료: {imageBytes.Length} bytes, {requestTypeText}");
+
+        if (currentIntentImage == "off")
+        {
+            // conversation 경로와 동일하게 설정이 off면 이미지를 첨부하지 않는다
+            Debug.Log($"[VlRouterRun] intent_image=off - 화면 캡처/이미지 전송 생략, {requestTypeText}");
+        }
+        else
+        {
+            // 화면 캡처 및 offset 확보
+            yield return CaptureScreenToMemoryWithOffset(
+                (bytes, x, y) =>
+                {
+                    imageBytes = bytes;
+                    captureOffsetX = x;
+                    captureOffsetY = y;
+                },
+                (failMsg) =>
+                {
+                    Debug.LogError($"[VlRouterRun] {failMsg}");
+                },
+                "[VlRouterRun]"
+            );
+
+            if (imageBytes == null || imageBytes.Length == 0)
+            {
+                Debug.LogError("[VlRouterRun] 화면 캡처 실패");
+                onComplete?.Invoke(false, "화면 캡처 실패");
+                yield break;
+            }
+
+            Debug.Log($"[VlRouterRun] 캡처 완료: {imageBytes.Length} bytes, {requestTypeText}");
+        }
+
+        currentOffsetX = captureOffsetX;
+        currentOffsetY = captureOffsetY;
 
         yield return CallRouterRunStreamingApi(query, memoryJson, thinkLog, retryCount, maxRetry, imageBytes, captureOffsetX, captureOffsetY, startText, onEvent, onComplete);
     }
@@ -856,7 +891,7 @@ public class ApiVlRouterManager : MonoBehaviour
             { "situation", UIChatSituationManager.Instance.GetCurUIChatSituationInfoJson() },
             { "chatIdx", currentChatIdx },
             { "intent_web", intentWeb },
-            { "intent_image", "force" },
+            { "intent_image", currentIntentImage },
             { "intent_confirm", intentConfirm },
             { "intent_confirm_type", "" },
             { "intent_confirm_answer", "" },
