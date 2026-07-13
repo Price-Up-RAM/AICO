@@ -174,7 +174,7 @@ public class ApiVlRouterManager : MonoBehaviour
         Action<bool, string> onComplete
     )
     {
-        ShowAnswerBalloonStartText(thinkLog, startText);
+        // ShowAnswerBalloonStartText(thinkLog, startText);
 
         string baseUrl = null;
         yield return GetBaseUrlCoroutine((url) =>

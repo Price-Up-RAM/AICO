@@ -9,6 +9,7 @@ public class KAIManager : MonoBehaviour
 {
     private const string AicoCharcode = "aico";      // Assets/Char/Aico/Aico.prefab의 CharAttributes.charcode
     private const string AicoPrefabKey = "naost";    // PrefabDataLocal 프리팹 키 (character_database.json AICO 항목)
+    private const string InitialAicoVoiceId = "woman_01";
 
     private const float SweepInterval = 0.25f;       // MenuTrigger 교체 스윕 주기
     private const float ForceInterval = 1f;          // 캐릭터 고정 재시도 주기
@@ -46,7 +47,11 @@ public class KAIManager : MonoBehaviour
         if (current == null) return;  // CharManager 초기 스폰 대기
 
         CharAttributes attrs = current.GetComponent<CharAttributes>();
-        if (attrs != null && attrs.charcode == AicoCharcode) return;  // 이미 AICO
+        if (attrs != null && attrs.charcode == AicoCharcode)
+        {
+            ApplyInitialAicoVoiceIfNeeded();
+            return;  // 이미 AICO
+        }
 
         // Pomodoro 착석 중에는 CharManager가 교체를 차단하므로 시도를 보류
         if (ChatModeManager.Instance != null && ChatModeManager.Instance.IsPomodoroMode()) return;
@@ -69,6 +74,20 @@ public class KAIManager : MonoBehaviour
 
         // 교체로 생성된 새 인스턴스의 MenuTrigger를 즉시 처리
         SweepMenuTriggers();
+    }
+
+    // 신규 settings_char.json으로 시작해 AICO가 최초 캐릭터로 확정된 경우에만 기본 음성을 기록한다.
+    // 기존 사용자의 빈 voiceId(음성 없음)는 절대 기본값으로 덮어쓰지 않는다.
+    private void ApplyInitialAicoVoiceIfNeeded()
+    {
+        if (SettingCharManager.Instance == null ||
+            !SettingCharManager.Instance.TryConsumeFirstCharacterSetup())
+        {
+            return;
+        }
+
+        SettingCharManager.Instance.SetVoice(AicoCharcode, InitialAicoVoiceId);
+        Debug.Log($"[KAIManager] 신규 캐릭터 설정: AICO 기본 음성 적용 ({InitialAicoVoiceId})");
     }
 
     // 비활성 오브젝트 포함, 씬의 모든 MenuTrigger를 같은 GameObject의 MenuTriggerKAI로 교체

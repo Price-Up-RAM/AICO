@@ -87,9 +87,20 @@ public class InstallStatusManager : MonoBehaviour
     {
         try
         {
-            // 실행 파일 기준 ../config/install_status.json
-            string executablePath = Application.dataPath;
-            string installStatusPath = Path.Combine(Path.GetDirectoryName(executablePath), "config/install_status.json");
+            // install.bat stores the runtime and status below the game-root server/ directory.
+            string gameRootPath = Path.GetDirectoryName(Application.dataPath);
+            string installStatusPath = Path.Combine(gameRootPath, "server", "config", "install_status.json");
+
+            // Keep reading the prior layout for existing installations.
+            if (!File.Exists(installStatusPath))
+            {
+                string legacyInstallStatusPath = Path.Combine(gameRootPath, "config", "install_status.json");
+                if (File.Exists(legacyInstallStatusPath))
+                {
+                    installStatusPath = legacyInstallStatusPath;
+                    Debug.Log($"[InstallStatusManager] Legacy install status detected: {installStatusPath}");
+                }
+            }
 
             // 파일 존재 여부 확인
             if (!File.Exists(installStatusPath))

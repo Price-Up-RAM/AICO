@@ -5,12 +5,20 @@ using Newtonsoft.Json.Linq;
 public class ChatHandler : MonoBehaviour
 {
     [SerializeField] public TMP_InputField inputField; // TMP_InputField를 참조할 수 있도록 SerializeField로 선언
+    [SerializeField] private bool useVlRouterForSubmit = false;
     public SubChatBalloonController subController; // 서브 캐릭터의 ChatBalloon 팝업인 경우 할당됨
 
     private void Start()
     {
         // 입력 필드에 대한 엔터키 이벤트 리스너 추가
-        inputField.onEndEdit.AddListener(HandleInputSubmit);
+        if (useVlRouterForSubmit)
+        {
+            inputField.onEndEdit.AddListener(HandleVlRouterInputSubmit);
+        }
+        else
+        {
+            inputField.onEndEdit.AddListener(HandleInputSubmit);
+        }
 
         // 복제된 서브용 말풍선의 경우, Scene 인스턴스 간 복사로 인해 UnityEvent가 
         // 원본 객체를 가리키는 현상을 방지하기 위해 동적으로 로컬 리스너를 덮어씌웁니다.
@@ -73,6 +81,15 @@ public class ChatHandler : MonoBehaviour
             // 말풍선 없애기
             if (subController != null) subController.HideChatBalloon();
             else ChatBalloonManager.Instance.HideChatBalloon();
+        }
+    }
+
+    // SampleSceneKAI에서는 Enter도 SendBtn과 동일하게 VL Router로 보낸다.
+    private void HandleVlRouterInputSubmit(string input)
+    {
+        if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+        {
+            HandleVlRouterRunButton();
         }
     }
 

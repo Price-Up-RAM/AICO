@@ -968,29 +968,10 @@ public class SettingManager : MonoBehaviour
         return value;
     }
 
-    // Local은 최소 Lite 버전 이상 필요 (서버 설치 여부 확인)
-    private async Task<int> getServerTypeFilterScenarioAsync(int value)
+    // Local can be selected before installation; unavailable Local is handled by ClickHandler.
+    private Task<int> getServerTypeFilterScenarioAsync(int value)
     {
-        // DEV MODE 일경우 로그 출력 후 value return
-        if (settings.isDevMode)
-        {   
-            Debug.Log($"[SettingManager] getServerTypeFilterScenarioAsync - DEV MODE로 통과");
-            return value;
-        }
-
-        // Local 기능 키려는데 현재 Sample 버전일 경우 버전업 요구
-        if (value == 1)
-        {
-            bool chk = await InstallStatusManager.Instance.CheckAndOperateLiteAsync();
-            if (!chk) 
-            {
-                // 안내했을 경우, 0(Auto)로 반환
-                return 0;
-            }
-        }
-
-
-        return value;
+        return Task.FromResult(value);
     }
 
     private async Task<int> getAiWebSearchFilterScenarioAsync(int value)
@@ -1529,7 +1510,7 @@ public class SettingManager : MonoBehaviour
         settings.ai_language_in = systemLang;  // 시스템 언어에 맞춰 설정
         settings.ai_language_out = systemLang;  // 시스템 언어에 맞춰 설정
         settings.ai_voice_filter_idx = 1;  // Skip AI Voice
-        settings.isAlwaysOnTop = false;
+        settings.isAlwaysOnTop = true;
         settings.isShowChatBoxOnClick = true;
         settings.isShowTutorialOnChat = true;
         settings.isTutorialCompleted = false;
@@ -1556,18 +1537,18 @@ public class SettingManager : MonoBehaviour
 #endif
 
         // 사운드 언어는 기본값으로 일본어 음성 사용 (가장 품질이 좋음)
-        settings.sound_language_idx = 1;  // jp
-        settings.sound_language = "jp";
+        settings.sound_language_idx = 0;  // jp
+        settings.sound_language = "ko";
         settings.sound_volumeMaster = 70;
         settings.sound_speedMaster = 100;
 
-        settings.server_type_idx = 0;  // 0: Auto, 1: Local, 2: Google, 3: OpenRouter
-        settings.server_type = "Auto";
+        settings.server_type_idx = 1;  // 0: Auto, 1: Local, 2: Google, 3: OpenRouter
+        settings.server_type = "Local";
         settings.server_id = "temp";
         settings.api_key_gemini = "";
         settings.api_key_openRouter = "";
-        settings.server_local_mode_idx = 0;  // 0: CPU, 1: GPU
-        settings.server_local_mode = "CPU";
+        settings.server_local_mode_idx = 1;  // 0: CPU, 1: GPU
+        settings.server_local_mode = "GPU";
         settings.model_name_Local = "";
         settings.model_name_Gemini = "gemini-1.5-flash";
         settings.model_name_OpenRouter = "google/gemini-flash-1.5";
@@ -1581,8 +1562,8 @@ public class SettingManager : MonoBehaviour
         settings.ai_ask_intent = "off";
         settings.ai_emotion_idx = 0;  // 0 : off, 1 : on
         settings.ai_emotion = "off";
-        settings.ai_think_mode_idx = 1;  // 0 : off, 1 : on
-        settings.ai_think_mode = "on";
+        settings.ai_think_mode_idx = 0;  // 0 : off, 1 : on
+        settings.ai_think_mode = "off";
         settings.isAskedTurnOnServer = true;
         settings.isAPITest = false;
         settings.confirmUserIntent = false;

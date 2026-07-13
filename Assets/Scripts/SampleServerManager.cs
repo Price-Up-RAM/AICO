@@ -33,7 +33,6 @@ public class SampleServerManager : MonoBehaviour
     public void InitializeForSample()
     {
         UnityEngine.Debug.Log("[Jarvis_Sample] SettingManager Fixed");
-        SettingManager.Instance.settings.server_type_idx = 2;
         SettingManager.Instance.settings.isShowChatBoxOnClick = true;
         UnityEngine.Debug.Log("[Jarvis_Sample] InitializeForSample() called");
         RunJarvisServerWithCheck();
@@ -157,7 +156,6 @@ public class SampleServerManager : MonoBehaviour
 
                 if (www.result == UnityWebRequest.Result.Success)
                 {
-                    SettingManager.Instance.settings.server_type_idx = 2;
                     UnityEngine.Debug.Log("[Jarvis_Sample] Health check OK");
                     AnswerBalloonSimpleManager.Instance.ModifyAnswerBalloonSimpleText("Server OK");
                     yield break;

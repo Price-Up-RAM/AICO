@@ -94,7 +94,6 @@ public class ChoiceInputManager : MonoBehaviour
     {
         if (currentApiTypeIdx == 0) // Gemini
         {
-            SettingManager.Instance.settings.server_type_idx = 0;
             ServerManager.Instance.CallValidateGeminiAPIKey();
         }
         else if (currentApiTypeIdx == 1) // OpenRouter

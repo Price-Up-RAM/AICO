@@ -54,10 +54,12 @@ public class ScenarioInstallerManager : MonoBehaviour
         {
             Debug.Log($"설치 상태 변경 감지: {previousInstallStatus} -> {currentStatus}");
 
-            // lite 또는 full로 변경된 경우
-            if (currentStatus == "lite" || currentStatus == "full")
+            if (currentStatus == "full")
             {
-                Debug.Log($"설치 완료: {currentStatus} 버전");
+                // lite 또는 full로 변경된 경우
+                // if (currentStatus == "lite" || currentStatus == "full")
+                // Debug.Log($"설치 완료: {currentStatus} 버전");
+                Debug.Log("로컬 AI 설치 완료");
 
                 // 안내 메시지 출력
                 StartCoroutine(Scenario_I02_InstallComplete());
@@ -90,6 +92,18 @@ public class ScenarioInstallerManager : MonoBehaviour
         StartCoroutine(Scenario_I00_Greeting());
     }
 
+    public void StartLocalAIInstallScenario()
+    {
+        if (StatusManager.Instance.isScenario)
+        {
+            return;
+        }
+
+        Debug.Log("[Installer] Local AI direct-install scenario started");
+        StatusManager.Instance.isScenario = true;
+        StartCoroutine(Scenario_I01_1_InstallServer());
+    }
+
     // 인스톨러 시나리오 종료시 호출
     public void EndInstaller()
     {
@@ -112,60 +126,73 @@ public class ScenarioInstallerManager : MonoBehaviour
         switch (scenarioId)
         {
             case "I01_installer_check":
-                // <응>
+                // <설치 부탁해>
                 if (index == 0)
                 {
-                    StartCoroutine(Scenario_I01_0_InstallServerType());
+                    StartCoroutine(Scenario_I01_1_InstallServer());
                 }
-                // <아니>
+                // <나중에 설치할게>
                 else
                 {
                     StartCoroutine(Scenario_I01_2_InstallLater());
                 }
                 break;
 
-            case "I01_installer_server_type_check_lite":
-                // <Lite(약 2GB)>
-                if (index == 0)
-                {
-                    // StartCoroutine(Scenario_I01_1_InstallServerLite());
-                    // TODO : 0.8.0에서 버전 확장해서 추가하는걸로. (현재 sample이 너무 유능)
-                    StartCoroutine(ScenarioCommonManager.Instance.Run_C99_NotReady());
-                }
-                // <Full(약 16GB)>
-                else if (index == 1)
-                {
-                    StartCoroutine(Scenario_I01_1_InstallServer());
-                }
-                // <각 Edition에 대해 설명해줘>
-                else if (index == 2)
-                {
-                    StartCoroutine(Scenario_I01_0_InstallServerExplain_Lite());
-                }
-                // <나중에 설치할게>
-                else if (index == 3)
-                {
-                    StartCoroutine(Scenario_I01_2_InstallLater());
-                }
-                break;
-
-            case "I01_installer_server_type_check_full":
-                // <Full(약 16GB)>
-                if (index == 0)
-                {
-                    StartCoroutine(Scenario_I01_1_InstallServer());
-                }
-                // <Full Edition에 대해 설명해줘>
-                else if (index == 1)
-                {
-                    StartCoroutine(Scenario_I01_0_InstallServerExplain_Full());
-                }
-                // <나중에 설치할게>
-                else if (index == 2)
-                {
-                    StartCoroutine(Scenario_I01_2_InstallLater());
-                }
-                break;
+            // case "I01_installer_check":
+            //     // <응>
+            //     if (index == 0)
+            //     {
+            //         StartCoroutine(Scenario_I01_0_InstallServerType());
+            //     }
+            //     // <아니>
+            //     else
+            //     {
+            //         StartCoroutine(Scenario_I01_2_InstallLater());
+            //     }
+            //     break;
+            //
+            // case "I01_installer_server_type_check_lite":
+            //     // <Lite(약 2GB)>
+            //     if (index == 0)
+            //     {
+            //         // StartCoroutine(Scenario_I01_1_InstallServerLite());
+            //         // TODO : 0.8.0에서 버전 확장해서 추가하는걸로. (현재 sample이 너무 유능)
+            //         StartCoroutine(ScenarioCommonManager.Instance.Run_C99_NotReady());
+            //     }
+            //     // <Full(약 16GB)>
+            //     else if (index == 1)
+            //     {
+            //         StartCoroutine(Scenario_I01_1_InstallServer());
+            //     }
+            //     // <각 Edition에 대해 설명해줘>
+            //     else if (index == 2)
+            //     {
+            //         StartCoroutine(Scenario_I01_0_InstallServerExplain_Lite());
+            //     }
+            //     // <나중에 설치할게>
+            //     else if (index == 3)
+            //     {
+            //         StartCoroutine(Scenario_I01_2_InstallLater());
+            //     }
+            //     break;
+            //
+            // case "I01_installer_server_type_check_full":
+            //     // <Full(약 16GB)>
+            //     if (index == 0)
+            //     {
+            //         StartCoroutine(Scenario_I01_1_InstallServer());
+            //     }
+            //     // <Full Edition에 대해 설명해줘>
+            //     else if (index == 1)
+            //     {
+            //         StartCoroutine(Scenario_I01_0_InstallServerExplain_Full());
+            //     }
+            //     // <나중에 설치할게>
+            //     else if (index == 2)
+            //     {
+            //         StartCoroutine(Scenario_I01_2_InstallLater());
+            //     }
+            //     break;
 
             case "I03_free_key_exhausted":
                 // <로컬 서버 설치>
@@ -208,23 +235,24 @@ public class ScenarioInstallerManager : MonoBehaviour
         yield return StartCoroutine(Scenario_I00_CurrentCheckVersion());
     }
 
-    public IEnumerator Scenario_I00_CurrentCheckSample()
-    {
-        float d1 = ScenarioUtil.Narration("I00_current_check_sample_1", "현재 Sample Edition을 사용 중이시네요.");
-        ScenarioUtil.ShowEmotion("relax");
-        yield return new WaitForSeconds(d1);
-    }
+    // public IEnumerator Scenario_I00_CurrentCheckSample()
+    // {
+    //     float d1 = ScenarioUtil.Narration("I00_current_check_sample_1", "현재 Sample Edition을 사용 중이시네요.");
+    //     ScenarioUtil.ShowEmotion("relax");
+    //     yield return new WaitForSeconds(d1);
+    // }
 
-    public IEnumerator Scenario_I00_CurrentCheckLite()
-    {
-        float d1 = ScenarioUtil.Narration("I00_current_check_lite_1", "현재 Lite Edition을 사용 중이시네요.");
-        ScenarioUtil.ShowEmotion("relax");
-        yield return new WaitForSeconds(d1);
-    }
+    // public IEnumerator Scenario_I00_CurrentCheckLite()
+    // {
+    //     float d1 = ScenarioUtil.Narration("I00_current_check_lite_1", "현재 Lite Edition을 사용 중이시네요.");
+    //     ScenarioUtil.ShowEmotion("relax");
+    //     yield return new WaitForSeconds(d1);
+    // }
 
     public IEnumerator Scenario_I00_CurrentCheckFull()
     {
-        float d1 = ScenarioUtil.Narration("I00_current_check_full_1", "현재 Full Edition을 사용 중이시네요.");
+        // float d1 = ScenarioUtil.Narration("I00_current_check_full_1", "현재 Full Edition을 사용 중이시네요.");
+        float d1 = ScenarioUtil.Narration("I00_current_check_full_1", "로컬 AI가 이미 설치되어 있네요.");
         ScenarioUtil.ShowEmotion("relax");
         yield return new WaitForSeconds(d1);
     }
@@ -233,62 +261,72 @@ public class ScenarioInstallerManager : MonoBehaviour
     {
         // 현재 설치 상태에 따라 사용 안내 달라짐
         string currentVersion = InstallStatusManager.Instance.GetInstallStatusString();
-        if (currentVersion == "sample")
-        {
-            yield return StartCoroutine(Scenario_I00_CurrentCheckSample());
-            yield return StartCoroutine(Scenario_I01_PreferHigher());
-            yield return StartCoroutine(Scenario_I01_0_InstallServerType());
-        }
-        else if (currentVersion == "lite")
-        {
-            yield return StartCoroutine(Scenario_I00_CurrentCheckLite());
-            yield return StartCoroutine(Scenario_I01_PreferHigher());
-            yield return StartCoroutine(Scenario_I01_0_InstallServerType());
-        }
-        else if (currentVersion == "full")
+        if (currentVersion == "full")
         {
             yield return StartCoroutine(Scenario_I00_CurrentCheckFull());
             yield return StartCoroutine(Scenario_I01_AlreadyLatest());
+            EndInstaller();
         }
+        else
+        {
+            yield return StartCoroutine(Scenario_I01_0_InstallServerType());
+        }
+
+        // if (currentVersion == "sample")
+        // {
+        //     yield return StartCoroutine(Scenario_I00_CurrentCheckSample());
+        //     yield return StartCoroutine(Scenario_I01_PreferHigher());
+        //     yield return StartCoroutine(Scenario_I01_0_InstallServerType());
+        // }
+        // else if (currentVersion == "lite")
+        // {
+        //     yield return StartCoroutine(Scenario_I00_CurrentCheckLite());
+        //     yield return StartCoroutine(Scenario_I01_PreferHigher());
+        //     yield return StartCoroutine(Scenario_I01_0_InstallServerType());
+        // }
+        // else if (currentVersion == "full")
+        // {
+        //     yield return StartCoroutine(Scenario_I00_CurrentCheckFull());
+        //     yield return StartCoroutine(Scenario_I01_AlreadyLatest());
+        // }
     }
 
     /////////////////////////////////// I01 ///////////////////////////////////////////////
-    public IEnumerator Scenario_I01_PreferHigher()
-    {
-        float d1 = ScenarioUtil.Narration("I01_prefer_higher_1", "지금보다 더 많은 기능을 사용할 수 있는 상위 Edition을 설치하실 수도 있어요.");
-        ScenarioUtil.ShowEmotion("star");
-        yield return new WaitForSeconds(d1);
-    }
+    // public IEnumerator Scenario_I01_PreferHigher()
+    // {
+    //     float d1 = ScenarioUtil.Narration("I01_prefer_higher_1", "지금보다 더 많은 기능을 사용할 수 있는 상위 Edition을 설치하실 수도 있어요.");
+    //     ScenarioUtil.ShowEmotion("star");
+    //     yield return new WaitForSeconds(d1);
+    // }
 
     public IEnumerator Scenario_I01_AlreadyLatest()
     {
-        float d1 = ScenarioUtil.Narration("I01_already_latest_1", "이미 모든 기능을 사용하실 수 있는 상태에요!");
+        // float d1 = ScenarioUtil.Narration("I01_already_latest_1", "이미 모든 기능을 사용하실 수 있는 상태에요!");
+        float d1 = ScenarioUtil.Narration("I01_already_latest_1", "이미 로컬 AI를 사용하실 수 있는 상태예요!");
         ScenarioUtil.ShowEmotion("><");
         yield return new WaitForSeconds(d1);
     }
 
-    // 구버전
     private IEnumerator Scenario_I01_0_InstallServerType()
     {
-        float d1 = ScenarioUtil.Narration("I01_1_install_server_type_1", "설치를 위한 프로그램을 기동할까요? 원하신다면 설치 가능한 Edition들에 대해 간단히 설명드릴수 있어요.");
-        ScenarioUtil.ShowEmotion("star");  // 아로나만 표정
-        yield return new WaitForSeconds(d1);
+        ChoiceManager.Instance.ShowChoice(2, "I01_installer_check");
+        yield break;
 
-        yield return new WaitForSeconds(0.2f);
-
-        // 현재 설치 상태에 따라 다른 선택지 표시
-        string currentVersion = InstallStatusManager.Instance.GetInstallStatusString();
-
-        if (currentVersion == "sample")
-        {
-            // Sample → Lite/Full 모두 설치 가능
-            ChoiceManager.Instance.ShowChoice(4, "I01_installer_server_type_check_lite");  // <Lite(약 2GB)>, <Full(약 16GB)>, <각 버전에 대해 설명해줘>, <나중에 설치할게>
-        }
-        else if (currentVersion == "lite")
-        {
-            // Lite → Full만 업그레이드 가능
-            ChoiceManager.Instance.ShowChoice(3, "I01_installer_server_type_check_full");  // <Full(약 16GB)>, <각 버전에 대해 설명해줘>, <나중에 설치할게>
-        }
+        // float d1 = ScenarioUtil.Narration("I01_1_install_server_type_1", "설치를 위한 프로그램을 기동할까요? 원하신다면 설치 가능한 Edition들에 대해 간단히 설명드릴수 있어요.");
+        // ScenarioUtil.ShowEmotion("star");  // 아로나만 표정
+        // yield return new WaitForSeconds(d1);
+        // yield return new WaitForSeconds(0.2f);
+        // string currentVersion = InstallStatusManager.Instance.GetInstallStatusString();
+        // if (currentVersion == "sample")
+        // {
+        //     // Sample → Lite/Full 모두 설치 가능
+        //     ChoiceManager.Instance.ShowChoice(4, "I01_installer_server_type_check_lite");  // <Lite(약 2GB)>, <Full(약 16GB)>, <각 버전에 대해 설명해줘>, <나중에 설치할게>
+        // }
+        // else if (currentVersion == "lite")
+        // {
+        //     // Lite → Full만 업그레이드 가능
+        //     ChoiceManager.Instance.ShowChoice(3, "I01_installer_server_type_check_full");  // <Full(약 16GB)>, <각 버전에 대해 설명해줘>, <나중에 설치할게>
+        // }
         // else if (currentVersion == "full")  // 여기까지 오는 경우의 수 없음
         // {
         //     // Full → 이미 최신 (선택지 없음, 바로 안내만)
@@ -296,86 +334,66 @@ public class ScenarioInstallerManager : MonoBehaviour
         // }
     }
 
-    // Lite + Full 설명
-    private IEnumerator Scenario_I01_0_InstallServerExplain_Lite()
-    {
-        float d1 = ScenarioUtil.Narration("I01_0_install_server_explain_1", "Lite Edition은 Sample Edition에서 다른 캐릭터와 대화할 수 있는 최소 기능만을 추가하여 Full Edition보다 가볍게 이용할 수 있는 edition이에요.");
-        ScenarioUtil.ShowEmotion("smile");
-        yield return new WaitForSeconds(d1);
-
-        float d2 = ScenarioUtil.Narration("I01_0_install_server_explain_2", "Full Edition은 기존 기능인 음성 인식을 더 높은 품질로도 사용할 수 있고, 화자 인식 같은 추가 기능도 제공되는 edition이에요.");
-        ScenarioUtil.ShowEmotion("smile");
-        yield return new WaitForSeconds(d2);
-
-        float d3 = ScenarioUtil.Narration("I01_0_install_server_explain_3", "또 저나 프라나짱 외에 다른 캐릭터와 대화하거나 여러 실험적 기능도 써볼 수 있어요!");
-        ScenarioUtil.ShowEmotion("star");
-        yield return new WaitForSeconds(d3);
-
-        float d4 = ScenarioUtil.Narration("I01_0_install_server_explain_4", "그리고 선생님 컴퓨터에서 AI를 직접 구동할 수 있는 기능도 제공돼요.");
-        ScenarioUtil.ShowEmotion("relax");
-        yield return new WaitForSeconds(d4);
-
-        float d5 = ScenarioUtil.Narration("I01_0_install_server_explain_5", "그러면 인터넷 상태와 무관하게 안정적으로 대화할 수 있고, 설정에 따라 검열 없는 대화도 가능해요!");
-        ScenarioUtil.ShowEmotion("><");
-        yield return new WaitForSeconds(d5);
-
-        float d6 = ScenarioUtil.Narration("I01_0_install_server_explain_6", "PC 성능이 좋을수록 더 뛰어난 AI 모델도 돌릴 수 있고요.");
-        ScenarioUtil.ShowEmotion("relax");
-        yield return new WaitForSeconds(d6);
-
-        float d7 = ScenarioUtil.Narration("I01_0_install_server_explain_7", "설치를 진행해볼까요?");
-        ScenarioUtil.ShowEmotion("star");
-        yield return new WaitForSeconds(d7);
-
-        yield return new WaitForSeconds(0.2f);
-        ChoiceManager.Instance.ShowChoice(4, "I01_installer_server_type_check_lite");  // <Lite(약 2GB)>, <Full(약 16GB)>, <각 버전에 대해 설명해줘>, <나중에 설치할게>
-    }
-
-    // Full 설명 (이미 Lite는 설치되어있음)
-    private IEnumerator Scenario_I01_0_InstallServerExplain_Full()
-    {
-        float d2 = ScenarioUtil.Narration("I01_0_install_server_explain_2", "Full Edition은 기존 기능인 음성 인식을 더 높은 품질로도 사용할 수 있고, 화자 인식 같은 추가 기능도 제공되는 edition이에요.");
-        ScenarioUtil.ShowEmotion("smile");
-        yield return new WaitForSeconds(d2);
-
-        float d3 = ScenarioUtil.Narration("I01_0_install_server_explain_3", "또 저나 프라나짱 외에 다른 캐릭터와 대화하거나 여러 실험적 기능도 써볼 수 있어요!");
-        ScenarioUtil.ShowEmotion("star");
-        yield return new WaitForSeconds(d3);
-
-        float d4 = ScenarioUtil.Narration("I01_0_install_server_explain_4", "그리고 선생님 컴퓨터에서 AI를 직접 구동할 수 있는 기능도 제공돼요.");
-        ScenarioUtil.ShowEmotion("relax");
-        yield return new WaitForSeconds(d4);
-
-        float d5 = ScenarioUtil.Narration("I01_0_install_server_explain_5", "그러면 인터넷 상태와 무관하게 안정적으로 대화할 수 있고, 설정에 따라 검열 없는 대화도 가능해요!");
-        ScenarioUtil.ShowEmotion("><");
-        yield return new WaitForSeconds(d5);
-
-        float d6 = ScenarioUtil.Narration("I01_0_install_server_explain_6", "PC 성능이 좋을수록 더 뛰어난 AI 모델도 돌릴 수 있고요.");
-        ScenarioUtil.ShowEmotion("relax");
-        yield return new WaitForSeconds(d6);
-
-        float d7 = ScenarioUtil.Narration("I01_0_install_server_explain_7", "설치를 진행해볼까요?");
-        ScenarioUtil.ShowEmotion("star");
-        yield return new WaitForSeconds(d7);
-
-        yield return new WaitForSeconds(0.2f);
-        ChoiceManager.Instance.ShowChoice(4, "I01_installer_server_type_check_full");  // <Full(약 16GB)>, <Full 버전에 대해 설명해줘>, <나중에 설치할게>
-    }
-
-    private IEnumerator Scenario_I01_1_InstallServerLite()
-    {
-        float d1 = ScenarioUtil.Narration("I01_1_install_server_1", "설치 프로그램을 실행할게요.");
-        ScenarioUtil.ShowEmotion("star");  // 아로나만 표정
-        yield return new WaitForSeconds(d1);
-
-
-        isListeningInstallStatus = true;  // 설치 감지 시작
-
-        // InstallerManager를 통해 설치 실행
-        InstallerManager.Instance.RunInstallerLite();
-
-        EndInstaller();
-    }
+    // private IEnumerator Scenario_I01_0_InstallServerExplain_Lite()
+    // {
+    //     float d1 = ScenarioUtil.Narration("I01_0_install_server_explain_1", "Lite Edition은 Sample Edition에서 다른 캐릭터와 대화할 수 있는 최소 기능만을 추가하여 Full Edition보다 가볍게 이용할 수 있는 edition이에요.");
+    //     ScenarioUtil.ShowEmotion("smile");
+    //     yield return new WaitForSeconds(d1);
+    //     float d2 = ScenarioUtil.Narration("I01_0_install_server_explain_2", "Full Edition은 기존 기능인 음성 인식을 더 높은 품질로도 사용할 수 있고, 화자 인식 같은 추가 기능도 제공되는 edition이에요.");
+    //     ScenarioUtil.ShowEmotion("smile");
+    //     yield return new WaitForSeconds(d2);
+    //     float d3 = ScenarioUtil.Narration("I01_0_install_server_explain_3", "또 저나 프라나짱 외에 다른 캐릭터와 대화하거나 여러 실험적 기능도 써볼 수 있어요!");
+    //     ScenarioUtil.ShowEmotion("star");
+    //     yield return new WaitForSeconds(d3);
+    //     float d4 = ScenarioUtil.Narration("I01_0_install_server_explain_4", "그리고 선생님 컴퓨터에서 AI를 직접 구동할 수 있는 기능도 제공돼요.");
+    //     ScenarioUtil.ShowEmotion("relax");
+    //     yield return new WaitForSeconds(d4);
+    //     float d5 = ScenarioUtil.Narration("I01_0_install_server_explain_5", "그러면 인터넷 상태와 무관하게 안정적으로 대화할 수 있고, 설정에 따라 검열 없는 대화도 가능해요!");
+    //     ScenarioUtil.ShowEmotion("><");
+    //     yield return new WaitForSeconds(d5);
+    //     float d6 = ScenarioUtil.Narration("I01_0_install_server_explain_6", "PC 성능이 좋을수록 더 뛰어난 AI 모델도 돌릴 수 있고요.");
+    //     ScenarioUtil.ShowEmotion("relax");
+    //     yield return new WaitForSeconds(d6);
+    //     float d7 = ScenarioUtil.Narration("I01_0_install_server_explain_7", "설치를 진행해볼까요?");
+    //     ScenarioUtil.ShowEmotion("star");
+    //     yield return new WaitForSeconds(d7);
+    //     yield return new WaitForSeconds(0.2f);
+    //     ChoiceManager.Instance.ShowChoice(4, "I01_installer_server_type_check_lite");  // <Lite(약 2GB)>, <Full(약 16GB)>, <각 버전에 대해 설명해줘>, <나중에 설치할게>
+    // }
+    //
+    // private IEnumerator Scenario_I01_0_InstallServerExplain_Full()
+    // {
+    //     float d2 = ScenarioUtil.Narration("I01_0_install_server_explain_2", "Full Edition은 기존 기능인 음성 인식을 더 높은 품질로도 사용할 수 있고, 화자 인식 같은 추가 기능도 제공되는 edition이에요.");
+    //     ScenarioUtil.ShowEmotion("smile");
+    //     yield return new WaitForSeconds(d2);
+    //     float d3 = ScenarioUtil.Narration("I01_0_install_server_explain_3", "또 저나 프라나짱 외에 다른 캐릭터와 대화하거나 여러 실험적 기능도 써볼 수 있어요!");
+    //     ScenarioUtil.ShowEmotion("star");
+    //     yield return new WaitForSeconds(d3);
+    //     float d4 = ScenarioUtil.Narration("I01_0_install_server_explain_4", "그리고 선생님 컴퓨터에서 AI를 직접 구동할 수 있는 기능도 제공돼요.");
+    //     ScenarioUtil.ShowEmotion("relax");
+    //     yield return new WaitForSeconds(d4);
+    //     float d5 = ScenarioUtil.Narration("I01_0_install_server_explain_5", "그러면 인터넷 상태와 무관하게 안정적으로 대화할 수 있고, 설정에 따라 검열 없는 대화도 가능해요!");
+    //     ScenarioUtil.ShowEmotion("><");
+    //     yield return new WaitForSeconds(d5);
+    //     float d6 = ScenarioUtil.Narration("I01_0_install_server_explain_6", "PC 성능이 좋을수록 더 뛰어난 AI 모델도 돌릴 수 있고요.");
+    //     ScenarioUtil.ShowEmotion("relax");
+    //     yield return new WaitForSeconds(d6);
+    //     float d7 = ScenarioUtil.Narration("I01_0_install_server_explain_7", "설치를 진행해볼까요?");
+    //     ScenarioUtil.ShowEmotion("star");
+    //     yield return new WaitForSeconds(d7);
+    //     yield return new WaitForSeconds(0.2f);
+    //     ChoiceManager.Instance.ShowChoice(4, "I01_installer_server_type_check_full");  // <Full(약 16GB)>, <Full 버전에 대해 설명해줘>, <나중에 설치할게>
+    // }
+    //
+    // private IEnumerator Scenario_I01_1_InstallServerLite()
+    // {
+    //     float d1 = ScenarioUtil.Narration("I01_1_install_server_1", "설치 프로그램을 실행할게요.");
+    //     ScenarioUtil.ShowEmotion("star");  // 아로나만 표정
+    //     yield return new WaitForSeconds(d1);
+    //     isListeningInstallStatus = true;  // 설치 감지 시작
+    //     InstallerManager.Instance.RunInstallerLite();
+    //     EndInstaller();
+    // }
 
     private IEnumerator Scenario_I01_1_InstallServer()
     {

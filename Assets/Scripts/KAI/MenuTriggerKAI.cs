@@ -158,6 +158,17 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             UIManager.Instance.showSettings();
         });
 
+        bool isLocalAiInstalled =
+            InstallerManager.Instance.IsJarvisServerInstalled() &&
+            InstallStatusManager.Instance.IsStatus("full");
+
+        if (!isLocalAiInstalled)
+        {
+            m_ContextMenu.AddMenuItem(GetLocalAiInstallMenuLabel(targetLang), delegate {
+                InstallerManager.Instance.RunInstaller();
+            });
+        }
+
         // Character Detail — 현재 캐릭터(AICO) 상세
         m_ContextMenu.AddMenuItem(
             LanguageData.Translate("Character", targetLang) + " " + LanguageData.Translate("Detail", targetLang),
@@ -199,11 +210,11 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
                 ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Pomodoro); })
                 : null  // 회색 글씨 (현재 모드)
             ),
-            (LanguageData.Translate("OPERATOR MODE", targetLang),
-                currentChatMode != ChatMode.Operator
-                ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Operator); })
-                : null  // 회색 글씨 (현재 모드)
-            ),
+            // (LanguageData.Translate("OPERATOR MODE", targetLang),
+            //     currentChatMode != ChatMode.Operator
+            //     ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Operator); })
+            //     : null  // 회색 글씨 (현재 모드)
+            // ),
         });
 
         // Control - 제어
@@ -254,6 +265,16 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
 
     // 현재 캐릭터의 character_database.json 엔트리를 찾아 CharacterDetail 패널 표시
     // (characterId 규칙은 CharacterDetailStateManager.BuildCharacterId와 동일: charcode 소문자, 없으면 nickname)
+    private static string GetLocalAiInstallMenuLabel(string language)
+    {
+        switch (language)
+        {
+            case "ko": return "로컬 AI 설치";
+            case "jp": return "ローカルAIをインストール";
+            default: return "Install Local AI";
+        }
+    }
+
     private void ShowCurrentCharacterDetail()
     {
         GameObject currentChar = CharManager.Instance != null ? CharManager.Instance.GetCurrentCharacter() : null;

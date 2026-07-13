@@ -22,13 +22,22 @@ public class InstallerManager : MonoBehaviour
 
     private Process installerProcess;  // 실행된 인스톨러 프로세스를 저장할 변수
 
+    private static string GetGameRootPath()
+    {
+        return Path.GetDirectoryName(Application.dataPath);
+    }
+
+    private static string GetInstallBatchPath()
+    {
+        return Path.Combine(GetGameRootPath(), "install.bat");
+    }
+
     // jarvis_server.exe가 설치되어 있는지 확인
     public bool IsJarvisServerInstalled()
     {
         UnityEngine.Debug.Log("[Installer] IsJarvisServerInstalled() called");
         
-        string executablePath = Application.dataPath;  // Unity 실행 파일이 있는 폴더 경로
-        string jarvisServerPath = Path.Combine(Path.GetDirectoryName(executablePath), "server.exe");  // server.exe 파일 경로
+        string jarvisServerPath = Path.Combine(GetGameRootPath(), "server.exe");
         
         bool result = File.Exists(jarvisServerPath);  // 파일 존재 여부 확인
         UnityEngine.Debug.Log("[Installer] IsJarvisServerInstalled() result: " + result);
@@ -39,7 +48,7 @@ public class InstallerManager : MonoBehaviour
     public bool IsInstallerRunning()
     {
         UnityEngine.Debug.Log("[Installer] IsInstallerRunning() called");
-        bool result = Process.GetProcessesByName("Install_Server").Length > 0;  // Install_Server 프로세스 검색
+        bool result = installerProcess != null && !installerProcess.HasExited;
         UnityEngine.Debug.Log("[Installer] IsInstallerRunning() result: " + result);
         return result;
     }
@@ -47,26 +56,8 @@ public class InstallerManager : MonoBehaviour
     // 문답무용으로 가장 단순한 lite 버전 설치
     public void RunInstallerLite()
     {
-        UnityEngine.Debug.Log("[Installer] RunInstallerLite() start");
-
-        // Install_Server.exe 파일 확인
-        string executablePath = Application.dataPath;  // Unity 실행 파일이 있는 폴더 경로
-        string installerPath = Path.Combine(Path.GetDirectoryName(executablePath), "Install_Server_Lite.exe");  // Install_Server.exe 파일 경로
-
-        if (File.Exists(installerPath))  // 파일 존재 여부 확인
-        {
-            installerProcess = RunInstallerProcess(installerPath);  // 인스톨러 프로세스 시작
-            AnswerBalloonSimpleManager.Instance.ShowAnswerBalloonSimpleInf();  // 알림창 표시
-            AnswerBalloonSimpleManager.Instance.ModifyAnswerBalloonSimpleText("Running installer...");  // 알림 텍스트 수정
-        }
-        else
-        {
-            UnityEngine.Debug.LogError("[Installer] Installer not found: " + installerPath);  // 에러 로그 출력
-            AnswerBalloonSimpleManager.Instance.ShowAnswerBalloonSimpleInf();  // 알림창 표시
-            AnswerBalloonSimpleManager.Instance.ModifyAnswerBalloonSimpleText("Installer not found");  // 알림 텍스트 수정
-        }
-
-        UnityEngine.Debug.Log("[Installer] RunInstallerLite() end");
+        // The new distribution detects the compatible profile from install.bat.
+        RunInstaller();
     }
 
     // jarvis_server.exe가 없으면 Install_Server.exe를 실행
@@ -88,14 +79,10 @@ public class InstallerManager : MonoBehaviour
         {
 
             UnityEngine.Debug.Log("[Installer] Launch aborted: installer already running");
-            // ScenarioInstallerManager에서 이미 실행 중 음성 실행
-            StartCoroutine(ScenarioInstallerManager.Instance.Scenario_I01_4_AlreadyRunning());
             return;  // 이미 실행 중이면 함수 종료
         }
 
-        // Install_Server.exe 파일 확인
-        string executablePath = Application.dataPath;  // Unity 실행 파일이 있는 폴더 경로
-        string installerPath = Path.Combine(Path.GetDirectoryName(executablePath), "Install_Server.exe");  // Install_Server.exe 파일 경로
+        string installerPath = GetInstallBatchPath();
 
         if (File.Exists(installerPath))  // 파일 존재 여부 확인
         {
@@ -113,17 +100,18 @@ public class InstallerManager : MonoBehaviour
         UnityEngine.Debug.Log("[Installer] RunInstaller() end");
     }
 
-    // 실제 Install_Server.exe 프로세스를 시작
-    public Process RunInstallerProcess(string exePath)
+    // Run install.bat with the game root as its working directory.
+    public Process RunInstallerProcess(string batchPath)
     {
-        UnityEngine.Debug.Log("[Installer] RunInstallerProcess() start: " + exePath);
+        UnityEngine.Debug.Log("[Installer] RunInstallerProcess() start: " + batchPath);
 
-        ProcessStartInfo startInfo = new ProcessStartInfo  // 프로세스 시작 정보 설정
+        ProcessStartInfo startInfo = new ProcessStartInfo
         {
-            FileName = exePath,  // 실행할 파일 경로
-            UseShellExecute = true,  // 셸을 통해 실행
-            Verb = "runas", // 관리자 권한으로 실행
-            CreateNoWindow = false  // 창 표시 (true면 숨김)
+            FileName = System.Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
+            Arguments = $"/c \"\"{batchPath}\"\"",
+            WorkingDirectory = GetGameRootPath(),
+            UseShellExecute = false,
+            CreateNoWindow = false
         };
 
         Process process = Process.Start(startInfo);  // 프로세스 시작
@@ -163,4 +151,4 @@ public class InstallerManager : MonoBehaviour
         UnityEngine.Debug.Log("[Installer] OnApplicationQuit() -> ShutdownInstaller()");
         ShutdownInstaller();  // 인스톨러 프로세스 종료
     }
-} 
+}
