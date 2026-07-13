@@ -779,6 +779,13 @@ public class PomodoroTimer : MonoBehaviour
 
     public void Hide()
     {
+        // Pomodoro 모드 중에는 숨김 = 모드 종료 (착석 해제/채팅 차단 해제까지 일관 처리 —
+        // UI만 사라지고 모드가 남는 유령 상태 방지)
+        if (ChatModeManager.Instance != null && ChatModeManager.Instance.IsPomodoroMode())
+        {
+            ChatModeManager.Instance.SetMode(ChatMode.Chat);
+            return;
+        }
         gameObject.SetActive(false);
     }
 }
