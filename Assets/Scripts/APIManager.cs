@@ -110,9 +110,37 @@ public class APIManager : MonoBehaviour
 
     #endregion
 
+    // Pomodoro(집중) 모드 중에는 대화 호출을 차단한다 (유저 입력·선톡·미니게임 공통 게이트).
+    // 예외처리는 호출부가 아니라 여기(피호출 함수 내부) 한 곳에서만 한다.
+    // 알려진 한계: 호출부의 chatIdx 선증가 등 부수효과는 차단돼도 실행됨(무해, idx 공백만 발생).
+    // 추후 모드 전용 일방 발화/반응이 필요하면 이 게이트를 우회하는 전용 진입점을 추가할 것.
+    private bool IsChatBlockedByPomodoro(string context, bool showFeedback)
+    {
+        if (ChatModeManager.Instance == null || !ChatModeManager.Instance.IsPomodoroMode())
+        {
+            return false;
+        }
+        Debug.Log($"[Pomodoro] 집중 모드 중 — {context} 호출 차단");
+        if (showFeedback && EmotionBalloonManager.Instance != null && CharManager.Instance != null)
+        {
+            GameObject cur = CharManager.Instance.GetCurrentCharacter();
+            if (cur != null)
+            {
+                EmotionBalloonManager.Instance.ShowEmotionBalloonForSec(cur, "No", 2f);
+            }
+        }
+        return true;
+    }
+
     // Small Talk 호출
     public async void CallSmallTalkStream(string purpose = "잡담", string currentSpeaker = null, string chatIdx = "-1", string aiLanguage = null)
     {
+        // Pomodoro 모드 중 선톡 차단 (자동 트리거라 피드백 풍선은 생략)
+        if (IsChatBlockedByPomodoro("SmallTalk", false))
+        {
+            return;
+        }
+
         // 호출 제한 체크
         DateTime now = DateTime.Now;
 
@@ -474,6 +502,12 @@ public class APIManager : MonoBehaviour
         string chatIdx,
         string serverType)
     {
+        // Pomodoro 모드 중 미니게임 대화 차단 (게이트 우회 경로 방지)
+        if (IsChatBlockedByPomodoro("MiniGame20Q", true))
+        {
+            return;
+        }
+
         // baseUrl을 비동기로 가져오기
         var tcs = new TaskCompletionSource<string>();
         ServerManager.Instance.GetBaseUrl((urlResult) => tcs.SetResult(urlResult));
@@ -2067,6 +2101,12 @@ public class APIManager : MonoBehaviour
     // chatHandler에서 호출
     public async void CallConversationStream(string query, string chatIdx = "-1", string ai_lang_in = "")
     {
+        // Pomodoro 모드 중 대화 차단 (유저 입력 경로: 채팅창/음성/Idle Talk)
+        if (IsChatBlockedByPomodoro("Conversation", true))
+        {
+            return;
+        }
+
         // 빈 쿼리 체크 (방어적 프로그래밍)
         if (string.IsNullOrWhiteSpace(query))
         {

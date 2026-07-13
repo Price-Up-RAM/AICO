@@ -218,6 +218,27 @@ public class OperatorMenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerU
             (LanguageData.Translate("Chat History", targetLang), delegate { UIManager.Instance.ShowChatHistory(); }),
         });
 
+        // Mode - 대화 모드 전환 (일반/포모도로/오퍼레이터). 현재 모드는 회색 표시. (MenuTrigger에서 복제)
+        ChatMode currentChatMode = ChatModeManager.Instance != null ? ChatModeManager.Instance.CurrentMode : ChatMode.Chat;
+        m_ContextMenu.AddSubMenuItem(LanguageData.Translate("Mode", targetLang), new List<(string, UnityAction)>
+        {
+            (LanguageData.Translate("Chat Mode", targetLang),
+                currentChatMode != ChatMode.Chat
+                ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Chat); })
+                : null  // 회색 글씨 (현재 모드)
+            ),
+            (LanguageData.Translate("Pomodoro Mode", targetLang),
+                currentChatMode != ChatMode.Pomodoro
+                ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Pomodoro); })
+                : null  // 회색 글씨 (현재 모드)
+            ),
+            (LanguageData.Translate("OPERATOR MODE", targetLang),
+                currentChatMode != ChatMode.Operator
+                ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Operator); })
+                : null  // 회색 글씨 (현재 모드)
+            ),
+        });
+
         // Control - 제어
         m_ContextMenu.AddSubMenuItem(LanguageData.Translate("Control", targetLang), new List<(string, UnityAction)>
         {

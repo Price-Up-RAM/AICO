@@ -341,6 +341,14 @@ public class CharManager : MonoBehaviour
     // clothesInfo2d 마녀 : 2d_general 프리팩일 때 주입할 ChangeCharClothesInfo (해당 없으면 null)
     public async Task ChangeCharacter(int index, ChangeCharClothesInfo clothesInfo2d = null)
     {
+        // Pomodoro 착석 중에는 캐릭터 오브젝트 교체 금지 — 착석 참조(chillCharacter)가 깨져 모드 상태가 꼬인다.
+        // (모든 교체 경로가 이 함수를 경유하므로 여기 한 곳에서 차단)
+        if (ChatModeManager.Instance != null && ChatModeManager.Instance.IsPomodoroMode())
+        {
+            Debug.Log("[CharManager] Pomodoro 모드 중에는 캐릭터 교체가 차단됩니다.");
+            return;
+        }
+
         pendingStartupDlcClothes = null;
 
         // 인덱스 유효성 체크

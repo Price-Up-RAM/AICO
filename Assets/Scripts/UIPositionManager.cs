@@ -137,7 +137,8 @@ public class UIPositionManager : MonoBehaviour
             case "ocrAutoMapper":
                 return canvas.transform.TransformPoint(new Vector3(-300f, 0f, 0f));
             case "pomodoro":
-                return canvas.transform.TransformPoint(new Vector3(250f, 50f, 0f));
+                // 캔버스 우측 상단 (Pomodoro 모드 UI 위치)
+                return canvas.transform.TransformPoint(new Vector3(canvasRect.rect.width / 2 - 250f, canvasRect.rect.height / 2 - 200f, 0f));
             case "alarm":
                 return canvas.transform.TransformPoint(new Vector3(300f, 0f, 0f));
             case "skill":

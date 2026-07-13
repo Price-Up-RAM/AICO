@@ -155,6 +155,9 @@ public static class LanguageData
         new Dictionary<string, string> { { "ko", "알람" }, { "jp", "アラーム" }, { "en", "Alarm" } },
         new Dictionary<string, string> { { "ko", "기능" }, { "jp", "機能" }, { "en", "Function" } },
         new Dictionary<string, string> { { "ko", "포모도로" }, { "jp", "ポモドーロ" }, { "en", "Pomodoro" } },
+        // Mode submenu (대화 모드 전환) — "Mode"/"OPERATOR MODE"는 기존 엔트리 재사용
+        new Dictionary<string, string> { { "ko", "일반 모드" }, { "jp", "通常モード" }, { "en", "Chat Mode" } },
+        new Dictionary<string, string> { { "ko", "포모도로 모드" }, { "jp", "ポモドーロモード" }, { "en", "Pomodoro Mode" } },
         new Dictionary<string, string> { { "ko", "스킬" }, { "jp", "スキル" }, { "en", "Skill" } },
         new Dictionary<string, string> { { "ko", "미니 알람" }, { "jp", "ミニアラーム" }, { "en", "AlarmMini" } },
         new Dictionary<string, string> { { "ko", "캘린더" }, { "jp", "カレンダー" }, { "en", "Calendar" } },

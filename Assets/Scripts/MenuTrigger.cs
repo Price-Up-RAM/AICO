@@ -192,8 +192,16 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         m_ContextMenu.AddSubMenuItem(LanguageData.Translate("Character", targetLang), new List<(string, UnityAction)>
         {
             (LanguageData.Translate("Action", targetLang), delegate { OnPointerDownRadialMenuAction(); }),
-            (LanguageData.Translate("Change Char", targetLang), delegate { UIManager.Instance.ShowCharChange();}),
-            (LanguageData.Translate("Summon Char", targetLang), delegate { UIManager.Instance.ShowCharSummon(); }),
+            (LanguageData.Translate("Change Char", targetLang),
+                (ChatModeManager.Instance == null || !ChatModeManager.Instance.IsPomodoroMode())
+                ? (UnityAction)(() => { UIManager.Instance.ShowCharChange(); })
+                : null  // 회색 글씨 (Pomodoro 착석 중 캐릭터 교체 금지)
+            ),
+            (LanguageData.Translate("Summon Char", targetLang),
+                (ChatModeManager.Instance == null || !ChatModeManager.Instance.IsPomodoroMode())
+                ? (UnityAction)(() => { UIManager.Instance.ShowCharSummon(); })
+                : null  // 회색 글씨 (Pomodoro 착석 중 소환 금지)
+            ),
             (LanguageData.Translate("Change Clothes", targetLang),
                 (_charAttributes.toggleClothes != null || _charAttributes.changeClothes != null)
                 ? (UnityAction)(() => {
@@ -219,7 +227,7 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
                 MemoryManager.Instance.ResetConversationMemoryAndGuide();
             }),
             (LanguageData.Translate("Chat History", targetLang), delegate { UIManager.Instance.ShowChatHistory(); }),
-            (LanguageData.Translate("Idle Talk", targetLang), async delegate { 
+            (LanguageData.Translate("Idle Talk", targetLang), async delegate {
                 if (!await InstallStatusManager.Instance.CheckAndOperateFullAsync())
                 {
                     return;
@@ -227,6 +235,27 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
                 string purpose = "잡담"; // 기본 목적
                 APIManager.Instance.CallSmallTalkStream(purpose);
             }), // 잡담
+        });
+
+        // Mode - 대화 모드 전환 (일반/포모도로/오퍼레이터). 현재 모드는 회색 표시.
+        ChatMode currentChatMode = ChatModeManager.Instance != null ? ChatModeManager.Instance.CurrentMode : ChatMode.Chat;
+        m_ContextMenu.AddSubMenuItem(LanguageData.Translate("Mode", targetLang), new List<(string, UnityAction)>
+        {
+            (LanguageData.Translate("Chat Mode", targetLang),
+                currentChatMode != ChatMode.Chat
+                ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Chat); })
+                : null  // 회색 글씨 (현재 모드)
+            ),
+            (LanguageData.Translate("Pomodoro Mode", targetLang),
+                currentChatMode != ChatMode.Pomodoro
+                ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Pomodoro); })
+                : null  // 회색 글씨 (현재 모드)
+            ),
+            (LanguageData.Translate("OPERATOR MODE", targetLang),
+                currentChatMode != ChatMode.Operator
+                ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Operator); })
+                : null  // 회색 글씨 (현재 모드)
+            ),
         });
 
         // Control - 제어
@@ -402,6 +431,17 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
                 }),
                 (LanguageData.Translate("Edition 튜토리얼", targetLang), delegate { ScenarioInstallerManager.Instance.StartInstaller(); }),
                 // (LanguageData.Translate("Setting 튜토리얼", targetLang), delegate { ScenarioTutorialManager.Instance.StartTutorial(); }),
+                (LanguageData.Translate("SitSupport", targetLang), delegate {
+                    // 착석 오프셋 튜닝 패널 (ChillSitData 편집) — 씬에 SitSupport 프리팹 설치 필요
+                    if (SitSupportScript.Instance != null)
+                    {
+                        SitSupportScript.Instance.TogglePanel();
+                    }
+                    else
+                    {
+                        Debug.Log("[SitSupport] 씬에 SitSupport가 없습니다. Tools → ChillWithYou → Install SitSupport Into SampleScene 실행 필요");
+                    }
+                }),
             });
 #endif
 
