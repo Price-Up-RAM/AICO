@@ -2,6 +2,28 @@
 
 앉아서 같이 포모도로 하는 시스템. 오피스 리소스(Desk_Set)는 Synty Polygon Office 발췌.
 
+## Pomodoro 모드 (본편 통합 — 2026-07-13)
+
+- **ChatMode.Pomodoro** 추가 (`ChatModeManager`): 진입 = ChillModeManager.EnterChillMode(착석) +
+  UIManager.ShowPomodoro(타이머 UI, 시작은 유저 수동). 종료 = 착석 해제 + ClosePomodoro.
+  **모든 모드 전환은 Chat 기저 상태를 경유** (SetMode가 Exit→CurrentMode=Chat→Enter 순서 보장).
+- **진입점**: 캐릭터 우클릭 메뉴 Function → Pomodoro (토글, 기존 타이머-열기 항목을 모드 토글로 교체).
+  모드 중 Character → Change Char/Summon Char는 회색 비활성. Operator 메뉴는 모드 배타라 미러링 불필요.
+- **채팅 차단**: APIManager의 3개 진입점 게이트 — CallConversationStream(채팅창/음성/Idle Talk),
+  CallSmallTalkStream(선톡, 풍선 피드백 없음), CallMiniGame20QStream(20Q 우회 방지).
+  `IsChatBlockedByPomodoro()` 한 곳에 모여 있어 추후 "모드 전용 일방 발화"는 이 게이트를 우회하는
+  전용 진입점으로 열면 됨. Aropla는 모드 배타(ChatModeManager)로 자동 차단.
+- **Pomodoro UI 위치**: 표시할 때마다 `UIPositionManager`의 "pomodoro" 좌표로 강제 재배치되는 구조라
+  씬/프리팹 이동이 불필요 — 해당 case를 캔버스 우측 상단(width/2−250, height/2−200)으로 변경.
+- **SitSupport** (`Assets/Prefabs/UI/extra/SitSupport.prefab` + `SitSupportScript.cs`):
+  착석 튜닝 패널의 공용 프리팹화(자체 오버레이 캔버스, 패널 기본 숨김). 본편에선 Dev → SitSupport로
+  토글(에디터 전용), 데모씬에선 항상 표시. 대상 캐릭터/ChillSitData는 싱글톤에서 자동 해석,
+  캐릭터 교체는 charcode 폴링으로 자동 감지. 착석 토글 버튼은 본편=ChatModeManager.ToggleMode(Pomodoro),
+  데모(ChatModeManager 없음)=ChillModeManager.ToggleChillMode.
+- **SampleScene 설치**: `Tools → ChillWithYou → 4. Install SitSupport Into SampleScene` —
+  씬 루트에 SitSupport 인스턴스 추가(멱등). **Root260616.prefab 불가침** — 씬 파일만 수정.
+- batchmode: `BuildAll`(프리팹+데모씬) / `BuildAllAndInstall`(+본편 설치).
+
 ## 아키텍처 (2026-07-12 3차 — 본편 ChillModeManager 기준으로 통합)
 
 **단일 출처는 본편 시스템이다.** 데모는 자체 착석 로직 없이 본편 코드를 그대로 구동하는 튜닝 환경.

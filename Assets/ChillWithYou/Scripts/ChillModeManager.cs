@@ -42,6 +42,7 @@ public class ChillModeManager : MonoBehaviour
     public GameObject overrideCharacter;  // CharManager가 없는 데모씬 등에서 착석 대상을 직접 지정 (null이면 CharManager의 현재 캐릭터)
 
     public bool IsChillMode { get { return isChillMode; } }  // 외부(UI)에서 현재 모드 확인용
+    public GameObject CurrentChillCharacter { get { return chillCharacter; } }  // 현재 착석 중인 캐릭터 (SitSupport 등 UI용)
 
     private bool isChillMode = false;  // 현재 칠윗유 모드 여부
     private GameObject chillCharacter;  // 칠윗유 모드에 들어간 캐릭터
@@ -204,6 +205,35 @@ public class ChillModeManager : MonoBehaviour
         if (!isChillMode)
         {
             // 칠윗유 모드가 아닌 경우 무시
+            return;
+        }
+
+        // 착석 중 캐릭터가 외부에서 파괴된 경우(의상 스왑 등) — 캐릭터 복원은 건너뛰고 환경만 복원
+        // (가드 없이는 MissingReferenceException으로 모드 상태가 영구히 꼬인다)
+        if (chillCharacter == null)
+        {
+            Debug.LogWarning("[ChillMode] 착석 캐릭터가 이미 파괴됨 — 환경만 복원하고 모드를 종료합니다.");
+            if (fallingObject != null)
+            {
+                fallingObject.enabled = true;
+            }
+            if (PhysicsManager.Instance != null)
+            {
+                PhysicsManager.Instance.enabled = true;
+            }
+            if (deskSetRoot != null)
+            {
+                deskSetRoot.localPosition = deskOriginalPosition;
+                deskSetRoot.localRotation = deskOriginalRotation;
+                deskSetRoot.localScale = deskOriginalScale;
+            }
+            if (chairRoot != null)
+            {
+                chairRoot.localPosition = chairOriginalLocalPosition;
+                chairRoot.localRotation = chairOriginalLocalRotation;
+            }
+            isChillMode = false;
+            chillCharacter = null;
             return;
         }
 

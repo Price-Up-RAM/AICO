@@ -15,8 +15,8 @@ using UnityEngine.UI;
 ///    (charcode는 본편과 동일: diana / arona_tripo / arona — 데모 튜닝값이 그대로 본편 데이터가 되도록).
 ///    + HY Motion Animator의 LookAround 트리거 배선 수정(멱등).
 /// 2) ChillWithYouSample 씬 베이크: 본편 Canvas_Char 환경 + Desk_Set(본편처럼 transform 0) +
-///    ChillModeManager 프리팹(참조 배선) + 데모 캐릭터 + 튜닝 UI(ChillWithYouDemoController).
-/// 사용: Tools → ChillWithYou → 1, 2 순서대로. batchmode는 BuildAll.
+///    ChillModeManager 프리팹(참조 배선) + 데모 캐릭터 + SitSupport 패널(공용) + 캐릭터 교체 패널(데모 전용).
+/// 사용: Tools → ChillWithYou → 1~4 순서대로. batchmode는 BuildAll(데모까지) / BuildAllAndInstall(본편 설치 포함).
 /// </summary>
 public static class ChillWithYouSampleBuilder
 {
@@ -40,19 +40,32 @@ public static class ChillWithYouSampleBuilder
 
     private static readonly Color PanelColor = new Color(0.09f, 0.1f, 0.13f, 0.92f);
     private static readonly Color ButtonColor = new Color(0.18f, 0.26f, 0.4f, 1f);
-    private static readonly Color LabelColor = new Color(0.85f, 0.87f, 0.9f, 1f);
     private static readonly Color HeaderColor = new Color(0.55f, 0.75f, 1f, 1f);
 
-    /// <summary>batchmode 진입점: 프리팹 → 씬 순서로 전체 빌드. 실패 시 예외로 중단(exit≠0).</summary>
+    /// <summary>batchmode 진입점: 프리팹 → 데모 씬 순서로 전체 빌드. 실패 시 예외로 중단(exit≠0).</summary>
     public static void BuildAll()
     {
         if (!BuildPocPrefabs())
         {
             throw new System.Exception("[ChillWithYou] POC 프리팹 빌드 실패 — 씬 베이크를 중단합니다.");
         }
+        if (!SitSupportBuilder.BuildSitSupportPrefab())
+        {
+            throw new System.Exception("[ChillWithYou] SitSupport 프리팹 빌드 실패.");
+        }
         if (!BuildSampleScene())
         {
             throw new System.Exception("[ChillWithYou] ChillWithYouSample 씬 베이크 실패.");
+        }
+    }
+
+    /// <summary>batchmode 진입점: 전체 빌드 + 본편 SampleScene에 SitSupport 설치(씬 파일만 수정).</summary>
+    public static void BuildAllAndInstall()
+    {
+        BuildAll();
+        if (!SitSupportBuilder.InstallSampleScene())
+        {
+            throw new System.Exception("[ChillWithYou] SampleScene 설치 실패.");
         }
     }
 
@@ -87,14 +100,28 @@ public static class ChillWithYouSampleBuilder
             Debug.LogError("[ChillWithYou] POC 프리팹이 없거나 미처리 상태입니다. 먼저 1번 메뉴(Build POC Prefabs)를 실행하세요.");
             return false;
         }
+        // GUI에서 실행 시 열려 있는 씬의 미저장 변경분 보호 (batchmode에서는 통과)
+        if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+        {
+            Debug.LogWarning("[ChillWithYou] 사용자가 씬 저장을 취소해 데모 씬 베이크를 중단합니다.");
+            return false;
+        }
+
         GameObject pocPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PocPrefabPath);
         GameObject deskSetPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(DeskSetPrefabPath);
         GameObject managerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(ChillManagerPrefabPath);
-        ChillSitData sitData = AssetDatabase.LoadAssetAtPath<ChillSitData>(SitDataPath);
-        if (deskSetPrefab == null || managerPrefab == null || sitData == null)
+        GameObject sitSupportPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(SitSupportBuilder.PrefabPath);
+        if (sitSupportPrefab == null)
         {
-            Debug.LogError(string.Format("[ChillWithYou] 필수 에셋 누락: Desk_Set={0}, ChillModeManager={1}, ChillSitData={2}",
-                deskSetPrefab != null, managerPrefab != null, sitData != null));
+            // 자가 치유: 3번 메뉴 산출물이 없으면 먼저 생성 (메뉴 번호 순서 의존 제거)
+            SitSupportBuilder.BuildSitSupportPrefab();
+            sitSupportPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(SitSupportBuilder.PrefabPath);
+        }
+        ChillSitData sitData = AssetDatabase.LoadAssetAtPath<ChillSitData>(SitDataPath);
+        if (deskSetPrefab == null || managerPrefab == null || sitData == null || sitSupportPrefab == null)
+        {
+            Debug.LogError(string.Format("[ChillWithYou] 필수 에셋 누락: Desk_Set={0}, ChillModeManager={1}, ChillSitData={2}, SitSupport={3}",
+                deskSetPrefab != null, managerPrefab != null, sitData != null, sitSupportPrefab != null));
             return false;
         }
 
@@ -170,8 +197,16 @@ public static class ChillWithYouSampleBuilder
         manager.deskRotationOffset = sitData.deskRotationOffset;
         manager.deskScaleMultiplier = sitData.deskScaleMultiplier;
 
-        // 데모 메뉴 UI (좌측 상단) — 별도 오버레이 캔버스
-        BuildDemoMenu(manager, sitData, canvasRt, poc, pocPrefab);
+        // SitSupport 패널(공용) — 데모에서는 항상 표시
+        GameObject sitSupport = (GameObject)PrefabUtility.InstantiatePrefab(sitSupportPrefab);
+        SitSupportScript sitScript = sitSupport.GetComponent<SitSupportScript>();
+        if (sitScript != null && sitScript.panel != null)
+        {
+            sitScript.panel.SetActive(true);
+        }
+
+        // 캐릭터 교체 패널(데모 전용) + 컨트롤러
+        BuildDemoCharPanel(canvasRt, poc, pocPrefab, manager);
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene, ScenePath);
@@ -251,9 +286,7 @@ public static class ChillWithYouSampleBuilder
         return true;
     }
 
-    /// <summary>HY Motion Animator의 LookAround 배선 수정(멱등).
-    /// 원본 상태: SitTyping의 전이가 모두 무조건 exit-time이라 SetTrigger("LookAround")가 소비되지 않고,
-    /// SitLookAround에는 나가는 전이가 없어 진입 시 복귀 불가였다.</summary>
+    /// <summary>HY Motion Animator의 LookAround 배선 수정(멱등).</summary>
     private static bool FixChillControllerWiring()
     {
         AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ChillControllerPath);
@@ -355,96 +388,32 @@ public static class ChillWithYouSampleBuilder
         return count;
     }
 
-    // ---------------------------------------------------------------- 데모 메뉴 UI
+    // ---------------------------------------------------------------- 데모 전용 캐릭터 교체 패널
 
-    private static void BuildDemoMenu(ChillModeManager manager, ChillSitData sitData,
-        RectTransform canvasRt, GameObject pocInstance, GameObject pocPrefab)
+    private static void BuildDemoCharPanel(RectTransform canvasRt, GameObject pocInstance,
+        GameObject pocPrefab, ChillModeManager manager)
     {
         TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(SuitBoldFontPath);
-        if (font == null)
-        {
-            Debug.LogWarning("[ChillWithYou] SUIT-Bold 폰트를 찾을 수 없습니다: " + SuitBoldFontPath);
-        }
 
-        GameObject uiCanvasGO = new GameObject("Canvas_DemoUI", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        GameObject uiCanvasGO = new GameObject("Canvas_DemoChar", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
         uiCanvasGO.layer = UILayer;
         Canvas uiCanvas = uiCanvasGO.GetComponent<Canvas>();
         uiCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        uiCanvas.sortingOrder = 100;
+        uiCanvas.sortingOrder = 101;
         ConfigureScaler(uiCanvasGO.GetComponent<CanvasScaler>());
 
-        GameObject panel = CreateUIObject("DemoMenuPanel", uiCanvasGO.transform, new Vector2(16f, -16f), new Vector2(380f, 800f));
+        // SitSupport 패널(좌측, 폭 380) 오른쪽에 배치
+        GameObject panel = CreateUIObject("DemoCharPanel", uiCanvasGO.transform, new Vector2(410f, -16f), new Vector2(380f, 106f));
         panel.AddComponent<Image>().color = PanelColor;
 
-        CreateText(panel.transform, "Title", "ChillWithYou 데모", 24f,
-            new Vector2(14f, -10f), new Vector2(352f, 28f), font, Color.white, TextAlignmentOptions.Left);
+        CreateText(panel.transform, "Title", "캐릭터 (데모 전용)", 20f,
+            new Vector2(14f, -10f), new Vector2(352f, 22f), font, HeaderColor, TextAlignmentOptions.Left);
 
         GameObject demoGO = new GameObject("ChillWithYouDemo");
         ChillWithYouDemoController demo = demoGO.AddComponent<ChillWithYouDemoController>();
         demo.chillManager = manager;
-        demo.sitData = sitData;
         demo.charParent = canvasRt;
         demo.currentCharacter = pocInstance;
-
-        // 초기 슬라이더 값 = ChillSitData의 diana 엔트리
-        ChillSitData.CharacterSitOffset d = sitData.GetOffset("diana");
-        Vector3 pos = d != null ? d.positionOffset : Vector3.zero;
-        Vector3 chair = d != null ? d.chairLocalPosition : Vector3.zero;
-        float scale = d != null ? d.scaleMultiplier : 1f;
-        float rotY = d != null ? Mathf.Repeat(d.rotationOffset.y, 360f) : 180f;
-
-        TMP_Text unused;
-        demo.enterButton = CreateButton(panel.transform, "EnterButton", "착석", new Vector2(14f, -48f), new Vector2(172f, 32f), font, out demo.enterButtonLabel);
-        demo.pauseButton = CreateButton(panel.transform, "PauseButton", "멈추기", new Vector2(196f, -48f), new Vector2(170f, 32f), font, out demo.pauseButtonLabel);
-
-        CreateText(panel.transform, "CharHeader", "캐릭터 착석 오프셋", 20f,
-            new Vector2(14f, -88f), new Vector2(352f, 22f), font, HeaderColor, TextAlignmentOptions.Left);
-        demo.charXSlider = CreateSliderRow(panel.transform, "CharX", "위치 X", -114f, -10f, 10f, pos.x, font, out demo.charXValueLabel, pos.x.ToString("0.00"));
-        demo.charYSlider = CreateSliderRow(panel.transform, "CharY", "위치 Y", -148f, -10f, 10f, pos.y, font, out demo.charYValueLabel, pos.y.ToString("0.00"));
-        demo.charZSlider = CreateSliderRow(panel.transform, "CharZ", "위치 Z", -182f, -10f, 10f, pos.z, font, out demo.charZValueLabel, pos.z.ToString("0.00"));
-        demo.charScaleSlider = CreateSliderRow(panel.transform, "CharScale", "크기", -216f, 0.1f, 30f, scale, font, out demo.charScaleValueLabel, scale.ToString("0.00"));
-        demo.charRotYSlider = CreateSliderRow(panel.transform, "CharRotY", "회전 Y", -250f, 0f, 360f, rotY, font, out demo.charRotYValueLabel, rotY.ToString("0") + "°");
-
-        CreateText(panel.transform, "ChairHeader", "의자 오프셋", 20f,
-            new Vector2(14f, -288f), new Vector2(352f, 22f), font, HeaderColor, TextAlignmentOptions.Left);
-        demo.chairXSlider = CreateSliderRow(panel.transform, "ChairX", "의자 X", -314f, -1f, 1f, chair.x, font, out demo.chairXValueLabel, chair.x.ToString("0.00"));
-        demo.chairYSlider = CreateSliderRow(panel.transform, "ChairY", "의자 Y", -348f, -1f, 1f, chair.y, font, out demo.chairYValueLabel, chair.y.ToString("0.00"));
-        demo.chairZSlider = CreateSliderRow(panel.transform, "ChairZ", "의자 Z", -382f, -1f, 1f, chair.z, font, out demo.chairZValueLabel, chair.z.ToString("0.00"));
-
-        // 책상 슬라이더 초기값 = 시트 앵커(착석 지점 좌표) — 컨트롤러의 ComputeSeatAnchor와 동일 공식
-        Vector3 anchor = manager.deskPositionOffset;
-        if (manager.chairSeatPoint != null && manager.deskSetRoot != null)
-        {
-            Vector3 seatLocal = manager.deskSetRoot.InverseTransformPoint(manager.chairSeatPoint.position);
-            anchor = manager.deskPositionOffset
-                + Quaternion.Euler(manager.deskRotationOffset) * (seatLocal * manager.deskScaleMultiplier);
-        }
-
-        CreateText(panel.transform, "DeskHeader", "책상 (착석 지점 기준)", 20f,
-            new Vector2(14f, -420f), new Vector2(352f, 22f), font, HeaderColor, TextAlignmentOptions.Left);
-        demo.deskXSlider = CreateSliderRow(panel.transform, "DeskX", "위치 X", -446f,
-            Mathf.Min(-1280f, anchor.x), Mathf.Max(1280f, anchor.x), anchor.x, font, out demo.deskXValueLabel, anchor.x.ToString("0"));
-        demo.deskYSlider = CreateSliderRow(panel.transform, "DeskY", "위치 Y", -480f,
-            Mathf.Min(-800f, anchor.y), Mathf.Max(800f, anchor.y), anchor.y, font, out demo.deskYValueLabel, anchor.y.ToString("0"));
-        demo.deskScaleSlider = CreateSliderRow(panel.transform, "DeskScale", "전체 크기", -514f,
-            Mathf.Min(50f, manager.deskScaleMultiplier), Mathf.Max(1000f, manager.deskScaleMultiplier),
-            manager.deskScaleMultiplier, font, out demo.deskScaleValueLabel, manager.deskScaleMultiplier.ToString("0"));
-
-        CreateText(panel.transform, "AngleLabel", "책상 각도", 20f,
-            new Vector2(14f, -548f), new Vector2(120f, 24f), font, LabelColor, TextAlignmentOptions.Left);
-        demo.angleValueLabel = CreateText(panel.transform, "AngleValue", manager.deskRotationOffset.y.ToString("0") + "°", 18f,
-            new Vector2(282f, -548f), new Vector2(86f, 24f), font, Color.white, TextAlignmentOptions.Right);
-        demo.turntableButton = CreateButton(panel.transform, "TurntableButton", "턴테이블", new Vector2(14f, -574f), new Vector2(172f, 32f), font, out demo.turntableButtonLabel);
-        demo.frontViewButton = CreateButton(panel.transform, "FrontViewButton", "정면", new Vector2(196f, -574f), new Vector2(170f, 32f), font, out unused);
-        demo.yawMinusButton = CreateButton(panel.transform, "YawMinusButton", "각도 -15°", new Vector2(14f, -612f), new Vector2(172f, 32f), font, out unused);
-        demo.yawPlusButton = CreateButton(panel.transform, "YawPlusButton", "각도 +15°", new Vector2(196f, -612f), new Vector2(170f, 32f), font, out unused);
-
-        demo.logButton = CreateButton(panel.transform, "LogButton", "값 로그", new Vector2(14f, -650f), new Vector2(172f, 32f), font, out unused);
-        demo.saveButton = CreateButton(panel.transform, "SaveButton", "데이터 저장", new Vector2(196f, -650f), new Vector2(170f, 32f), font, out unused);
-        demo.resetButton = CreateButton(panel.transform, "ResetButton", "리셋 (시작값 복원)", new Vector2(14f, -688f), new Vector2(352f, 32f), font, out unused);
-
-        CreateText(panel.transform, "CharListHeader", "캐릭터", 20f,
-            new Vector2(14f, -726f), new Vector2(200f, 22f), font, HeaderColor, TextAlignmentOptions.Left);
         demo.characterPrefabs = new[]
         {
             pocPrefab,
@@ -452,9 +421,10 @@ public static class ChillWithYouSampleBuilder
             AssetDatabase.LoadAssetAtPath<GameObject>(AronaSfmPrefabPath),
         };
         demo.characterButtons = new Button[3];
-        demo.characterButtons[0] = CreateButton(panel.transform, "CharDiana", "Diana", new Vector2(14f, -752f), new Vector2(112f, 34f), font, out unused);
-        demo.characterButtons[1] = CreateButton(panel.transform, "CharArona6", "Arona6", new Vector2(134f, -752f), new Vector2(112f, 34f), font, out unused);
-        demo.characterButtons[2] = CreateButton(panel.transform, "CharAronaSFM", "SFM", new Vector2(254f, -752f), new Vector2(112f, 34f), font, out unused);
+        TMP_Text unused;
+        demo.characterButtons[0] = CreateButton(panel.transform, "CharDiana", "Diana", new Vector2(14f, -42f), new Vector2(112f, 34f), font, out unused);
+        demo.characterButtons[1] = CreateButton(panel.transform, "CharArona6", "Arona6", new Vector2(134f, -42f), new Vector2(112f, 34f), font, out unused);
+        demo.characterButtons[2] = CreateButton(panel.transform, "CharAronaSFM", "SFM", new Vector2(254f, -42f), new Vector2(112f, 34f), font, out unused);
     }
 
     private static void ConfigureScaler(CanvasScaler scaler)
@@ -464,72 +434,6 @@ public static class ChillWithYouSampleBuilder
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         scaler.matchWidthOrHeight = 0.5f;
         scaler.referencePixelsPerUnit = 100f;
-    }
-
-    private static Slider CreateSliderRow(Transform panel, string name, string label, float y,
-        float min, float max, float value, TMP_FontAsset font, out TMP_Text valueLabel, string valueText)
-    {
-        CreateText(panel, name + "Label", label, 18f,
-            new Vector2(14f, y), new Vector2(94f, 24f), font, LabelColor, TextAlignmentOptions.Left);
-        Slider slider = CreateSlider(panel, name + "Slider", new Vector2(110f, y), new Vector2(162f, 24f), min, max, value);
-        valueLabel = CreateText(panel, name + "Value", valueText, 18f,
-            new Vector2(282f, y), new Vector2(86f, 24f), font, Color.white, TextAlignmentOptions.Right);
-        return slider;
-    }
-
-    private static Slider CreateSlider(Transform parent, string name, Vector2 pos, Vector2 size,
-        float min, float max, float value)
-    {
-        GameObject go = CreateUIObject(name, parent, pos, size);
-        Slider slider = go.AddComponent<Slider>();
-
-        GameObject bg = CreateUIObject("Background", go.transform, Vector2.zero, Vector2.zero);
-        RectTransform bgRt = bg.GetComponent<RectTransform>();
-        bgRt.anchorMin = new Vector2(0f, 0.5f);
-        bgRt.anchorMax = new Vector2(1f, 0.5f);
-        bgRt.pivot = new Vector2(0.5f, 0.5f);
-        bgRt.anchoredPosition = Vector2.zero;
-        bgRt.sizeDelta = new Vector2(0f, 8f);
-        bg.AddComponent<Image>().color = new Color(0.22f, 0.24f, 0.28f, 1f);
-
-        GameObject fillArea = CreateUIObject("Fill Area", go.transform, Vector2.zero, Vector2.zero);
-        RectTransform faRt = fillArea.GetComponent<RectTransform>();
-        faRt.anchorMin = new Vector2(0f, 0.5f);
-        faRt.anchorMax = new Vector2(1f, 0.5f);
-        faRt.pivot = new Vector2(0.5f, 0.5f);
-        faRt.anchoredPosition = Vector2.zero;
-        faRt.sizeDelta = new Vector2(-20f, 8f);
-
-        GameObject fill = CreateUIObject("Fill", fillArea.transform, Vector2.zero, Vector2.zero);
-        RectTransform fillRt = fill.GetComponent<RectTransform>();
-        fillRt.anchorMin = new Vector2(0f, 0f);
-        fillRt.anchorMax = new Vector2(0f, 1f);
-        fillRt.pivot = new Vector2(0.5f, 0.5f);
-        fillRt.sizeDelta = new Vector2(10f, 0f);
-        fill.AddComponent<Image>().color = new Color(0.3f, 0.55f, 0.95f, 1f);
-
-        GameObject handleArea = CreateUIObject("Handle Slide Area", go.transform, Vector2.zero, Vector2.zero);
-        RectTransform haRt = handleArea.GetComponent<RectTransform>();
-        haRt.anchorMin = new Vector2(0f, 0.5f);
-        haRt.anchorMax = new Vector2(1f, 0.5f);
-        haRt.pivot = new Vector2(0.5f, 0.5f);
-        haRt.anchoredPosition = Vector2.zero;
-        haRt.sizeDelta = new Vector2(-20f, 0f);
-
-        GameObject handle = CreateUIObject("Handle", handleArea.transform, Vector2.zero, new Vector2(20f, 20f));
-        RectTransform handleRt = handle.GetComponent<RectTransform>();
-        handleRt.pivot = new Vector2(0.5f, 0.5f);
-        Image handleImg = handle.AddComponent<Image>();
-        handleImg.color = new Color(0.85f, 0.87f, 0.92f, 1f);
-
-        slider.fillRect = fillRt;
-        slider.handleRect = handleRt;
-        slider.targetGraphic = handleImg;
-        slider.direction = Slider.Direction.LeftToRight;
-        slider.minValue = min;
-        slider.maxValue = max;
-        slider.value = value;
-        return slider;
     }
 
     private static Button CreateButton(Transform parent, string name, string label,
