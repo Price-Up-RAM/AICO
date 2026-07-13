@@ -1538,8 +1538,8 @@ public class APIManager : MonoBehaviour
     // 최종 반환 완료 시 호출될 함수
     private void OnFinalResponseReceived(AIChatSession session)
     {
-        // 최종 응답이 비어있는지 체크
-        if (session.replyListKo.Count == 0)
+        // 최종 응답이 비어있는지 체크 (번역 스킵 시 특정 언어만 채워질 수 있으므로 3개 언어 모두 확인)
+        if (session.replyListKo.Count == 0 && session.replyListJp.Count == 0 && session.replyListEn.Count == 0)
         {
             // 말풍선 숨기기 (표시된 경우)
             AnswerBalloonManager.Instance.HideAnswerBalloon();
@@ -1583,6 +1583,12 @@ public class APIManager : MonoBehaviour
         else if (SettingManager.Instance.settings.ui_language == "ko")
         {
             reply = replyKo;
+        }
+
+        // 번역 스킵으로 표시언어 답변이 비어있으면 비어있지 않은 언어로 대체 (메모리 message 빈값 방지)
+        if (string.IsNullOrEmpty(reply))
+        {
+            reply = !string.IsNullOrEmpty(replyKo) ? replyKo : (!string.IsNullOrEmpty(replyJp) ? replyJp : replyEn);
         }
 
         Debug.Log("Answer Finished : " + reply);

@@ -163,20 +163,26 @@ public class AnswerBalloonManager : MonoBehaviour
         textEn = replyEn;
     }
 
-    // 답변풍선 언어 변경
+    // 답변풍선 언어 변경 (번역 스킵 등으로 답변이 비어있는 언어는 순환에서 제외)
     public void changeAnswerLanguage()
     {
-        if (answerLanguage == "ko")
+        string[] langOrder = { "ko", "jp", "en" };
+        int currentIdx = System.Array.IndexOf(langOrder, answerLanguage);
+        if (currentIdx < 0)
         {
-            answerLanguage = "jp";
+            currentIdx = 2;  // 알 수 없는 언어면 en으로 간주
         }
-        else if (answerLanguage == "jp")
+
+        // 다음 언어부터 순환하며 텍스트가 있는 언어 탐색 (모두 비어있으면 현재 언어 유지)
+        for (int i = 1; i <= langOrder.Length; i++)
         {
-            answerLanguage = "en";
-        }
-        else
-        {
-            answerLanguage = "ko";
+            string nextLang = langOrder[(currentIdx + i) % langOrder.Length];
+            string nextText = nextLang == "ko" ? textKo : (nextLang == "jp" ? textJp : textEn);
+            if (!string.IsNullOrEmpty(nextText))
+            {
+                answerLanguage = nextLang;
+                break;
+            }
         }
         // 바뀐 언어로 AnswerBalloon 다시 세팅
         ModifyAnswerBalloonText();
