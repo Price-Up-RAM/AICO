@@ -45,7 +45,10 @@ public class InstallStatusManager : MonoBehaviour
         loadCompleteTcs.SetResult(true);
         
         ApplyInstallStatusToUI();
+    }
 
+    private void Start()
+    {
         // 시작시 서버 기동 옵션 확인 및 시동
         if (!SettingManager.Instance.settings.isStartServerOnInit)
         {

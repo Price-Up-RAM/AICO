@@ -1483,7 +1483,7 @@ public class SettingManager : MonoBehaviour
     private void SetDefaultValues()
     {
         Debug.Log("SetDefaultValues");
-        settings.player_name = "Sensei";
+        settings.player_name = "선생님";
         
         // 시스템 언어 자동 감지
         string systemLang = GetSystemLanguage();

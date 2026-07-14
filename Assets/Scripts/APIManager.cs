@@ -738,7 +738,27 @@ public class APIManager : MonoBehaviour
     // 로그 기록 메서드
     private void LogToFile(string message)
     {
-        File.AppendAllText(logFilePath, $"{DateTime.Now}: {message}\n");
+        // 진단용 파일 로그 실패해도 메인로직 유지
+        try
+        {
+            if (string.IsNullOrEmpty(logFilePath))
+            {
+                return;
+            }
+
+            string directory = Path.GetDirectoryName(logFilePath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.AppendAllText(logFilePath, $"{DateTime.Now}: {message}\n");
+        }
+        catch (Exception ex)
+        {
+            // Debug.Log 대신 Unity 콘솔에만 남기고, 호출자 로직은 계속 실행한다.
+            Debug.LogWarning($"[APIManager] File logging skipped: {ex.Message}");
+        }
     }
 
     // 이미지를 multipart/form-data 요청에 첨부하고 last_send_image.png로 저장

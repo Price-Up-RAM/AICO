@@ -92,11 +92,19 @@ public static class ApiKei
         
         if (freeGeminiCallCount < 0)
         {
-            UnityEngine.Debug.LogWarning("[ApiKei] Free Gemini call count exhausted. Triggering I03 scenario.");
-            // 무료 서버 소진 → I03 시나리오 (서버 설치 or 외부 플랫폼 안내)
-            ScenarioInstallerManager.Instance.StartCoroutine(
-                ScenarioInstallerManager.Instance.Scenario_I03_FreeKeyExhausted()
-            );
+            int serverTypeIdx = SettingManager.Instance?.settings?.server_type_idx ?? 0;
+            if (serverTypeIdx != 0 && serverTypeIdx != 1)
+            {
+                UnityEngine.Debug.LogWarning("[ApiKei] Free Gemini call count exhausted. Triggering I03 scenario.");
+                // 무료 서버 소진 → I03 시나리오 (서버 설치 or 외부 플랫폼 안내)
+                ScenarioInstallerManager.Instance.StartCoroutine(
+                    ScenarioInstallerManager.Instance.Scenario_I03_FreeKeyExhausted()
+                );
+            }
+            else
+            {
+                UnityEngine.Debug.LogWarning("[ApiKei] Free Gemini call count exhausted. I03 scenario skipped in Auto/Local mode.");
+            }
             return null;
         }
         

@@ -44,10 +44,6 @@ public class SettingCharManager : MonoBehaviour
     private string configFilePath;
     public bool isLoaded = false;
 
-    // 최초 로드 시 settings_char.json이 없었던 경우에만 true.
-    // AICO 기본값 적용 시 한 번 소비한다.
-    private bool isFirstSettingsFile;
-
     public event Action<string> OnCharacterSettingChanged;
     public event Action OnSettingsLoaded; // LoadSettingChar 완료 통지 — 로드 전 조회를 미룬 UI(카드 테두리 등)의 재적용 트리거
 
@@ -121,11 +117,6 @@ public class SettingCharManager : MonoBehaviour
     {
         configFilePath = Path.Combine(Application.persistentDataPath, "config", "settings_char.json");
 
-        if (!isLoaded)
-        {
-            isFirstSettingsFile = !File.Exists(configFilePath);
-        }
-
         try
         {
             if (File.Exists(configFilePath))
@@ -136,6 +127,11 @@ public class SettingCharManager : MonoBehaviour
             }
             else
             {
+                // KAI 이슈
+                settingsCharData.char_code_info_dict["aico"] = new CharCodeSetting
+                {
+                    voiceId = "woman_01"
+                };
                 SaveToFile();
             }
         }
@@ -231,18 +227,6 @@ public class SettingCharManager : MonoBehaviour
     public bool IsAffinityRewardUnlocked(string charCode, string unlockId) { var setting = GetCharCodeSetting(charCode); return setting != null && setting.affinityUnlockedIds != null && setting.affinityUnlockedIds.Contains(unlockId); }
     public bool UnlockAffinityReward(string charCode, string unlockId) { if (string.IsNullOrEmpty(unlockId)) return false; var setting = GetCharCodeSetting(charCode); if (setting == null) return false; if (setting.affinityUnlockedIds == null) setting.affinityUnlockedIds = new List<string>(); if (setting.affinityUnlockedIds.Contains(unlockId)) return false; setting.affinityUnlockedIds.Add(unlockId); SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); return true; }
     public void SetVoice(string charCode, string voiceId) { var setting = GetCharCodeSetting(charCode); if (setting != null) { setting.voiceId = voiceId; SaveToFile(); OnCharacterSettingChanged?.Invoke(charCode); } }
-
-    // 신규 설정 파일일 때만 한 번 true를 반환한다.
-    public bool TryConsumeFirstCharacterSetup()
-    {
-        if (!isLoaded || !isFirstSettingsFile)
-        {
-            return false;
-        }
-
-        isFirstSettingsFile = false;
-        return true;
-    }
 
     public CharSetting GetCharSetting(string charName)
     {

@@ -210,7 +210,7 @@ public class PrefabDataLocal : MonoBehaviour
         }
     }
 
-    private void RegisterAllPrefabsToCharList()
+    public void RegisterAllPrefabsToCharList()
     {
         int addedCount = 0;
 

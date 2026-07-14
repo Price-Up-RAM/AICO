@@ -56,6 +56,8 @@ public class ScenarioInstallerManager : MonoBehaviour
 
             if (currentStatus == "full")
             {
+                InstallStatusManager.Instance.ApplyInstallStatusToUI();
+
                 // lite 또는 full로 변경된 경우
                 // if (currentStatus == "lite" || currentStatus == "full")
                 // Debug.Log($"설치 완료: {currentStatus} 버전");
@@ -309,6 +311,11 @@ public class ScenarioInstallerManager : MonoBehaviour
 
     private IEnumerator Scenario_I01_0_InstallServerType()
     {
+        float d7 = ScenarioUtil.Narration("I01_0_install_server_explain_7", "AI 서버 설치를 진행해볼까요?");
+        ScenarioUtil.ShowEmotion("><");
+        yield return new WaitForSeconds(d7);
+        yield return new WaitForSeconds(0.2f);
+
         ChoiceManager.Instance.ShowChoice(2, "I01_installer_check");
         yield break;
 

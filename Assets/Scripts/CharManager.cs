@@ -55,6 +55,10 @@ public class CharManager : MonoBehaviour
         // JSON 데이터 로드 후, 이미 다운로드된 DLC만 즉시 charList에 붙입니다.
         await LoadCharacterListFromJSON();
         await RegisterAlreadyDownloadedDlcPrefabsAsync();
+        if (PrefabDataLocal.Instance != null)
+        {
+            PrefabDataLocal.Instance.RegisterAllPrefabsToCharList();
+        }
 
         // InitCharacter 호출해서 첫 번째 캐릭터를 생성
         InitCharacter();

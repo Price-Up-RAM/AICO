@@ -33,13 +33,11 @@ public class JarvisServerManager : MonoBehaviour
     // InstallStatusManager에서 호출할 초기화 함수
     public void InitializeForLiteOrFull()
     {
-#if !UNITY_EDITOR
         UnityEngine.Debug.Log("[Jarvis] InitializeForLiteOrFull() called");
         if (SettingManager.Instance.settings.isStartServerOnInit)
         {
             RunJarvisServerWithCheck();
         }
-#endif
     }
 
     public void RunJarvisServerWithCheck()

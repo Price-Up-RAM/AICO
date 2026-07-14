@@ -135,7 +135,7 @@ public class ClickHandler : MonoBehaviour, IPointerClickHandler
             if (string.IsNullOrEmpty(ServerManager.Instance.baseUrl))
             {
                 // 앱 실행 후 15초가 지나야만 실행 (Server 실행중일 수 있음)
-                if (Time.time <= 15f) return;
+                if (Time.time <= 3f) return;  // 초기 프로그램 구동시간만 고려해서 대폭축소
                 // 기존 시나리오 실행중일 경우 return
                 if (StatusManager.Instance.isScenario) return;
 

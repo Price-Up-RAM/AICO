@@ -96,6 +96,8 @@ public class ApiGeminiMultiClient : MonoBehaviour
 
     void Awake()
     {
+        modelName = "gemma-4-31b-it";
+
         // 씬에 여러 개가 생겼을 때는 먼저 생성된 것을 사용합니다.
         if (instance == null)
         {
