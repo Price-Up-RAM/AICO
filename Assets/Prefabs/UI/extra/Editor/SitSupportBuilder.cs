@@ -72,7 +72,7 @@ public static class SitSupportBuilder
 
             SitSupportScript script = root.AddComponent<SitSupportScript>();
 
-            GameObject panel = CreateUIObject("Panel", root.transform, new Vector2(16f, -16f), new Vector2(380f, 740f));
+            GameObject panel = CreateUIObject("Panel", root.transform, new Vector2(16f, -16f), new Vector2(380f, 840f));
             panel.AddComponent<Image>().color = PanelColor;
             script.panel = panel;
 
@@ -129,9 +129,21 @@ public static class SitSupportBuilder
             script.yawMinusButton = CreateButton(panel.transform, "YawMinusButton", "각도 -15°", new Vector2(14f, -612f), new Vector2(172f, 32f), font, out unused);
             script.yawPlusButton = CreateButton(panel.transform, "YawPlusButton", "각도 +15°", new Vector2(196f, -612f), new Vector2(170f, 32f), font, out unused);
 
-            script.logButton = CreateButton(panel.transform, "LogButton", "값 로그", new Vector2(14f, -650f), new Vector2(172f, 32f), font, out unused);
-            script.saveButton = CreateButton(panel.transform, "SaveButton", "데이터 저장", new Vector2(196f, -650f), new Vector2(170f, 32f), font, out unused);
-            script.resetButton = CreateButton(panel.transform, "ResetButton", "리셋 (시작값 복원)", new Vector2(14f, -688f), new Vector2(352f, 32f), font, out unused);
+            // 시점 프리셋 — 책상 배치(위치/각도/전체 크기) 저장 슬롯 3개
+            CreateText(panel.transform, "ViewHeader", "시점 (책상 배치 프리셋)", 20f,
+                new Vector2(14f, -650f), new Vector2(352f, 22f), font, HeaderColor, TextAlignmentOptions.Left);
+            script.viewApplyButtons = new Button[3];
+            script.viewApplyButtons[0] = CreateButton(panel.transform, "ViewApply1", "시점 1", new Vector2(14f, -676f), new Vector2(112f, 34f), font, out unused);
+            script.viewApplyButtons[1] = CreateButton(panel.transform, "ViewApply2", "시점 2", new Vector2(134f, -676f), new Vector2(112f, 34f), font, out unused);
+            script.viewApplyButtons[2] = CreateButton(panel.transform, "ViewApply3", "시점 3", new Vector2(254f, -676f), new Vector2(112f, 34f), font, out unused);
+            script.viewSaveButtons = new Button[3];
+            script.viewSaveButtons[0] = CreateButton(panel.transform, "ViewSave1", "저장 1", new Vector2(14f, -716f), new Vector2(112f, 34f), font, out unused);
+            script.viewSaveButtons[1] = CreateButton(panel.transform, "ViewSave2", "저장 2", new Vector2(134f, -716f), new Vector2(112f, 34f), font, out unused);
+            script.viewSaveButtons[2] = CreateButton(panel.transform, "ViewSave3", "저장 3", new Vector2(254f, -716f), new Vector2(112f, 34f), font, out unused);
+
+            script.logButton = CreateButton(panel.transform, "LogButton", "값 로그", new Vector2(14f, -756f), new Vector2(172f, 32f), font, out unused);
+            script.saveButton = CreateButton(panel.transform, "SaveButton", "데이터 저장", new Vector2(196f, -756f), new Vector2(170f, 32f), font, out unused);
+            script.resetButton = CreateButton(panel.transform, "ResetButton", "리셋 (시작값 복원)", new Vector2(14f, -794f), new Vector2(352f, 32f), font, out unused);
 
             panel.SetActive(false); // 기본 숨김 — 본편은 Dev 메뉴로, 데모는 씬 오버라이드로 켠다
 

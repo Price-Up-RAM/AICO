@@ -25,6 +25,35 @@ public class ChillSitData : ScriptableObject
     public Vector3 deskRotationOffset = new Vector3(0f, 40.423f, 0f);
     public float deskScaleMultiplier = 250f;
 
+    // 시점 프리셋: 책상 배치(위치/각도/전체 크기)의 저장 슬롯. 캐릭터 무관.
+    // 데모/본편에서 "시점 1~3" 버튼으로 저장·전환한다 (ChillModeManager.Save/ApplyViewPreset).
+    [System.Serializable]
+    public class ViewPreset
+    {
+        public bool isSet;  // 저장된 적 있는 슬롯인지
+        public Vector3 deskPositionOffset;
+        public Vector3 deskRotationOffset;
+        public float deskScaleMultiplier = 250f;
+    }
+
+    [Header("시점 프리셋 (책상 배치 저장 슬롯)")]
+    public List<ViewPreset> viewPresets = new List<ViewPreset>();
+
+    public ViewPreset GetViewPreset(int index)
+    {
+        return (index >= 0 && index < viewPresets.Count) ? viewPresets[index] : null;
+    }
+
+    public ViewPreset GetOrCreateViewPreset(int index)
+    {
+        if (index < 0) return null;
+        while (viewPresets.Count <= index)
+        {
+            viewPresets.Add(new ViewPreset());
+        }
+        return viewPresets[index];
+    }
+
     // charcode에 해당하는 오프셋 반환, 없으면 defaultOffset 반환
     public CharacterSitOffset GetOffset(string charcode)
     {

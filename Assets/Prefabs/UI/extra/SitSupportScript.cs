@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -62,6 +63,10 @@ public class SitSupportScript : MonoBehaviour
     public Button frontViewButton;
     public Button yawMinusButton;
     public Button yawPlusButton;
+
+    [Header("UI - 시점 프리셋")]
+    public Button[] viewApplyButtons; // 시점 1~3 전환
+    public Button[] viewSaveButtons;  // 현재 책상 배치를 슬롯에 저장
 
     [Header("UI - 기타")]
     public Button logButton;
@@ -130,6 +135,29 @@ public class SitSupportScript : MonoBehaviour
         HookSlider(deskXSlider, OnDeskAnchorChanged);
         HookSlider(deskYSlider, OnDeskAnchorChanged);
         HookSlider(deskScaleSlider, OnDeskScaleChanged);
+
+        if (viewApplyButtons != null)
+        {
+            for (int i = 0; i < viewApplyButtons.Length; i++)
+            {
+                int index = i; // 클로저 캡처용 복사
+                if (viewApplyButtons[i] != null)
+                {
+                    viewApplyButtons[i].onClick.AddListener(() => ApplyViewPreset(index));
+                }
+            }
+        }
+        if (viewSaveButtons != null)
+        {
+            for (int i = 0; i < viewSaveButtons.Length; i++)
+            {
+                int index = i; // 클로저 캡처용 복사
+                if (viewSaveButtons[i] != null)
+                {
+                    viewSaveButtons[i].onClick.AddListener(() => SaveViewPresetSlot(index));
+                }
+            }
+        }
 
         TryCaptureBaseline();
         RefreshAllFromData();
@@ -254,6 +282,7 @@ public class SitSupportScript : MonoBehaviour
             SyncDeskSliders();
             UpdateAngleLabel();
         }
+        RefreshViewPresetButtons();
         UpdateEnterLabel();
     }
 
@@ -496,6 +525,7 @@ public class SitSupportScript : MonoBehaviour
     {
         RefreshDeskLabels();
         if (_syncingUI || Manager == null) return;
+        if (Manager.IsViewTransitioning) return; // 전환 중 스테일 앵커로 덮어쓰기 방지
         if (deskXSlider != null) _seatAnchor.x = deskXSlider.value;
         if (deskYSlider != null) _seatAnchor.y = deskYSlider.value;
         ApplyDeskPose();
@@ -505,6 +535,7 @@ public class SitSupportScript : MonoBehaviour
     {
         RefreshDeskLabels();
         if (_syncingUI || Manager == null) return;
+        if (Manager.IsViewTransitioning) return; // 전환 중 스테일 앵커로 덮어쓰기 방지
         if (deskScaleSlider != null) Manager.deskScaleMultiplier = deskScaleSlider.value;
         ApplyDeskPose(); // 앵커 고정 확대/축소 (책상+캐릭터 함께)
     }
@@ -512,6 +543,7 @@ public class SitSupportScript : MonoBehaviour
     private void AddDeskYaw(float delta)
     {
         if (Manager == null || !Manager.IsChillMode) return;
+        if (Manager.IsViewTransitioning) return; // 전환 중 스테일 앵커로 덮어쓰기 방지 (턴테이블 경유 포함)
         Vector3 rot = Manager.deskRotationOffset;
         rot.y += delta;
         Manager.deskRotationOffset = rot;
@@ -561,6 +593,61 @@ public class SitSupportScript : MonoBehaviour
     {
         if (angleValueLabel == null || Manager == null) return;
         angleValueLabel.text = Mathf.RoundToInt(NormalizeAngle(Manager.deskRotationOffset.y)) + "°";
+    }
+
+    // ---------------------------------------------------------------- 시점 프리셋
+
+    private Coroutine _viewSyncCoroutine; // 전환 후 동기 코루틴 (연타 시 이전 것 정지)
+
+    /// <summary>시점 슬롯의 책상 배치로 전환 — ChillModeManager가 시트 고정 부드러운 전환을 수행.</summary>
+    private void ApplyViewPreset(int index)
+    {
+        if (Manager == null) return;
+        // 턴테이블이 돌고 있으면 전환과 충돌하므로 정지
+        _turntable = false;
+        if (turntableButtonLabel != null) turntableButtonLabel.text = "턴테이블";
+
+        if (Manager.ApplyViewPreset(index))
+        {
+            if (_viewSyncCoroutine != null) StopCoroutine(_viewSyncCoroutine);
+            _viewSyncCoroutine = StartCoroutine(SyncDeskAfterTransition());
+        }
+    }
+
+    /// <summary>현재 책상 배치를 시점 슬롯에 저장 (디스크 저장은 [데이터 저장]).</summary>
+    private void SaveViewPresetSlot(int index)
+    {
+        if (Manager == null) return;
+        Manager.SaveViewPreset(index);
+        RefreshViewPresetButtons();
+    }
+
+    /// <summary>빈 슬롯의 전환 버튼은 비활성(회색) 처리. 데이터 자체가 없으면 전부 비활성.</summary>
+    private void RefreshViewPresetButtons()
+    {
+        if (viewApplyButtons == null) return;
+        bool available = SitData != null;
+        for (int i = 0; i < viewApplyButtons.Length; i++)
+        {
+            if (viewApplyButtons[i] == null) continue;
+            ChillSitData.ViewPreset preset = available ? SitData.GetViewPreset(i) : null;
+            viewApplyButtons[i].interactable = available && preset != null && preset.isSet;
+        }
+    }
+
+    /// <summary>전환 완료를 폴링해 끝난 즉시 앵커/슬라이더를 최종 배치값과 재동기 (시간 갭 없음).</summary>
+    private IEnumerator SyncDeskAfterTransition()
+    {
+        yield return null; // 최소 1프레임 (즉시 적용 경로 포함)
+        while (Manager != null && Manager.IsViewTransitioning)
+        {
+            yield return null;
+        }
+        _viewSyncCoroutine = null;
+        if (Manager == null) yield break;
+        _seatAnchor = ComputeSeatAnchor();
+        SyncDeskSliders();
+        UpdateAngleLabel();
     }
 
     // ---------------------------------------------------------------- 리셋

@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using MagicaCloth2;
 
@@ -34,6 +35,13 @@ public class ChillModeManager : MonoBehaviour
     public string lookAroundTriggerName = "LookAround";  // SitLookAround 재생용 트리거 파라미터 이름
     public float lookAroundMinInterval = 8f;  // 최소 대기 시간(초)
     public float lookAroundMaxInterval = 20f;  // 최대 대기 시간(초)
+
+    [Header("시점 전환")]
+    public float viewTransitionSeconds = 0.5f;  // 시점 프리셋 전환 시간 (0이면 즉시)
+
+    public bool IsViewTransitioning { get { return viewTransitionCoroutine != null; } }  // UI가 전환 중 입력을 잠그는 데 사용
+
+    private Coroutine viewTransitionCoroutine;  // 진행 중인 시점 전환 (중복 실행 방지)
 
     [Header("에디터 튜닝")]
     public bool applyOffsetEveryFrame = true;  // 인스펙터에서 값 바꿀 때 즉시 확인용, UI 연동 시에는 꺼두고 Set 함수로 1회씩 적용
@@ -430,6 +438,104 @@ public class ChillModeManager : MonoBehaviour
         deskRotationOffset = rotationOffset;
         deskScaleMultiplier = scaleMultiplier;
 
+        ApplyDeskOffset();
+    }
+
+    // ---------------------------------------------------------------- 시점 프리셋 (책상 배치 저장 슬롯)
+
+    // 현재 책상 배치(위치/각도/전체 크기)를 시점 슬롯에 저장 (SO 인메모리 — 디스크 저장은 SitSupport [데이터 저장])
+    public void SaveViewPreset(int index)
+    {
+        if (chillSitData == null) return;
+        ChillSitData.ViewPreset preset = chillSitData.GetOrCreateViewPreset(index);
+        if (preset == null) return;
+        preset.isSet = true;
+        preset.deskPositionOffset = deskPositionOffset;
+        preset.deskRotationOffset = deskRotationOffset;
+        preset.deskScaleMultiplier = deskScaleMultiplier;
+        Debug.Log($"[ChillMode] 시점 {index + 1} 저장: pos={deskPositionOffset:F1} rot={deskRotationOffset:F1} scale={deskScaleMultiplier:0.#}");
+    }
+
+    // 시점 슬롯의 책상 배치로 전환. 착석 중이면 시트(착석 지점)를 고정점으로 부드럽게 전환하고,
+    // 비착석/전환시간 0이면 값만 즉시 반영(다음 착석 때 적용). 빈 슬롯이면 false.
+    public bool ApplyViewPreset(int index)
+    {
+        if (chillSitData == null) return false;
+        ChillSitData.ViewPreset preset = chillSitData.GetViewPreset(index);
+        if (preset == null || !preset.isSet)
+        {
+            Debug.Log($"[ChillMode] 시점 {index + 1}이 비어 있습니다. 먼저 저장하세요.");
+            return false;
+        }
+
+        if (viewTransitionCoroutine != null)
+        {
+            StopCoroutine(viewTransitionCoroutine);
+            viewTransitionCoroutine = null;
+        }
+
+        if (!isChillMode || viewTransitionSeconds <= 0f)
+        {
+            SetDeskPose(preset.deskPositionOffset, preset.deskRotationOffset, preset.deskScaleMultiplier);
+            return true;
+        }
+
+        viewTransitionCoroutine = StartCoroutine(TransitionToViewPreset(preset));
+        return true;
+    }
+
+    // 시트(착석 캐릭터)를 고정점으로 유지하며 현재 배치 → 프리셋 배치로 보간.
+    // 캐릭터는 제자리(앵커 사이를 직선 이동)에 머물고 책상이 주위로 회전/확대되는 "시점 전환" 연출.
+    private IEnumerator TransitionToViewPreset(ChillSitData.ViewPreset preset)
+    {
+        // 시트의 데스크 로컬 좌표 — 전환 동안 의자 오프셋은 불변이므로 상수
+        bool hasSeat = chairSeatPoint != null && deskSetRoot != null;
+        Vector3 seatLocal = hasSeat ? deskSetRoot.InverseTransformPoint(chairSeatPoint.position) : Vector3.zero;
+
+        Vector3 pos0 = deskPositionOffset;
+        Quaternion rot0 = Quaternion.Euler(deskRotationOffset);
+        float scale0 = deskScaleMultiplier;
+        Quaternion rot1 = Quaternion.Euler(preset.deskRotationOffset);
+        float scale1 = preset.deskScaleMultiplier;
+
+        // 시트 앵커(시트가 놓이는 좌표) 기준으로 보간해야 중간 프레임에서 캐릭터가 흘러다니지 않는다
+        Vector3 anchor0 = pos0 + rot0 * (seatLocal * scale0);
+        Vector3 anchor1 = preset.deskPositionOffset + rot1 * (seatLocal * scale1);
+
+        float elapsed = 0f;
+        while (elapsed < viewTransitionSeconds)
+        {
+            if (!isChillMode) break; // 전환 중 기립하면 중단하고 최종값만 남긴다
+
+            elapsed += Time.deltaTime;
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / viewTransitionSeconds));
+            Quaternion rot = Quaternion.Slerp(rot0, rot1, t);
+            float scale = Mathf.Lerp(scale0, scale1, t);
+            Vector3 anchor = Vector3.Lerp(anchor0, anchor1, t);
+            Vector3 pos = hasSeat
+                ? anchor - rot * (seatLocal * scale)
+                : Vector3.Lerp(pos0, preset.deskPositionOffset, t);
+            SetDeskPose(pos, rot.eulerAngles, scale);
+            yield return null;
+        }
+
+        // 종료 시 프리셋 값으로 정확히 스냅 (보간 오차/오일러 표현 차이 제거)
+        SetDeskPose(preset.deskPositionOffset, preset.deskRotationOffset, preset.deskScaleMultiplier);
+        viewTransitionCoroutine = null;
+    }
+
+    // 책상 배치 일괄 갱신 — 단일 출처인 ChillSitData도 함께 동기
+    private void SetDeskPose(Vector3 positionOffset, Vector3 rotationOffset, float scaleMultiplier)
+    {
+        deskPositionOffset = positionOffset;
+        deskRotationOffset = rotationOffset;
+        deskScaleMultiplier = scaleMultiplier;
+        if (chillSitData != null)
+        {
+            chillSitData.deskPositionOffset = positionOffset;
+            chillSitData.deskRotationOffset = rotationOffset;
+            chillSitData.deskScaleMultiplier = scaleMultiplier;
+        }
         ApplyDeskOffset();
     }
 

@@ -447,7 +447,7 @@ public class InventoryView : MonoBehaviour
                         return;
                     }
 
-                    manager.MoveStack(InventorySystemManager.MainOwnerId, slotIndex, charcode, -1);
+                    MoveWithAmountPrompt(manager, InventorySystemManager.MainOwnerId, slotIndex, charcode, -1, $"'{key}' 이동 수량");
                 }
             });
         }
@@ -464,12 +464,48 @@ public class InventoryView : MonoBehaviour
                         return;
                     }
 
-                    manager.MoveStack(charcode, slotIndex, InventorySystemManager.MainOwnerId, -1);
+                    MoveWithAmountPrompt(manager, charcode, slotIndex, InventorySystemManager.MainOwnerId, -1, $"'{key}' 이동 수량");
                 }
             });
         }
 
         InventoryMenu.Show(RootCanvas(), screenPos, entries, MenuFont());
+    }
+
+    // 크로스 스토어 이동 공통: 1개면 즉시 이동, 여러 개면 수량 선택 모달(기본값 전량) 후 확정 수량만 이동.
+    // 모달이 뜬 사이 스택이 변해도 MoveStackAmount가 현재 수량으로 클램프한다.
+    private void MoveWithAmountPrompt(InventorySystemManager manager, string fromOwner, int fromSlot, string toOwner, int toSlot, string title)
+    {
+        InvStore store;
+        if (fromOwner == InventorySystemManager.MainOwnerId)
+        {
+            store = manager.GetMainStore();
+        }
+        else
+        {
+            store = manager.GetCharStore(fromOwner);
+        }
+        if (store == null)
+        {
+            return;
+        }
+
+        InvItemStack stack = store.FindBySlot(fromSlot);
+        if (stack == null)
+        {
+            return;
+        }
+
+        if (stack.count <= 1)
+        {
+            manager.MoveStack(fromOwner, fromSlot, toOwner, toSlot);
+            return;
+        }
+
+        InventoryConfirmView.Show(RootCanvas(), title, stack.count, MenuFont(), n =>
+        {
+            manager.MoveStackAmount(fromOwner, fromSlot, toOwner, toSlot, n);
+        });
     }
 
     // 상세 팝업 열기 (이름/설명/수량/분류)
@@ -524,7 +560,15 @@ public class InventoryView : MonoBehaviour
                 return;
             }
 
-            manager.MoveStack(fromOwner, fromSlot, toOwner, targetCell.SlotIndex);
+            if (toOwner == fromOwner)
+            {
+                // 같은 스토어 = 배치(이동/스왑/병합) — 수량 질의 없음
+                manager.MoveStack(fromOwner, fromSlot, toOwner, targetCell.SlotIndex);
+            }
+            else
+            {
+                MoveWithAmountPrompt(manager, fromOwner, fromSlot, toOwner, targetCell.SlotIndex, $"'{key}' 이동 수량");
+            }
             return;
         }
 
@@ -543,7 +587,7 @@ public class InventoryView : MonoBehaviour
                 return;
             }
 
-            manager.MoveStack(fromOwner, fromSlot, toOwner, -1);
+            MoveWithAmountPrompt(manager, fromOwner, fromSlot, toOwner, -1, $"'{key}' 이동 수량");
             return;
         }
 
@@ -555,7 +599,7 @@ public class InventoryView : MonoBehaviour
 
         if (section == InventorySection.Main)
         {
-            // MAIN → 캐릭터: 스택 통째 이동 + (장착 가능하면) 즉시 장착
+            // MAIN → 캐릭터: 장착 의도가 명확하므로 1개만 이동 + (장착 가능하면) 즉시 장착 (수량 질의 없음)
             string charcode = manager.ActiveCharcode;
             if (string.IsNullOrEmpty(charcode))
             {
@@ -563,7 +607,7 @@ public class InventoryView : MonoBehaviour
                 return;
             }
 
-            if (manager.MoveStack(fromOwner, fromSlot, charcode, -1))
+            if (manager.MoveMainToChar(charcode, key, 1))
             {
                 if (manager.IsEquippable(key))
                 {

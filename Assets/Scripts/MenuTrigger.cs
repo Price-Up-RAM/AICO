@@ -159,6 +159,33 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 
     작업 후 OperatorMenuTrigger.TriggerMenu에 복제 (복제영역 확인 잘 할 것)
     */
+
+    // 포모도로 자세 항목 생성 — 시점 프리셋(ChillSitData.viewPresets) 슬롯이 저장돼 있을 때만 활성.
+    // 클릭 시: 포모도로 모드 진입(이미 모드면 유지) 후 해당 시점으로 전환(착석 중이면 부드러운 전환).
+    private (string, UnityAction) BuildPomodoroPoseItem(int presetIndex, string targetLang)
+    {
+        string label = LanguageData.Translate("Pomodoro Pose " + (presetIndex + 1), targetLang);
+
+        ChillSitData sitData = ChillModeManager.Instance != null ? ChillModeManager.Instance.chillSitData : null;
+        ChillSitData.ViewPreset preset = sitData != null ? sitData.GetViewPreset(presetIndex) : null;
+        if (ChatModeManager.Instance == null || preset == null || !preset.isSet)
+        {
+            return (label, null); // 회색 글씨 (빈 슬롯 — SitSupport에서 [저장 n] 필요)
+        }
+
+        return (label, (UnityAction)(() =>
+        {
+            if (!ChatModeManager.Instance.IsPomodoroMode())
+            {
+                ChatModeManager.Instance.SetMode(ChatMode.Pomodoro);
+            }
+            if (ChatModeManager.Instance.IsPomodoroMode())
+            {
+                ChillModeManager.Instance.ApplyViewPreset(presetIndex);
+            }
+        }));
+    }
+
     private void TriggerMenu()
     {
         this.m_ContextMenu.Clear();
@@ -238,6 +265,7 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         });
 
         // Mode - 대화 모드 전환 (일반/포모도로/오퍼레이터). 현재 모드는 회색 표시.
+        // 포모도로 자세 1~3 = 시점 프리셋(ChillSitData.viewPresets) 슬롯으로 착석 — 빈 슬롯은 회색.
         ChatMode currentChatMode = ChatModeManager.Instance != null ? ChatModeManager.Instance.CurrentMode : ChatMode.Chat;
         m_ContextMenu.AddSubMenuItem(LanguageData.Translate("Mode", targetLang), new List<(string, UnityAction)>
         {
@@ -251,6 +279,9 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
                 ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Pomodoro); })
                 : null  // 회색 글씨 (현재 모드)
             ),
+            BuildPomodoroPoseItem(0, targetLang),
+            BuildPomodoroPoseItem(1, targetLang),
+            BuildPomodoroPoseItem(2, targetLang),
             (LanguageData.Translate("OPERATOR MODE", targetLang),
                 currentChatMode != ChatMode.Operator
                 ? (UnityAction)(() => { ChatModeManager.Instance.SetMode(ChatMode.Operator); })

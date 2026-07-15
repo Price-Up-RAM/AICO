@@ -2,6 +2,22 @@
 
 앉아서 같이 포모도로 하는 시스템. 오피스 리소스(Desk_Set)는 Synty Polygon Office 발췌.
 
+## 시점 프리셋 (2026-07-15)
+
+- **ChillSitData.viewPresets**: 책상 배치(deskPositionOffset/RotationOffset/ScaleMultiplier)의 저장
+  슬롯 리스트(시점 1~3, 캐릭터 무관). [데이터 저장]으로 디스크 영속.
+- **ChillModeManager**: `SaveViewPreset(i)` = 현재 배치를 슬롯에 기록,
+  `ApplyViewPreset(i)` = 슬롯 배치로 전환. 착석 중이면 **시트(착석 캐릭터)를 고정점으로
+  0.5초(viewTransitionSeconds) 부드럽게 보간** — 캐릭터는 제자리(앵커 직선 이동), 책상이 주위로
+  회전/확대되는 시점 전환 연출. 비착석이면 값만 반영(다음 착석 때 적용). 빈 슬롯은 false.
+  `IsViewTransitioning`으로 UI가 전환 중 책상 입력을 잠근다(스테일 앵커 덮어쓰기 방지).
+- **SitSupport 패널**: "시점" 섹션 — [시점 1~3](빈 슬롯 회색) + [저장 1~3]. 적용 시 턴테이블 자동
+  정지, 전환 완료를 폴링해 즉시 슬라이더/앵커 재동기.
+- 본편 활용: 트리거/코드에서 `ChillModeManager.Instance.ApplyViewPreset(n)` 호출만 하면 됨.
+- **메뉴 진입**: 우클릭 Mode 서브메뉴에 **포모도로 자세 1~3** 항목(빈 슬롯 회색) — 클릭 시 포모도로
+  모드 진입 후 해당 시점 적용, 이미 모드 중이면 재착석 없이 시점만 부드럽게 전환.
+  (MenuTrigger.BuildPomodoroPoseItem, OperatorMenuTrigger에 복제)
+
 ## Pomodoro 모드 (본편 통합 — 2026-07-13)
 
 - **ChatMode.Pomodoro** 추가 (`ChatModeManager`): 진입 = ChillModeManager.EnterChillMode(착석) +
