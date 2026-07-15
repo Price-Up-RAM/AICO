@@ -65,7 +65,7 @@ public class OperatorClickHandler : MonoBehaviour, IPointerClickHandler
 
         // 정상 대화 모드
         StatusManager.Instance.isAnswering = false;
-        VoiceManager.Instance.ResetAudio();
+        TTSManager.Instance.CancelTtsSession();  // 큐+세션 모두 중지
 
         // ChatBalloon 위치를 Operator Portrait로 설정
         if (OperatorManager.Instance.portraitTransform != null)

@@ -23,6 +23,11 @@ public class AIChatSession
     public GameObject targetCharacter;  // 현재 세션의 타겟 캐릭터
     public int chatIdxNum;              // 세션에 할당된 고유 대화 번호
 
+    // 이 스트림이 시작한 TTS 세션 id 스냅샷.
+    // 사용자 정지(CancelTtsSession)나 다른 발화의 세션 시작 이후 도착한 문장은
+    // 이 값과 현재 세션 id가 달라지므로 TTS를 생략한다 (-1 = 미설정, 게이트 없음)
+    public int ttsSessionId = -1;
+
     public AIChatSession(GameObject targetCharacter = null, int chatIdxNum = -1)
     {
         this.targetCharacter = targetCharacter;

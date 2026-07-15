@@ -213,17 +213,18 @@ public class WhisperSTTManager : MonoBehaviour
             // 바로 API 호출
         NoticeBalloonManager.Instance.ModifyNoticeBalloonText(query);
 
+        // 기존 음성 중지 및 초기화 (세션까지 취소 — 새 대화 응답 도착 전 재공급 차단)
+        // 반드시 대화 시작 '전'에 호출 (대화 시작이 동기적으로 새 TTS 세션을 만들 수 있음)
+        TTSManager.Instance.CancelTtsSession();
+
         // 대화 시작 - chatIdx는 string 타입
         APIManager.Instance.CallConversationStream(query, response.chatIdx, response.lang);
 
         // dev : 발언 음성 재생
         if (query != "" && SettingManager.Instance.settings.isDevHowling)
-        { 
+        {
             TTSManager.Instance.GetHowlingFromAPI(query);
         }
-
-        // 기존 음성 중지 및 초기화
-        VoiceManager.Instance.ResetAudio();
         }
     }
 

@@ -82,11 +82,11 @@ public class ClickHandler : MonoBehaviour, IPointerClickHandler
         if (SettingManager.Instance.settings.isShowChatBoxOnClick)
         {
             StatusManager.Instance.isAnswering = false;
-            VoiceManager.Instance.ResetAudio();
+            TTSManager.Instance.CancelTtsSession();  // 큐+세션 모두 중지 (큐만 비우면 남은 문장이 재공급됨)
             ChatBalloonManager.Instance.characterTransform = this.transform.parent.GetComponent<RectTransform>();
             ChatBalloonManager.Instance.clickedCharacter = this.transform.parent.gameObject; // 클릭한 캐릭터 설정
             ChatBalloonManager.Instance.ToggleChatBalloon();
-        }       
+        }
         else
         {
             if (isAnimatorTriggerExists(_animator, "doSpecial"))
@@ -157,7 +157,7 @@ public class ClickHandler : MonoBehaviour, IPointerClickHandler
 
         // 정상 대화.
         StatusManager.Instance.isAnswering = false;
-        VoiceManager.Instance.ResetAudio();
+        TTSManager.Instance.CancelTtsSession();  // 큐+세션 모두 중지
         ChatBalloonManager.Instance.characterTransform = this.transform.parent.GetComponent<RectTransform>();
         ChatBalloonManager.Instance.clickedCharacter = this.transform.parent.gameObject; // 클릭한 캐릭터 설정
         ChatBalloonManager.Instance.ToggleChatBalloon();

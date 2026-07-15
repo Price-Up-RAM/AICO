@@ -50,7 +50,7 @@ public class ScenarioTutorialManager : MonoBehaviour
 
         // 튜토리얼 종료 후 필요한 리셋 작업이 있다면 여기에 추가
         AnswerBalloonSimpleManager.Instance.HideAnswerBalloonSimple();
-        VoiceManager.Instance.StopAudio();
+        TTSManager.Instance.CancelTtsSession();  // 큐+세션 모두 중지 (남은 TTS 문장이 시나리오 위로 재생되는 것 방지)
     }
 
     // 시나리오 선택지 반영 (콜백)
@@ -59,7 +59,7 @@ public class ScenarioTutorialManager : MonoBehaviour
         Debug.Log($"[시나리오 {scenarioId}] 선택지에서 {index}번 선택됨");
 
         AnswerBalloonSimpleManager.Instance.HideAnswerBalloonSimple();
-        VoiceManager.Instance.StopAudio();
+        TTSManager.Instance.CancelTtsSession();  // 큐+세션 모두 중지 (남은 TTS 문장이 시나리오 위로 재생되는 것 방지)
 
         switch (scenarioId)
         {

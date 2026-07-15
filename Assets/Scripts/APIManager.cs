@@ -103,9 +103,9 @@ public class APIManager : MonoBehaviour
     }
 
     // 외부 매니저용: TTS 요청 (TTSManager로 위임)
-    public void RequestTTS(string text, string chatIdx, string soundLanguage, string nickname = null)
+    public void RequestTTS(string text, string chatIdx, string soundLanguage, string nickname = null, bool isSubCharacter = false)
     {
-        TTSManager.Instance.RequestTTS(text, chatIdx, soundLanguage, nickname);
+        TTSManager.Instance.RequestTTS(text, chatIdx, soundLanguage, nickname, isSubCharacter);
     }
 
     #endregion
@@ -184,17 +184,16 @@ public class APIManager : MonoBehaviour
             }
         }
 
-        string resolvedAiLanguage = aiLanguage;
-        if (string.IsNullOrEmpty(resolvedAiLanguage))
+        // 선톡 계약은 언어 필드가 ai_language 하나뿐이라 서버가 보정할 수 없다.
+        // normal/prefer(추론 모드값)·ja 표기 등을 실제 언어코드(ko/jp/en)로 해석해 전송한다.
+        string resolvedAiLanguage = "ko";
+        try
         {
-            try
-            {
-                resolvedAiLanguage = SettingManager.Instance.settings.ai_language ?? "ko";
-            }
-            catch
-            {
-                resolvedAiLanguage = "ko";
-            }
+            resolvedAiLanguage = SettingManager.Instance.ResolveAiLanguageCode(aiLanguage);
+        }
+        catch
+        {
+            resolvedAiLanguage = "ko";
         }
 
         string resolvedChatIdx = (!string.IsNullOrEmpty(chatIdx) && chatIdx != "-1")
@@ -208,6 +207,8 @@ public class APIManager : MonoBehaviour
             List<string> replyListJp = new List<string>();
             List<string> replyListEn = new List<string>();
             bool isResponsedStarted = false;
+            bool ttsSessionStarted = false;      // 이 선톡 스트림에서 TTS 세션을 시작했는지
+            int smallTalkTtsSessionId = -1;      // 시작한 세션 id 스냅샷 (정지/선점 후 도착 문장 TTS 생략용)
 
             string boundary = "----WebKitFormBoundary" + DateTime.Now.Ticks.ToString("x");
             string contentType = "multipart/form-data; boundary=" + boundary;
@@ -264,11 +265,13 @@ public class APIManager : MonoBehaviour
                         // 풍선기준 최신대화여야 함
                         if (curChatIdxNum >= GameManager.Instance.chatIdxBalloon)
                         {
-                            // 최신화 하면서 기존 음성 queue 내용 지워버리기
+                            // 최신화 하면서 TTS 세션 시작 (기존 음성 queue도 정리됨)
                             if (GameManager.Instance.chatIdxBalloon != curChatIdxNum)
                             {
                                 GameManager.Instance.chatIdxBalloon = curChatIdxNum;
-                                VoiceManager.Instance.ResetAudio();
+                                TTSManager.Instance.BeginTtsSession(curChatIdxNum);
+                                smallTalkTtsSessionId = TTSManager.Instance.GetSessionId();
+                                ttsSessionStarted = true;
                             }
 
                             var jsonObject = JObject.Parse(line);
@@ -320,6 +323,17 @@ public class APIManager : MonoBehaviour
                             {
                                 if (!isResponsedStarted)
                                 {
+                                    // 선톡도 자체 TTS 세션을 시작한다.
+                                    // 직전 대화 세션에 seq를 이어붙이면 옛 음성이 뒤늦게 재생되거나(과거 대화 재생)
+                                    // 옛 pending seq에 막혀 선톡 음성이 영영 재생되지 않는다.
+                                    // (선톡은 chatIdx를 재사용하므로 위의 idx 전진 분기로는 세션이 시작되지 않음)
+                                    if (!ttsSessionStarted)
+                                    {
+                                        TTSManager.Instance.BeginTtsSession(curChatIdxNum);
+                                        smallTalkTtsSessionId = TTSManager.Instance.GetSessionId();
+                                        ttsSessionStarted = true;
+                                    }
+
                                     // 생각 중 말풍선 숨기기
                                     AnswerBalloonSimpleManager.Instance.HideAnswerBalloonSimple();
 
@@ -406,7 +420,7 @@ public class APIManager : MonoBehaviour
                                 }
 
                                 // SmallTalk 응답을 ProcessReply로 처리 (지역 session-like 패턴)
-                                ProcessReplySmallTalk(jsonObject, replyListKo, replyListJp, replyListEn);
+                                ProcessReplySmallTalk(jsonObject, replyListKo, replyListJp, replyListEn, smallTalkTtsSessionId);
                             }
                         }
                         else
@@ -437,6 +451,15 @@ public class APIManager : MonoBehaviour
                                  SettingManager.Instance.settings.ui_language == "jp")
                         {
                             smalltalkText = string.Join(" ", replyListJp);
+                        }
+
+                        // 표시언어 슬롯이 비면(번역 실패 시 빈값 계약) 비어있지 않은 언어로 폴백
+                        // — 미설정 시 다음 대화에서 AI가 자기 선톡을 기억하지 못하는 문맥 소실 방지
+                        if (string.IsNullOrEmpty(smalltalkText))
+                        {
+                            if (replyListKo.Count > 0) smalltalkText = string.Join(" ", replyListKo);
+                            else if (replyListJp.Count > 0) smalltalkText = string.Join(" ", replyListJp);
+                            else if (replyListEn.Count > 0) smalltalkText = string.Join(" ", replyListEn);
                         }
 
                         if (!string.IsNullOrEmpty(smalltalkText))
@@ -996,9 +1019,19 @@ public class APIManager : MonoBehaviour
             // 음성 API 호출 (TTSManager로 위임)
             if (answerVoice != null)
             {
-                string soundLang = SettingManager.Instance.settings.sound_language;
-                string nickname = session.targetCharacter != null ? CharManager.Instance.GetNickname(session.targetCharacter) : null;
-                TTSManager.Instance.RequestTTS(answerVoice, chatIdx, soundLang, nickname);
+                // 사용자 정지(CancelTtsSession)나 다른 발화의 세션 시작 이후 도착한 문장은 발화하지 않음
+                if (session.ttsSessionId >= 0 && session.ttsSessionId != TTSManager.Instance.GetSessionId())
+                {
+                    Debug.Log("[TTS] Skip TTS: stream session superseded");
+                }
+                else
+                {
+                    string soundLang = SettingManager.Instance.settings.sound_language;
+                    string nickname = session.targetCharacter != null ? CharManager.Instance.GetNickname(session.targetCharacter) : null;
+                    // 서브 캐릭터 발화는 서브 경로(전용 wav 파일·SubVoiceManager)로 재생 (GeminiDirect 경로와 동일 기준)
+                    bool isSubCharacter = session.targetCharacter != null && session.targetCharacter != CharManager.Instance.GetCurrentCharacter();
+                    TTSManager.Instance.RequestTTS(answerVoice, chatIdx, soundLang, nickname, isSubCharacter);
+                }
             }
         }
     }
@@ -1038,6 +1071,7 @@ public class APIManager : MonoBehaviour
         // 원문 기록 및 TTS 세션 시작
         AddQueryOrigin(session.chatIdxNum, session.query_origin);
         TTSManager.Instance.BeginTtsSession(chatIdxNum);
+        session.ttsSessionId = TTSManager.Instance.GetSessionId();
 
         // 전송시작 말풍선
         NoticeManager.Instance.ShowNoticeEmotionBalloon("Time");
@@ -1281,7 +1315,7 @@ public class APIManager : MonoBehaviour
     }
 
     // SmallTalk 전용 ProcessReply (지역 replyList 버전)
-    private void ProcessReplySmallTalk(JObject jsonObject, List<string> replyListKo, List<string> replyListJp, List<string> replyListEn)
+    private void ProcessReplySmallTalk(JObject jsonObject, List<string> replyListKo, List<string> replyListJp, List<string> replyListEn, int ttsSessionId = -1)
     {
         // SmallTalk은 chatIdx 체크 없이 단순 누적
         JToken replyToken = jsonObject["reply_list"];
@@ -1338,8 +1372,16 @@ public class APIManager : MonoBehaviour
 
         if (answerVoice != null)
         {
-            string soundLang = SettingManager.Instance.settings.sound_language;
-            TTSManager.Instance.RequestTTS(answerVoice, chatIdx, soundLang, null);
+            // 사용자 정지(CancelTtsSession)나 다른 발화의 세션 시작 이후 도착한 문장은 발화하지 않음
+            if (ttsSessionId >= 0 && ttsSessionId != TTSManager.Instance.GetSessionId())
+            {
+                Debug.Log("[TTS] Skip SmallTalk TTS: stream session superseded");
+            }
+            else
+            {
+                string soundLang = SettingManager.Instance.settings.sound_language;
+                TTSManager.Instance.RequestTTS(answerVoice, chatIdx, soundLang, null);
+            }
         }
     }
 
@@ -1397,14 +1439,20 @@ public class APIManager : MonoBehaviour
         {
             // 언어 설정 가져오기
             string uiLang = SettingManager.Instance.settings.ui_language ?? "ko";
-            string aiLang = SettingManager.Instance.settings.ai_language ?? "ko";
             string soundLang = SettingManager.Instance.settings.sound_language ?? "ko";
 
-            // UI 번역 필요 여부 (ai_lang != ui_lang이면 UI 번역 필요)
-            bool needUiTranslation = (aiLang != uiLang);
-            
-            // TTS 번역 필요 여부 (ai_lang != sound_lang이면 TTS 번역 필요)
-            bool needTtsTranslation = (aiLang != soundLang);
+            // 모델 출력 언어: 응답의 ai_language_out 우선, 없으면 설정 해석값.
+            // settings.ai_language 원시값은 normal/prefer일 수 있어 그대로 비교하면
+            // 같은 언어끼리도 항상 재번역(ko→ko 등)을 타게 된다.
+            string aiLang = !string.IsNullOrEmpty(session.ai_language_out)
+                ? session.ai_language_out
+                : SettingManager.Instance.ResolveAiLanguageCode();
+
+            // UI 번역 필요 여부 (jp/ja 표기 혼용을 정규화해 비교)
+            bool needUiTranslation = !SettingManager.IsSameLangCode(aiLang, uiLang);
+
+            // TTS 번역 필요 여부
+            bool needTtsTranslation = !SettingManager.IsSameLangCode(aiLang, soundLang);
 
             foreach (var reply in replyToken)
             {
@@ -1424,11 +1472,19 @@ public class APIManager : MonoBehaviour
                 if (string.IsNullOrEmpty(answerOriginal))
                     continue;
 
-                // --- 0. seq 선할당 (번역 전에 순서 확정) ---
-                int seq = TTSManager.Instance.RegisterTtsRequest(answerOriginal);
-                int capturedSessionId = TTSManager.Instance.GetSessionId();
+                // 사용자 정지(CancelTtsSession)나 다른 발화의 세션 시작 이후 도착한 문장은 TTS 생략
+                // (생략해도 말풍선 텍스트 누적은 계속한다)
+                bool ttsAllowed = session.ttsSessionId < 0 || session.ttsSessionId == TTSManager.Instance.GetSessionId();
 
-                Debug.Log($"[TTS_Flow] 1.문장성립 seq={seq} text='{answerOriginal.Substring(0, Math.Min(30, answerOriginal.Length))}...'");
+                // --- 0. seq 선할당 (번역 전에 순서 확정) ---
+                int seq = -1;
+                int capturedSessionId = -1;
+                if (ttsAllowed)
+                {
+                    seq = TTSManager.Instance.RegisterTtsRequest(answerOriginal);
+                    capturedSessionId = TTSManager.Instance.GetSessionId();
+                    Debug.Log($"[TTS_Flow] 1.문장성립 seq={seq} text='{answerOriginal.Substring(0, Math.Min(30, answerOriginal.Length))}...'");
+                }
 
                 // --- 1. UI 표시 (번역 필요 시 번역) ---
                 string answerUi = answerOriginal;
@@ -1511,7 +1567,11 @@ public class APIManager : MonoBehaviour
                 string answerVoice = answerOriginal;
 
                 // UI 번역과 TTS 번역의 목표 언어가 같으면 중복 번역 방지
-                if (needUiTranslation && needTtsTranslation && uiLang == soundLang)
+                if (!ttsAllowed)
+                {
+                    // TTS 생략 문장은 TTS용 번역도 생략
+                }
+                else if (needUiTranslation && needTtsTranslation && uiLang == soundLang)
                 {
                     // UI 번역 결과 재사용
                     answerVoice = answerUi;
@@ -1536,20 +1596,30 @@ public class APIManager : MonoBehaviour
                     }
                 }
 
-                Debug.Log($"[TTS_Flow] 2.번역종료 seq={seq} voice='{answerVoice.Substring(0, Math.Min(20, answerVoice.Length))}...'");
-
-                // --- 3. TTS 요청 (선할당된 seq 사용) ---
-                TTSManager.Instance.MarkTtsInFlight(seq, answerVoice);
-                string nickname = session.targetCharacter != null ? CharManager.Instance.GetNickname(session.targetCharacter) : null;
-                bool isSubCharacter = session.targetCharacter != null && session.targetCharacter != CharManager.Instance.GetCurrentCharacter();
-
-                if (soundLang == "ko" || soundLang == "en")
+                // 번역 await 사이에 세션이 바뀌었을 수 있으므로 디스패치 직전 재확인
+                if (ttsAllowed && capturedSessionId != TTSManager.Instance.GetSessionId())
                 {
-                    TTSManager.Instance.GetKoWavFromAPI(answerVoice, chatIdx, seq, capturedSessionId, nickname, isSubCharacter);
+                    ttsAllowed = false;
+                    Debug.Log($"[TTS] Skip TTS dispatch seq={seq}: session changed during translation");
                 }
-                else // jp, ja
+
+                if (ttsAllowed)
                 {
-                    TTSManager.Instance.GetJpWavFromAPI(answerVoice, chatIdx, seq, capturedSessionId, nickname, isSubCharacter);
+                    Debug.Log($"[TTS_Flow] 2.번역종료 seq={seq} voice='{answerVoice.Substring(0, Math.Min(20, answerVoice.Length))}...'");
+
+                    // --- 3. TTS 요청 (선할당된 seq 사용) ---
+                    TTSManager.Instance.MarkTtsInFlight(seq, answerVoice);
+                    string nickname = session.targetCharacter != null ? CharManager.Instance.GetNickname(session.targetCharacter) : null;
+                    bool isSubCharacter = session.targetCharacter != null && session.targetCharacter != CharManager.Instance.GetCurrentCharacter();
+
+                    if (soundLang == "ko" || soundLang == "en")
+                    {
+                        TTSManager.Instance.GetKoWavFromAPI(answerVoice, chatIdx, seq, capturedSessionId, nickname, isSubCharacter);
+                    }
+                    else // jp, ja
+                    {
+                        TTSManager.Instance.GetJpWavFromAPI(answerVoice, chatIdx, seq, capturedSessionId, nickname, isSubCharacter);
+                    }
                 }
             }
         }
@@ -1714,6 +1784,7 @@ public class APIManager : MonoBehaviour
                 {
                     string line;
                     string currentMemoryType = "conversation"; // 응답 타입 추적
+                    bool ttsSessionStartedForStream = false;   // 이 스트림에서 TTS 세션을 시작했는지
 
                     // SmallTalk 연관성 판단 결과 저장
                     string latestIntentSmallTalkAnswer = "off";
@@ -1728,11 +1799,19 @@ public class APIManager : MonoBehaviour
                                 // 풍선기준 최신대화여야 함
                                 if (curChatIdxNum >= GameManager.Instance.chatIdxBalloon)
                                 {
-                                    // 최신화 하면서 TTS 세션 시작 (기존 음성 queue도 정리됨)
+                                    // 풍선 idx 최신화
                                     if (GameManager.Instance.chatIdxBalloon != curChatIdxNum)
                                     {
                                         GameManager.Instance.chatIdxBalloon = curChatIdxNum;
+                                    }
+                                    // TTS 세션은 스트림당 1회 무조건 새로 시작.
+                                    // 풍선 idx가 이미 같아도(직전 선톡이 같은 idx를 선점/재생성 직후 등)
+                                    // 직전 세션에 이어붙지 않도록 idx 비교와 분리한다.
+                                    if (!ttsSessionStartedForStream)
+                                    {
                                         TTSManager.Instance.BeginTtsSession(curChatIdxNum);
+                                        session.ttsSessionId = TTSManager.Instance.GetSessionId();
+                                        ttsSessionStartedForStream = true;
                                     }
 
                                     var jsonObject = JObject.Parse(line);
@@ -2527,6 +2606,7 @@ public class APIManager : MonoBehaviour
         
         // TTS 세션 시작 (GeminiDirect는 FetchStreamingData를 거치지 않으므로 여기서 수행)
         TTSManager.Instance.BeginTtsSession(chatIdxNum);
+        session.ttsSessionId = TTSManager.Instance.GetSessionId();
         
         // 전송시작 말풍선
         NoticeManager.Instance.ShowNoticeEmotionBalloon("Time");
@@ -2534,7 +2614,9 @@ public class APIManager : MonoBehaviour
         // 변수 할당 시 targetCharacter는 위에서 이미 가져옴
         string nickname = CharManager.Instance.GetNickname(targetCharacter);
         string player_name = SettingManager.Instance.settings.player_name;
-        string ai_language = SettingManager.Instance.settings.ai_language ?? "";
+        // GeminiDirect는 이 값을 프롬프트 언어 분기와 응답 ai_language_out에 그대로 쓴다.
+        // normal/prefer 원시값이 넘어가면 영어 프롬프트로 폴백되므로 실제 언어코드로 해석해 전달.
+        string ai_language = SettingManager.Instance.ResolveAiLanguageCode();
         string ai_language_in = ai_lang_in;  // stt 에서 가져온 언어 있으면 사용
         string ai_language_out = SettingManager.Instance.settings.ai_language_out ?? "";
 

@@ -64,9 +64,9 @@ public class PortraitClickHandler : MonoBehaviour, IPointerClickHandler
         if (SettingManager.Instance.settings.isShowChatBoxOnClick)
         {
             StatusManager.Instance.isAnswering = false;
-            VoiceManager.Instance.ResetAudio();
+            TTSManager.Instance.CancelTtsSession();  // 큐+세션 모두 중지
             ChatBalloonManager.Instance.ToggleChatBalloon();
-        }       
+        }
         else
         {
             

@@ -697,9 +697,19 @@ public class APIAroPlaManager : MonoBehaviour
         
         // 캐릭터별 닉네임 설정 (아로나/프라나 각각의 음성 생성)
         string characterNickname = GetCharacterNickname(speaker);
-        
+
+        // 현재 메인 캐릭터가 아닌 발화는 서브 경로(전용 wav·SubVoiceManager)로 재생
+        // (isSubCharacter 없이 보내면 메인과 같은 파일/큐를 써서 음성이 덮이고 메인 입이 움직임)
+        bool isSubCharacter = false;
+        try
+        {
+            string mainNickname = CharManager.Instance.GetNickname(CharManager.Instance.GetCurrentCharacter());
+            isSubCharacter = !string.IsNullOrEmpty(characterNickname) && characterNickname != mainNickname;
+        }
+        catch { }
+
         // 세션 기반 TTS 요청
-        APIManager.Instance.RequestTTS(message, chatIdx, soundLang, characterNickname);
+        APIManager.Instance.RequestTTS(message, chatIdx, soundLang, characterNickname, isSubCharacter);
         
         LogToFile($"Voice generation requested for {speaker} (nickname: {characterNickname}): {message}");
     }

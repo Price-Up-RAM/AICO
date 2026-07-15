@@ -27,9 +27,10 @@ public class SubVoiceManager : MonoBehaviour
     }
 
     
-    private List<AudioSource> audioSources = new List<AudioSource>();  // 여러 개의 AudioSource를 관리할 수 있는 리스트    
-    public int maxAudioSources = 20;  // 최대 동시에 재생 가능한 AudioSource 수 (상한선)    
+    private List<AudioSource> audioSources = new List<AudioSource>();  // 여러 개의 AudioSource를 관리할 수 있는 리스트
+    public int maxAudioSources = 20;  // 최대 동시에 재생 가능한 AudioSource 수 (상한선)
     private int initialAudioSourceCount = 5;  // 초기 AudioSource 개수
+    private int pendingLoadCount = 0;  // 로드 코루틴 진행 수 (로드 중엔 isPlaying=false라 busy 판정 공백이 생기는 것 방지)
 
     void Start()
     {
@@ -82,31 +83,39 @@ public class SubVoiceManager : MonoBehaviour
             yield break;
         }
 
-        using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(audioPath, AudioType.OGGVORBIS))
+        pendingLoadCount++;
+        try
         {
-            yield return uwr.SendWebRequest(); // 요청 전송
-
-            if (uwr.result == UnityWebRequest.Result.ConnectionError || uwr.result == UnityWebRequest.Result.ProtocolError)
+            using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(audioPath, AudioType.OGGVORBIS))
             {
-                Debug.Log("오디오 로드 실패: " + uwr.error);
-            }
-            else
-            {
-                AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr); // 오디오 클립 가져오기
-                availableSource.clip = clip;
-                availableSource.volume = 1f; // 기본 볼륨
+                yield return uwr.SendWebRequest(); // 요청 전송
 
-                try
+                if (uwr.result == UnityWebRequest.Result.ConnectionError || uwr.result == UnityWebRequest.Result.ProtocolError)
                 {
-                    availableSource.volume = SettingManager.Instance.settings.sound_volumeMaster / 100;
+                    Debug.Log("오디오 로드 실패: " + uwr.error);
                 }
-                catch
+                else
                 {
-                    Debug.Log("오디오 볼륨 변경 오류");
-                }
+                    AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr); // 오디오 클립 가져오기
+                    availableSource.clip = clip;
+                    availableSource.volume = 1f; // 기본 볼륨
 
-                availableSource.Play(); // 오디오 재생
+                    try
+                    {
+                        availableSource.volume = SettingManager.Instance.settings.sound_volumeMaster / 100;
+                    }
+                    catch
+                    {
+                        Debug.Log("오디오 볼륨 변경 오류");
+                    }
+
+                    availableSource.Play(); // 오디오 재생
+                }
             }
+        }
+        finally
+        {
+            pendingLoadCount--;
         }
     }
 
@@ -121,30 +130,56 @@ public class SubVoiceManager : MonoBehaviour
             yield break;
         }
 
-        using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(audioPath, AudioType.WAV))
+        pendingLoadCount++;
+        try
         {
-            yield return uwr.SendWebRequest(); // 요청 전송
+            using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(audioPath, AudioType.WAV))
+            {
+                yield return uwr.SendWebRequest(); // 요청 전송
 
-            if (uwr.result == UnityWebRequest.Result.ConnectionError || uwr.result == UnityWebRequest.Result.ProtocolError)
-            {
-                Debug.LogError("오디오 로드 실패: " + uwr.error);
-            }
-            else
-            {
-                AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr); // 오디오 클립 가져오기
-                availableSource.clip = clip;
-                availableSource.volume = 1f; // 100%
-                try
+                if (uwr.result == UnityWebRequest.Result.ConnectionError || uwr.result == UnityWebRequest.Result.ProtocolError)
                 {
-                    availableSource.volume = SettingManager.Instance.settings.sound_volumeMaster / 100;
+                    Debug.LogError("오디오 로드 실패: " + uwr.error);
                 }
-                catch
+                else
                 {
-                    Debug.Log("wav volume change error");
+                    AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr); // 오디오 클립 가져오기
+                    availableSource.clip = clip;
+                    availableSource.volume = 1f; // 100%
+                    try
+                    {
+                        availableSource.volume = SettingManager.Instance.settings.sound_volumeMaster / 100;
+                    }
+                    catch
+                    {
+                        Debug.Log("wav volume change error");
+                    }
+                    availableSource.Play(); // 오디오 재생
                 }
-                availableSource.Play(); // 오디오 재생
             }
         }
+        finally
+        {
+            pendingLoadCount--;
+        }
+    }
+
+    // 하나라도 재생 중이거나 로드 중인 AudioSource가 있는지 (TTS 파이프라인 busy 판정용)
+    // 로드 공백 프레임(isPlaying=false) 동안 겹침 게이트가 뚫리지 않도록 pendingLoadCount 포함
+    public bool IsAnyPlaying()
+    {
+        if (pendingLoadCount > 0)
+        {
+            return true;
+        }
+        foreach (var audioSource in audioSources)
+        {
+            if (audioSource.isPlaying)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // 현재 재생 중인 AudioSource의 AudioClip을 반환

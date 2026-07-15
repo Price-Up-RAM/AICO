@@ -159,7 +159,7 @@ public class SettingManager : MonoBehaviour
         public string ui_language;
         public int operator_type_idx;  // 0 : ARONA, 1: Plana
         public string operator_type;
-        public int ai_language_idx;  // 0 : ko, 1 : jp, 2: en
+        public int ai_language_idx;  // 0 : normal, 1 : prefer, 2 : ko, 3 : jp, 4 : en (getAiLangFromIdx와 동일 매핑)
         public string ai_language_in;
         public string ai_language_out;
         public int ai_voice_filter_idx;  // 0 : None, 1 : Skip AI Voice, 2 : User Voice Only
@@ -903,6 +903,68 @@ public class SettingManager : MonoBehaviour
         return lang;
     }
 
+    // ai_language 값 → 드롭다운 idx (getAiLangFromIdx의 역방향; 미지 값은 -1)
+    private int getAiLangIdxFromValue(string lang)
+    {
+        switch ((lang ?? "").Trim().ToLowerInvariant())
+        {
+            case "normal": return 0;
+            case "prefer": return 1;
+            case "ko": return 2;
+            case "jp":
+            case "ja": return 3;
+            case "en": return 4;
+            default: return -1;
+        }
+    }
+
+    // 언어코드 정규화: ko/en은 그대로, ja/jp는 'jp'로 통일, 그 외(normal/prefer 등 비언어 값)는 null
+    private static string NormalizeLangCode(string lang)
+    {
+        if (string.IsNullOrEmpty(lang))
+        {
+            return null;
+        }
+        string lower = lang.Trim().ToLowerInvariant();
+        if (lower == "ko" || lower == "en")
+        {
+            return lower;
+        }
+        if (lower == "jp" || lower == "ja")
+        {
+            return "jp";
+        }
+        return null;
+    }
+
+    // 두 언어코드가 같은 언어인지 (ja/jp 표기 혼용 허용, 비언어 값은 항상 false)
+    public static bool IsSameLangCode(string langA, string langB)
+    {
+        string a = NormalizeLangCode(langA);
+        string b = NormalizeLangCode(langB);
+        return a != null && a == b;
+    }
+
+    // ai_language 설정을 실제 언어코드(ko/jp/en)로 해석한다.
+    // normal/prefer(추론 모드값)는 언어코드가 아니므로 UI 언어로, 최종적으로 ko로 폴백.
+    // 언어 필드를 하나만 받는 경로(선톡 /conversation/small_talk, GeminiDirect) 전용 —
+    // /conversation_stream은 normal/prefer를 서버가 직접 해석하므로 원시값을 그대로 보낼 것.
+    public string ResolveAiLanguageCode(string preferred = null)
+    {
+        string norm = NormalizeLangCode(preferred);
+        if (norm != null)
+        {
+            return norm;
+        }
+        norm = NormalizeLangCode(settings != null ? settings.ai_language : null);
+        if (norm != null)
+        {
+            return norm;
+        }
+        norm = NormalizeLangCode(settings != null ? settings.ui_language : null);
+        return norm ?? "ko";
+    }
+
     private async Task<int> getAiEmotionFilterScenarioAsync(int value)
     {
         // DEV MODE 일경우 로그 출력 후 value return
@@ -1275,6 +1337,23 @@ public class SettingManager : MonoBehaviour
         }
         Debug.Log("LoadSettings End");
 
+        // ai_language 값-idx 정합화: 구버전 저장파일의 모순 치유
+        // (구 기본값 버그: idx=2('한국어')+"en", 또는 옛 매핑 시절의 idx).
+        // 실제로 전송·동작해 온 값(ai_language)을 진실로 보고 idx를 값에 맞춘다 — 동작 불변, 표시만 교정.
+        int reconciledAiLangIdx = getAiLangIdxFromValue(settings.ai_language);
+        if (reconciledAiLangIdx >= 0)
+        {
+            if (settings.ai_language == "ja")
+            {
+                settings.ai_language = "jp";  // 표기 통일
+            }
+            if (settings.ai_language_idx != reconciledAiLangIdx)
+            {
+                Debug.Log($"[SettingManager] ai_language idx 정합화: idx {settings.ai_language_idx} → {reconciledAiLangIdx} (value='{settings.ai_language}')");
+                settings.ai_language_idx = reconciledAiLangIdx;
+            }
+        }
+
         // 로딩 후 Dev 값 초기화
         settings.isDevMode = false;
         settings.isDevSound = false;
@@ -1505,8 +1584,24 @@ public class SettingManager : MonoBehaviour
         }
         settings.operator_type_idx = 0;
         settings.operator_type = "ARONA";
-        settings.ai_language_idx = 2;
-        settings.ai_language = "en";
+        // ai_language 기본값: 시스템 언어와 일치시키고 idx-값 정합 유지
+        // (기존 idx=2('한국어' 슬롯) + "en" 조합은 자기모순 — 드롭다운 표시와 실제 전송값이 달랐음)
+        switch (systemLang)
+        {
+            case "jp":
+                settings.ai_language_idx = 3;
+                settings.ai_language = "jp";
+                break;
+            case "en":
+                settings.ai_language_idx = 4;
+                settings.ai_language = "en";
+                break;
+            case "ko":
+            default:
+                settings.ai_language_idx = 2;
+                settings.ai_language = "ko";
+                break;
+        }
         settings.ai_language_in = systemLang;  // 시스템 언어에 맞춰 설정
         settings.ai_language_out = systemLang;  // 시스템 언어에 맞춰 설정
         settings.ai_voice_filter_idx = 1;  // Skip AI Voice

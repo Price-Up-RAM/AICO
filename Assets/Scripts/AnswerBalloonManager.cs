@@ -139,6 +139,14 @@ public class AnswerBalloonManager : MonoBehaviour
             displayText = textJp;
         }
 
+        // 표시언어 답변이 비어있으면(번역 스킵/실패 시 빈값 계약) 비어있지 않은 언어로 폴백
+        if (string.IsNullOrEmpty(displayText))
+        {
+            if (!string.IsNullOrEmpty(textKo)) displayText = textKo;
+            else if (!string.IsNullOrEmpty(textJp)) displayText = textJp;
+            else if (!string.IsNullOrEmpty(textEn)) displayText = textEn;
+        }
+
         // Operator 모드일 경우 PortraitBalloonSimpleManager로 라우팅
         if (ChatModeManager.Instance.IsOperatorMode())
         {
@@ -200,8 +208,8 @@ public class AnswerBalloonManager : MonoBehaviour
     // 대화 재생성
     public void ChatRegenerate()
     {
-        // 기존 음성 중지 및 초기화
-        VoiceManager.Instance.ResetAudio();
+        // 기존 음성 중지 및 초기화 (세션까지 취소 — 새 대화 세션 시작 전 재공급 차단)
+        TTSManager.Instance.CancelTtsSession();
 
         string input = APIManager.Instance.GetQueryOrigin(GameManager.Instance.chatIdx);
         GameManager.Instance.chatIdx += 1;

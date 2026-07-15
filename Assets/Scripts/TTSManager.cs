@@ -16,6 +16,7 @@ public class TTSManager : MonoBehaviour
     // TTS 세션 관리
     private SessionDataTTS ttsSession = new SessionDataTTS();
     private int globalSessionId = 0;
+    private bool lastConsumedSeqWasSub = false;  // 직전에 소비한 seq가 서브 발화였는지 (메인-서브 겹침 방지용)
 
     #region Unity Lifecycle
 
@@ -45,8 +46,32 @@ public class TTSManager : MonoBehaviour
     {
         globalSessionId++;
         ttsSession.Reset(globalSessionId, chatIdxNum);
+        lastConsumedSeqWasSub = false;
         VoiceManager.Instance.ResetAudio();
+        CleanupStaleWavFiles();
         // Session start log removed - not needed for flow tracking
+    }
+
+    // 사용자 중지 제스처(클릭/드래그/재생성/음성입력 시작 등)용:
+    // 진행 중 TTS 세션을 무효화하고 재생 큐까지 비운다.
+    // 큐만 비우면(ResetAudio) 세션에 남은 ready seq가 다음 프레임에 다시 공급되어 멈춘 발화가 재개된다.
+    public void CancelTtsSession()
+    {
+        BeginTtsSession(ttsSession.chatIdxNum);
+    }
+
+    // 이전 세션들의 seq별 wav 파일 정리 (사용 중이라 삭제 실패한 파일은 다음 세션 시작 시 재시도)
+    private void CleanupStaleWavFiles()
+    {
+        try
+        {
+            string dir = Application.persistentDataPath;
+            foreach (string path in Directory.GetFiles(dir, "response_*.wav"))
+            {
+                try { File.Delete(path); } catch { }
+            }
+        }
+        catch { }
     }
 
     // 문장을 등록하고 seq를 할당 (번역 전에 호출하여 순서 확정)
@@ -70,7 +95,12 @@ public class TTSManager : MonoBehaviour
         if (ttsSession.stateBySeq != null && ttsSession.stateBySeq.ContainsKey(seq))
         {
             ttsSession.textBySeq[seq] = translatedText;
-            ttsSession.stateBySeq[seq] = "in_flight";
+            // 이미 skipped(타임아웃)된 seq를 in_flight로 되돌리면 늦은 wav 도착 시
+            // 복구(MarkTtsReady의 되감기)가 무력화되므로 pending일 때만 전이한다
+            if (ttsSession.stateBySeq[seq] == "pending")
+            {
+                ttsSession.stateBySeq[seq] = "in_flight";
+            }
             Debug.Log($"[TTS_Flow] 3.TTS요청 seq={seq} len={translatedText.Length}");
         }
     }
@@ -96,12 +126,26 @@ public class TTSManager : MonoBehaviour
         
         if (state == "ready")
         {
+            // 서브 캐릭터 발화는 큐가 없어 즉시 재생되므로,
+            // 앞 문장이 아직 재생 중이면 유휴해질 때까지 소비를 미룬다 (메인/서브 음성 겹침 방지)
+            bool isSubSeq = ttsSession.isSubBySeq.ContainsKey(seq) && ttsSession.isSubBySeq[seq];
+            if (isSubSeq && IsPlaybackPipelineBusy())
+            {
+                return;
+            }
+            // 직전 소비가 서브 발화였고 아직 재생 중이면 메인 문장도 대기 (반대 방향 겹침 방지)
+            if (!isSubSeq && lastConsumedSeqWasSub && SubVoiceManager.Instance != null && SubVoiceManager.Instance.IsAnyPlaying())
+            {
+                return;
+            }
+
             // 재생 큐에 삽입
             EnqueueWavData(ttsSession.wavBySeq[seq], seq);
+            lastConsumedSeqWasSub = isSubSeq;
             ttsSession.stateBySeq[seq] = "played";
             Debug.Log($"[TTS_Flow] 4.TTS수락 seq={seq} → 재생큐 추가");
             ttsSession.nextSeqToPlay++;
-            
+
             // 다음 seq의 타임아웃 카운트 시작 (이 시점부터 2초)
             int nextSeq = seq + 1;
             if (ttsSession.stateBySeq.ContainsKey(nextSeq) && !ttsSession.waitStartTimeBySeq.ContainsKey(nextSeq))
@@ -135,23 +179,32 @@ public class TTSManager : MonoBehaviour
                 // 첫 문장 대기 중 (타임아웃 없음)
                 return;
             }
-            
-            // seq=1+ 는 이전 seq가 처리된 후부터 2초 대기
-            if (!ttsSession.waitStartTimeBySeq.ContainsKey(seq))
+
+            // 앞 문장이 아직 재생/로딩 중이면 대기 시각을 계속 뒤로 밀어,
+            // 재생이 끝나 유휴해진 시점부터 2초를 센다.
+            // (큐 삽입 시점 기준으로 세면 앞 문장이 2초보다 길기만 해도 뒷문장이 전부 스킵됨)
+            if (IsPlaybackPipelineBusy())
             {
-                // 아직 이전 seq가 처리되지 않았으면 대기 시작하지 않음
+                ttsSession.waitStartTimeBySeq[seq] = Time.time;
                 return;
             }
-            
+
+            // seq=1+ 는 파이프라인 유휴 진입 후부터 2초 대기 (미기록이면 지금부터)
+            if (!ttsSession.waitStartTimeBySeq.ContainsKey(seq))
+            {
+                ttsSession.waitStartTimeBySeq[seq] = Time.time;
+                return;
+            }
+
             float elapsed = Time.time - ttsSession.waitStartTimeBySeq[seq];
-            
+
             if (elapsed > 2f)
             {
                 // 2초 타임아웃
                 ttsSession.stateBySeq[seq] = "skipped";
                 Debug.Log($"[TTS_Flow] 4.TTS스킵 seq={seq} reason=timeout ({elapsed:F2}s)");
                 ttsSession.nextSeqToPlay++;
-                
+
                 // 다음 seq의 타임아웃 카운트 시작
                 int nextSeq = seq + 1;
                 if (ttsSession.stateBySeq.ContainsKey(nextSeq) && !ttsSession.waitStartTimeBySeq.ContainsKey(nextSeq))
@@ -163,16 +216,62 @@ public class TTSManager : MonoBehaviour
         }
     }
 
+    // 재생 파이프라인이 아직 소비 중인지 (메인 재생/큐/로딩 + 서브 캐릭터 발화)
+    private bool IsPlaybackPipelineBusy()
+    {
+        if (VoiceManager.Instance.IsPlaybackBusy())
+        {
+            return true;
+        }
+        SubVoiceManager sub = SubVoiceManager.Instance;
+        return sub != null && sub.IsAnyPlaying();
+    }
+
+    // TTS 응답 wav를 세션에 반영. 타임아웃으로 지나친(skipped) seq라도
+    // 그 뒤 문장이 아직 하나도 재생되지 않았다면 되돌아가 재생한다 (순서 보존 복구).
+    private void MarkTtsReady(int seq, byte[] wavData)
+    {
+        if (ttsSession.stateBySeq == null)
+        {
+            return;
+        }
+
+        string prevState = ttsSession.stateBySeq.ContainsKey(seq) ? ttsSession.stateBySeq[seq] : null;
+        ttsSession.wavBySeq[seq] = wavData;
+        ttsSession.stateBySeq[seq] = "ready";
+        Debug.Log($"[TTS] TTS ready seq={seq} bytes={wavData.Length}");
+
+        if (prevState == "skipped" && ttsSession.nextSeqToPlay > seq)
+        {
+            bool anyPlayedAfter = false;
+            for (int s = seq + 1; s < ttsSession.nextSeqToPlay; s++)
+            {
+                if (ttsSession.stateBySeq.ContainsKey(s) && ttsSession.stateBySeq[s] == "played")
+                {
+                    anyPlayedAfter = true;
+                    break;
+                }
+            }
+            if (!anyPlayedAfter)
+            {
+                ttsSession.nextSeqToPlay = seq;
+                Debug.Log($"[TTS_Flow] 4.TTS복구 seq={seq} (skipped→ready, 재생 복귀)");
+            }
+        }
+    }
+
     // WAV 데이터를 파일로 저장하고 VoiceManager 큐에 추가
     private void EnqueueWavData(byte[] wavData, int seq)
     {
-        string filePath = Path.Combine(Application.persistentDataPath, "response.wav");
         bool isSubCharacter = ttsSession.isSubBySeq.ContainsKey(seq) && ttsSession.isSubBySeq[seq];
-        
-        if (isSubCharacter)
-        {
-            filePath = Path.Combine(Application.persistentDataPath, "response_sub.wav");
-        }
+
+        // 세션+seq별 고유 파일명. 고정 파일(response.wav) 하나에 덮어쓰면
+        // 연속 ready 시 로드 코루틴이 다음 문장 데이터를 읽어 중복 재생/문장 소실이 나고,
+        // 세션 리셋 경계에서 옛 클립이 새 큐에 유입된다. (스테일 파일은 BeginTtsSession에서 일괄 정리)
+        string fileName = isSubCharacter
+            ? $"response_sub_{ttsSession.sessionId}_{seq}.wav"
+            : $"response_{ttsSession.sessionId}_{seq}.wav";
+        string filePath = Path.Combine(Application.persistentDataPath, fileName);
 
         try
         {
@@ -188,7 +287,7 @@ public class TTSManager : MonoBehaviour
             }
             else
             {
-                VoiceManager.Instance.LoadAudioWavToQueue();
+                VoiceManager.Instance.LoadAudioWavToQueue(filePath, ttsSession.sessionId);
             }
         }
         catch (IOException e)
@@ -208,7 +307,7 @@ public class TTSManager : MonoBehaviour
     }
 
     // 외부 매니저용: TTS 요청 등록 및 호출
-    public void RequestTTS(string text, string chatIdx, string soundLanguage, string nickname = null)
+    public void RequestTTS(string text, string chatIdx, string soundLanguage, string nickname = null, bool isSubCharacter = false)
     {
         if (ttsSession.stateBySeq == null)
         {
@@ -216,23 +315,23 @@ public class TTSManager : MonoBehaviour
             int chatIdxNum = int.TryParse(chatIdx, out var idx) ? idx : 0;
             BeginTtsSession(chatIdxNum);
         }
-        
+
         int seq = RegisterTtsRequest(text);
         MarkTtsInFlight(seq, text);
         int capturedSessionId = ttsSession.sessionId;
-        
+
         if (soundLanguage == "ko" || soundLanguage == "en")
         {
-            GetKoWavFromAPI(text, chatIdx, seq, capturedSessionId, nickname);
+            GetKoWavFromAPI(text, chatIdx, seq, capturedSessionId, nickname, isSubCharacter);
         }
         else if (soundLanguage == "jp" || soundLanguage == "ja")
         {
-            GetJpWavFromAPI(text, chatIdx, seq, capturedSessionId, nickname);
+            GetJpWavFromAPI(text, chatIdx, seq, capturedSessionId, nickname, isSubCharacter);
         }
         else
         {
             // 기본값: 일본어
-            GetJpWavFromAPI(text, chatIdx, seq, capturedSessionId, nickname);
+            GetJpWavFromAPI(text, chatIdx, seq, capturedSessionId, nickname, isSubCharacter);
         }
     }
 
@@ -242,11 +341,12 @@ public class TTSManager : MonoBehaviour
 
     public async void GetKoWavFromAPI(string text, string chatIdx, int seq, int capturedSessionId, string nickname = null, bool isSubCharacter = false)
     {
-        if (ttsSession.stateBySeq != null)
+        // 세션이 바뀐 뒤 도착한 스테일 호출이 새 세션의 동일 seq 플래그를 덮지 않도록 가드
+        if (ttsSession.stateBySeq != null && capturedSessionId == ttsSession.sessionId)
         {
             ttsSession.isSubBySeq[seq] = isSubCharacter;
         }
-        
+
         Debug.Log($"[TTS] TTS start seq={seq} lang=ko");
         
         // baseUrl을 비동기로 가져오기
@@ -356,9 +456,10 @@ public class TTSManager : MonoBehaviour
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
                     // 헤더에서 Chat-Idx 값을 가져와, 현재 대화보다 과거일 경우에는 queue에 넣지 않음
+                    // (헤더 누락/비정상 값은 예외로 문장을 잃는 대신 현재 대화로 간주하고 통과)
                     string chatIdxHeader = response.Headers["Chat-Idx"];
-                    int chatIdxHeaderNum = int.Parse(chatIdxHeader);
-                    if (GameManager.Instance.chatIdxBalloon > chatIdxHeaderNum)
+                    if (int.TryParse(chatIdxHeader, out int chatIdxHeaderNum)
+                        && GameManager.Instance.chatIdxBalloon > chatIdxHeaderNum)
                     {
                         Debug.Log("과거대화 : " + GameManager.Instance.chatIdxBalloon.ToString() + "/" + chatIdxHeaderNum.ToString());
                         if (ttsSession.stateBySeq != null)
@@ -374,14 +475,7 @@ public class TTSManager : MonoBehaviour
                         if (responseStream != null)
                         {
                             byte[] wavData = ReadFully(responseStream);
-                            
-                            // wavBySeq에 저장하고 상태를 ready로 변경
-                            if (ttsSession.stateBySeq != null)
-                            {
-                                ttsSession.wavBySeq[seq] = wavData;
-                                ttsSession.stateBySeq[seq] = "ready";
-                                Debug.Log($"[TTS] TTS ready seq={seq} bytes={wavData.Length}");
-                            }
+                            MarkTtsReady(seq, wavData);
                         }
                     }
                 }
@@ -415,7 +509,8 @@ public class TTSManager : MonoBehaviour
 
     public async void GetJpWavFromAPI(string text, string chatIdx, int seq, int capturedSessionId, string nickname = null, bool isSubCharacter = false)
     {
-        if (ttsSession.stateBySeq != null)
+        // 세션이 바뀐 뒤 도착한 스테일 호출이 새 세션의 동일 seq 플래그를 덮지 않도록 가드
+        if (ttsSession.stateBySeq != null && capturedSessionId == ttsSession.sessionId)
         {
             ttsSession.isSubBySeq[seq] = isSubCharacter;
         }
@@ -530,9 +625,10 @@ public class TTSManager : MonoBehaviour
                     using (Stream responseStream = response.GetResponseStream())
                     {
                         // 헤더에서 Chat-Idx 값을 가져와, 현재 대화보다 과거일 경우에는 queue에 넣지 않음
+                        // (헤더 누락/비정상 값은 예외로 문장을 잃는 대신 현재 대화로 간주하고 통과)
                         string chatIdxHeader = response.Headers["Chat-Idx"];
-                        int chatIdxHeaderNum = int.Parse(chatIdxHeader);
-                        if (GameManager.Instance.chatIdxBalloon > chatIdxHeaderNum)
+                        if (int.TryParse(chatIdxHeader, out int chatIdxHeaderNum)
+                            && GameManager.Instance.chatIdxBalloon > chatIdxHeaderNum)
                         {
                             Debug.Log("과거대화 : " + GameManager.Instance.chatIdxBalloon.ToString() + "/" + chatIdxHeaderNum.ToString());
                             if (ttsSession.stateBySeq != null)
@@ -545,14 +641,7 @@ public class TTSManager : MonoBehaviour
                         if (responseStream != null)
                         {
                             byte[] wavData = ReadFully(responseStream);
-
-                            // wavBySeq에 저장하고 상태를 ready로 변경
-                            if (ttsSession.stateBySeq != null)
-                            {
-                                ttsSession.wavBySeq[seq] = wavData;
-                                ttsSession.stateBySeq[seq] = "ready";
-                                Debug.Log($"[TTS] TTS ready seq={seq} bytes={wavData.Length}");
-                            }
+                            MarkTtsReady(seq, wavData);
                         }
                     }
                 }

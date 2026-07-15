@@ -10,6 +10,7 @@ public class VoiceManager : MonoBehaviour
     private static VoiceManager instance; // 싱글톤 인스턴스
     private Queue<AudioClip> clipQueue = new Queue<AudioClip>(); // AudioClip을 저장하는 Queue
     public bool isQueuePlaying = false;  // 현재 재생 여부를 추적하는 플래그
+    private int pendingLoadCount = 0;    // 큐 적재용 로드 코루틴 진행 수 (busy 판정용)
 
     // VoiceManager 인스턴스에 접근하는 함수
     public static VoiceManager Instance
@@ -204,6 +205,13 @@ public class VoiceManager : MonoBehaviour
 
     public void LoadAudioWavToQueue(string audioPath)
     {
+        LoadAudioWavToQueue(audioPath, -1);
+    }
+
+    // ttsSessionId >= 0 이면 로드 완료 시점에 TTS 세션이 그대로인지 확인 후 큐에 넣는다
+    // (세션 리셋 경계에서 늦게 완료된 로드가 옛 클립을 새 큐에 흘리는 것을 차단)
+    public void LoadAudioWavToQueue(string audioPath, int ttsSessionId)
+    {
         if (string.IsNullOrEmpty(audioPath))
         {
             Debug.LogError("오디오 로드 실패: audioPath가 비어있습니다.");
@@ -213,41 +221,62 @@ public class VoiceManager : MonoBehaviour
         #if UNITY_ANDROID
         // 안드로이드에서 파일 경로가 다를 경우 처리 방식 다르게 적용
         string audioPathAndroid = audioPath.StartsWith("file://") ? audioPath : "file://" + audioPath; // 안드로이드+UnityWebRequest 에서는 "file://" 경로 필요
-        StartCoroutine(LoadAudioWavToQueueEnum(audioPathAndroid));
+        StartCoroutine(LoadAudioWavToQueueEnum(audioPathAndroid, ttsSessionId));
         #else
         // 안드로이드가 아닌 플랫폼에서는 일반적인 파일 경로를 사용
-        StartCoroutine(LoadAudioWavToQueueEnum(audioPath));
+        StartCoroutine(LoadAudioWavToQueueEnum(audioPath, ttsSessionId));
         #endif
     }
 
     // WAV 파일을 로드하고 Queue에 추가하는 코루틴
-    private IEnumerator LoadAudioWavToQueueEnum(string audioPath)
+    private IEnumerator LoadAudioWavToQueueEnum(string audioPath, int ttsSessionId)
     {
-        using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(audioPath, AudioType.WAV))
+        pendingLoadCount++;
+        try
         {
-            yield return uwr.SendWebRequest(); // 요청 전송
+            using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(audioPath, AudioType.WAV))
+            {
+                yield return uwr.SendWebRequest(); // 요청 전송
 
-            if (uwr.result == UnityWebRequest.Result.ConnectionError || uwr.result == UnityWebRequest.Result.ProtocolError)
-            {
-                Debug.LogError("오디오 로드 실패: " + uwr.error);
+                if (uwr.result == UnityWebRequest.Result.ConnectionError || uwr.result == UnityWebRequest.Result.ProtocolError)
+                {
+                    Debug.LogError("오디오 로드 실패: " + uwr.error);
+                }
+                else if (ttsSessionId >= 0 && TTSManager.Instance != null && ttsSessionId != TTSManager.Instance.GetSessionId())
+                {
+                    // 로드 도중 세션이 바뀜 → 옛 대화의 클립이므로 폐기
+                    Debug.Log($"[TTS] Ignore stale clip (session mismatch: {ttsSessionId} != {TTSManager.Instance.GetSessionId()})");
+                }
+                else
+                {
+                    AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr); // 오디오 클립 가져오기
+                    AddToQueue(clip); // 클립을 Queue에 추가
+                }
             }
-            else
-            {
-                AudioClip clip = DownloadHandlerAudioClip.GetContent(uwr); // 오디오 클립 가져오기
-                AddToQueue(clip); // 클립을 Queue에 추가
-            }
+        }
+        finally
+        {
+            pendingLoadCount--;
         }
     }
 
+    // 재생 파이프라인이 소비 중인지 (재생 중 / 큐 대기 / 로드 진행 중)
+    public bool IsPlaybackBusy()
+    {
+        return audioSource.isPlaying || clipQueue.Count > 0 || pendingLoadCount > 0;
+    }
 
-    // 오디오 정지 함수
+
+    // 오디오 정지 함수: 현재 클립 정지 + 대기 큐 폐기
+    // (큐를 남기면 Update의 자동재생이 다음 프레임에 멈춘 발화를 즉시 재개한다)
     public void StopAudio()
     {
+        clipQueue.Clear();
         if (audioSource.isPlaying)
         {
             audioSource.Stop();
-            isQueuePlaying = false;
         }
+        isQueuePlaying = false;
     }
 
     // 현재 재생(세팅)중인 clip 반환

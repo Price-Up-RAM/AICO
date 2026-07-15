@@ -106,6 +106,15 @@ public class GlobalInputVariableManager : MonoBehaviour
         {
             try
             {
+                // 자동(타이머) 선톡과 동일한 가드: 대화·풍선 표시·음성 재생 중에는 건너뜀
+                // (재생 중 발동하면 선톡의 TTS 세션 시작이 진행 중인 답변 음성을 끊는다)
+                if (StatusManager.Instance.IsConversationing || StatusManager.Instance.IsOptioning
+                    || VoiceManager.Instance.IsPlaybackBusy())
+                {
+                    LogToDebug($"[InputStats] SmallTalk Trigger 스킵 - 대화/재생 중 (좌클릭 {leftClickCount})");
+                    return;
+                }
+
                 string purpose = "잡담"; // 기본 목적
                 string chatIdx = GameManager.Instance.chatIdxSuccess?.ToString() ?? "-1";
                 string speaker = CharManager.Instance.GetNickname(CharManager.Instance.GetCurrentCharacter());

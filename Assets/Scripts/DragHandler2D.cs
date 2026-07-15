@@ -38,8 +38,8 @@ public class DragHandler2D : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
         // 기존 애니메이션 정지
         // PhysicsManager.Instance.animator.Play("idle", 0, 0);  // 현재 애니메이션 강제 중지;
 
-        // 기존 음성 초기화
-        VoiceManager.Instance.ResetAudio();
+        // 기존 음성 초기화 (세션까지 취소해 드래그 중 재공급 차단)
+        TTSManager.Instance.CancelTtsSession();
 
         // Pick 상태 전환시의 음성 재생
         Dialogue pick = DialogueManager.Instance.GetRandomPick();

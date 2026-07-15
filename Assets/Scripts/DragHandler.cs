@@ -75,10 +75,10 @@ public class DragHandler : MonoBehaviour, IDragHandler, IBeginDragHandler, IEndD
         // 기존 애니메이션 정지
         PhysicsManager.Instance.animator.Play("idle", 0, 0);  // 현재 애니메이션 강제 중지;
 
-        // 기존 음성 초기화 (메인 캐릭터일 때만)
+        // 기존 음성 초기화 (메인 캐릭터일 때만) — 세션까지 취소해 드래그 중 재공급 차단
         if (IsCurrentMainCharacter())
         {
-            VoiceManager.Instance.ResetAudio();
+            TTSManager.Instance.CancelTtsSession();
         }
 
         // 쓰다듬기 모션이 있을 경우

@@ -32,7 +32,7 @@ public class ScenarioAskManager : MonoBehaviour
 
         // 시나리오 종료 후 필요한 리셋 작업
         AnswerBalloonSimpleManager.Instance.HideAnswerBalloonSimple();
-        VoiceManager.Instance.StopAudio();
+        TTSManager.Instance.CancelTtsSession();  // 큐+세션 모두 중지 (남은 TTS 문장이 시나리오 위로 재생되는 것 방지)
     }
 
     // 시나리오 선택지 반영 (콜백)
@@ -67,7 +67,7 @@ public class ScenarioAskManager : MonoBehaviour
         }
 
         AnswerBalloonSimpleManager.Instance.HideAnswerBalloonSimple();
-        VoiceManager.Instance.StopAudio();
+        TTSManager.Instance.CancelTtsSession();  // 큐+세션 모두 중지 (남은 TTS 문장이 시나리오 위로 재생되는 것 방지)
 
         switch (scenarioId)
         {
