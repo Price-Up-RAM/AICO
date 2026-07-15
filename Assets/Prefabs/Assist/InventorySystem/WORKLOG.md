@@ -62,6 +62,18 @@
   성공 시 해석된 슬롯으로 미러 재구성, 실패(소켓 없음)는 경고 후 **기록 유지**(소켓 저작 후 자연 복원).
 - 앱 배선은 `CharManager.setInventoryVar`가 스폰/전환 3지점에서 `SetActiveOwner` 호출 — 이미 연결됨.
 
+### 이동 수량 선택 (2026-07-15)
+- **크로스 스토어 이동에서 count>1이면 수량 선택 모달**(`InventoryConfirmView` — 코드 런타임 생성,
+  InventoryMenu 관례: 백드롭 클릭=취소, 동시 1개, SUIT-Bold 상속, UI 레이어). **기본값 = 전량**,
+  [−][n/max][+] + [취소][이동], Enter=확정/Esc=취소 (UGUI Submit 이중 발화는 선택 해제+콜백 1회 가드로 차단).
+  Store의 StoreConfirmView와 같은 UX 문법이지만 독립성 원칙에 따라 참조 없이 자체 구현.
+- 진입점: 우클릭 메뉴 "CHAR/MAIN으로 이동", 드래그 크로스-창 드롭(칸/여백) — 공통 헬퍼
+  `MoveWithAmountPrompt`(count==1은 즉시 이동). 같은 창 내 배치(이동/스왑/병합)는 질의 없음.
+- **캐릭터 3D 드롭(MAIN→캐릭터)은 질의 없이 1개만 이동+장착**으로 변경 (기존: 스택 통째 — 장착 의도가 명확).
+- 매니저에 `MoveStackAmount(from, fromSlot, to, toSlot, amount)` 신설: 확정 시점에 현재 수량으로
+  클램프, 전량/같은 스토어면 MoveStack 위임(기존 규칙 그대로), 일부면 스택 분할(병합/빈칸/다른 키 거부,
+  잔량>0이라 장착 해제 불필요, 양쪽 즉시 저장+이벤트).
+
 ### key 규약 — 카탈로그 2개의 관계
 - `InventoryCatalog`(표시 메타)와 `EquipCatalog`(장착 물리정보)는 **같은 key 문자열 공간**을 쓴다.
 - "장착 가능한가"는 런타임에 `EquipCatalog.Contains(key)`로 판정 → 소유만 가능하고 착용 불가한

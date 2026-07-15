@@ -442,6 +442,80 @@ public class InventorySystemManager : MonoBehaviour
 
     // 스택 칸 이동 (드래그 앤 드롭용). 같은 스토어 = 자리 이동/스왑/병합, 다른 스토어 = 통째 이동.
     // toSlot < 0 이면 목적지의 빈 칸에 자동 배치.
+    // 수량 지정 이동 (수량 선택 모달의 단일 진입점): amount를 현재 스택 수량으로 클램프한 뒤
+    // 전량이면 MoveStack에 위임(스왑/병합/장착해제 등 기존 규칙 그대로), 일부면 스택을 분할해 옮긴다.
+    // 부분 이동은 원본에 잔량이 남으므로 장착 해제가 필요 없다. 같은 스토어면 배치 의미라 MoveStack에 위임.
+    public bool MoveStackAmount(string fromOwnerId, int fromSlot, string toOwnerId, int toSlot, int amount)
+    {
+        if (amount <= 0)
+        {
+            return false;
+        }
+
+        InvStore fromStore = GetStore(fromOwnerId);
+        InvStore toStore = GetStore(toOwnerId);
+        if (fromStore == null || toStore == null)
+        {
+            return false;
+        }
+
+        InvItemStack moving = fromStore.FindBySlot(fromSlot);
+        if (moving == null)
+        {
+            return false;
+        }
+
+        // 모달이 뜬 사이 스택이 변했을 수 있다 — 현재 수량으로 클램프
+        if (amount >= moving.count || fromOwnerId == toOwnerId)
+        {
+            return MoveStack(fromOwnerId, fromSlot, toOwnerId, toSlot);
+        }
+
+        // ── 부분 이동 (다른 스토어, amount < count) ──
+        if (toSlot < 0)
+        {
+            toSlot = toStore.FirstFreeSlot();
+        }
+
+        InvItemStack target = toStore.FindBySlot(toSlot);
+        int moved;
+        if (target == null)
+        {
+            InvItemStack piece = new InvItemStack();
+            piece.key = moving.key;
+            piece.count = amount;
+            piece.slot = toSlot;
+            toStore.stacks.Add(piece);
+            moved = amount;
+        }
+        else
+        {
+            if (target.key != moving.key)
+            {
+                Debug.LogWarning($"[InventorySystemManager] 부분 이동 거부(칸이 차 있음): {toStore.ownerId} 칸 {toSlot} = {target.key}");
+                return false;
+            }
+
+            int room = GetMaxStack(moving.key) - target.count;
+            if (room <= 0)
+            {
+                Debug.LogWarning($"[InventorySystemManager] 부분 이동 거부(최대 스택 도달): {moving.key} → {toStore.ownerId} 칸 {toSlot}");
+                return false;
+            }
+
+            moved = Mathf.Min(room, amount);
+            target.count += moved;
+        }
+
+        moving.count -= moved;  // 부분 이동이라 항상 잔량 > 0 — 장착 해제/스택 제거 불필요
+
+        SaveStore(fromStore);
+        SaveStore(toStore);
+        InventoryEvents.OnStoreChanged?.Invoke(fromStore.ownerId);
+        InventoryEvents.OnStoreChanged?.Invoke(toStore.ownerId);
+        return true;
+    }
+
     public bool MoveStack(string fromOwnerId, int fromSlot, string toOwnerId, int toSlot)
     {
         InvStore fromStore = GetStore(fromOwnerId);
