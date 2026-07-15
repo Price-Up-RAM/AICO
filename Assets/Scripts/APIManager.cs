@@ -184,8 +184,8 @@ public class APIManager : MonoBehaviour
             }
         }
 
-        // 선톡 계약은 언어 필드가 ai_language 하나뿐이라 서버가 보정할 수 없다.
-        // normal/prefer(추론 모드값)·ja 표기 등을 실제 언어코드(ko/jp/en)로 해석해 전송한다.
+        // ai_language는 normal/prefer(추론 모드값)·ja 표기 등을 실제 언어코드(ko/jp/en)로 해석해 전송한다.
+        // (선톡 생성 언어·토픽 언어·번역 소스가 전부 이 값 하나로 결정됨)
         string resolvedAiLanguage = "ko";
         try
         {
@@ -194,6 +194,17 @@ public class APIManager : MonoBehaviour
         catch
         {
             resolvedAiLanguage = "ko";
+        }
+
+        // 서버가 번역 스킵 판단에 사용 (conversation과 동일 계약 — 생성 언어와 같으면 타언어 번역 생략)
+        string resolvedSoundLanguage = "";
+        try
+        {
+            resolvedSoundLanguage = SettingManager.Instance.settings.sound_language ?? "";
+        }
+        catch
+        {
+            resolvedSoundLanguage = "";
         }
 
         string resolvedChatIdx = (!string.IsNullOrEmpty(chatIdx) && chatIdx != "-1")
@@ -234,6 +245,7 @@ public class APIManager : MonoBehaviour
                 WriteField("purpose", purpose);
                 WriteField("current_speaker", resolvedSpeaker);
                 WriteField("ai_language", resolvedAiLanguage);
+                WriteField("sound_language", resolvedSoundLanguage);  // 서버가 번역 스킵 판단에 사용
                 WriteField("chatIdx", resolvedChatIdx);
                 WriteField("intent_smalltalk", "on");
 
