@@ -40,7 +40,7 @@ public class ItemSystemManager : MonoBehaviour
         }
     }
 
-    private ItemCatalog itemCatalog;  // 카테고리 레지스트리 (Resources) — 정체·능력의 단일 출처
+    [SerializeField] private ItemCatalog itemCatalog;  // 카테고리 레지스트리 — 인스펙터 지정 우선, 없으면 Resources 폴백. 정체·능력의 단일 출처
 
     private bool warnedNoCatalog;          // 카탈로그 부재 경고 1회 래치 (스팸 방지)
     private bool warnedNoInventorySystem;  // 보관 매니저 부재 경고 1회 래치
@@ -49,15 +49,24 @@ public class ItemSystemManager : MonoBehaviour
     {
         if (_instance != null && _instance != this)
         {
-            Debug.LogWarning("[ItemSystem][ItemSystemManager] 인스턴스가 이미 존재합니다. 중복 매니저를 파괴합니다.");
-            Destroy(gameObject);
+            Debug.LogWarning("[ItemSystem][ItemSystemManager] 인스턴스가 이미 존재합니다. 중복 컴포넌트를 파괴합니다.");
+            // GameObject가 아니라 이 컴포넌트만 파괴 — 한 GO에 매니저 여러 개가 공존하는 배치(ItemManager)에서 연쇄 파괴 방지
+            Destroy(this);
             return;
         }
 
         _instance = this;
-        DontDestroyOnLoad(gameObject);
 
-        itemCatalog = Resources.Load<ItemCatalog>("ItemCatalog");
+        // 씬에서 부모(그룹 노드) 밑에 배치되면 DontDestroyOnLoad가 무효(경고 로그)라 루트일 때만 적용
+        if (transform.parent == null)
+        {
+            DontDestroyOnLoad(gameObject);
+        }
+
+        if (itemCatalog == null)
+        {
+            itemCatalog = Resources.Load<ItemCatalog>("ItemCatalog");
+        }
     }
 
     // ── 마스터 데이터 조회 (Catalog가 null이면 전부 null/false/0 — 경고 1회) ──

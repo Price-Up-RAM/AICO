@@ -31,9 +31,9 @@ public class StoreManager : MonoBehaviour
 
     public event System.Action<string, Sprite> IconReady;  // (key, sprite) — 프리뷰 캡처 완료/리롤 갱신 브로드캐스트
 
-    private StoreCatalog storeCatalog;                     // 태그 레지스트리 (Resources) — 아이콘 소유 카탈로그
-    private StoreDetailPoseCatalog detailPoseCatalog;      // 포즈 키→클립 상세 카탈로그 (Resources)
-    private StoreDetailEffectCatalog detailEffectCatalog;  // 이펙트 키→프리팹 상세 카탈로그 (Resources)
+    [SerializeField] private StoreCatalog storeCatalog;                     // 태그 레지스트리 — 인스펙터 지정 우선, 없으면 Resources 폴백. 아이콘 소유 카탈로그
+    [SerializeField] private StoreDetailPoseCatalog detailPoseCatalog;      // 포즈 키→클립 상세 카탈로그 — 인스펙터 지정 우선, 없으면 Resources 폴백
+    [SerializeField] private StoreDetailEffectCatalog detailEffectCatalog;  // 이펙트 키→프리팹 상세 카탈로그 — 인스펙터 지정 우선, 없으면 Resources 폴백
 
     private readonly Dictionary<string, Sprite> previewCache = new Dictionary<string, Sprite>();  // key→캡처 스프라이트
     private readonly HashSet<string> pendingKeys = new HashSet<string>();  // 캡처 요청 중 (중복 요청 방지)
@@ -66,17 +66,34 @@ public class StoreManager : MonoBehaviour
     {
         if (_instance != null && _instance != this)
         {
-            Debug.LogWarning("[Store][StoreManager] 인스턴스가 이미 존재합니다. 중복 매니저를 파괴합니다.");
-            Destroy(gameObject);
+            Debug.LogWarning("[Store][StoreManager] 인스턴스가 이미 존재합니다. 중복 컴포넌트를 파괴합니다.");
+            // GameObject가 아니라 이 컴포넌트만 파괴 — 한 GO에 매니저 여러 개가 공존하는 배치(ItemManager)에서 연쇄 파괴 방지
+            Destroy(this);
             return;
         }
 
         _instance = this;
-        DontDestroyOnLoad(gameObject);
 
-        storeCatalog = Resources.Load<StoreCatalog>("StoreCatalog");
-        detailPoseCatalog = Resources.Load<StoreDetailPoseCatalog>("StoreDetailPoseCatalog");
-        detailEffectCatalog = Resources.Load<StoreDetailEffectCatalog>("StoreDetailEffectCatalog");
+        // 씬에서 부모(그룹 노드) 밑에 배치되면 DontDestroyOnLoad가 무효(경고 로그)라 루트일 때만 적용
+        if (transform.parent == null)
+        {
+            DontDestroyOnLoad(gameObject);
+        }
+
+        if (storeCatalog == null)
+        {
+            storeCatalog = Resources.Load<StoreCatalog>("StoreCatalog");
+        }
+
+        if (detailPoseCatalog == null)
+        {
+            detailPoseCatalog = Resources.Load<StoreDetailPoseCatalog>("StoreDetailPoseCatalog");
+        }
+
+        if (detailEffectCatalog == null)
+        {
+            detailEffectCatalog = Resources.Load<StoreDetailEffectCatalog>("StoreDetailEffectCatalog");
+        }
     }
 
     // ── 공개 API ──

@@ -85,7 +85,7 @@ public class CurrencyManager : MonoBehaviour
     private const string ChecksumSalt = "AICO.CurrencyManager.v1";  // 체크섬 salt (변경 시 기존 저장 전부 불일치 — 버전 올릴 때만)
 
     private CurrencySaveData data = new CurrencySaveData();
-    private ItemCurrencyCatalog catalog;          // 재화 정의 카탈로그 (Resources)
+    [SerializeField] private ItemCurrencyCatalog catalog;  // 재화 정의 카탈로그 — 인스펙터 지정 우선, 없으면 Resources 폴백
 
     private bool warnedNoCatalog;  // 카탈로그 부재 경고 1회 래치
 
@@ -101,15 +101,25 @@ public class CurrencyManager : MonoBehaviour
     {
         if (_instance != null && _instance != this)
         {
-            Debug.LogWarning("[ItemSystem][CurrencyManager] 인스턴스가 이미 존재합니다. 중복 매니저를 파괴합니다.");
-            Destroy(gameObject);
+            Debug.LogWarning("[ItemSystem][CurrencyManager] 인스턴스가 이미 존재합니다. 중복 컴포넌트를 파괴합니다.");
+            // GameObject가 아니라 이 컴포넌트만 파괴 — 한 GO에 매니저 여러 개가 공존하는 배치(ItemManager)에서 연쇄 파괴 방지
+            Destroy(this);
             return;
         }
 
         _instance = this;
-        DontDestroyOnLoad(gameObject);
 
-        catalog = Resources.Load<ItemCurrencyCatalog>("ItemCurrencyCatalog");
+        // 씬에서 부모(그룹 노드) 밑에 배치되면 DontDestroyOnLoad가 무효(경고 로그)라 루트일 때만 적용
+        if (transform.parent == null)
+        {
+            DontDestroyOnLoad(gameObject);
+        }
+
+        if (catalog == null)
+        {
+            catalog = Resources.Load<ItemCurrencyCatalog>("ItemCurrencyCatalog");
+        }
+
         Load();
         ImportLegacyGoldIfNeeded();
     }
