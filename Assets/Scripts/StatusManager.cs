@@ -66,6 +66,17 @@ public class StatusManager : MonoBehaviour
     public bool isMinimize;
     public bool isAiUsing;
     public bool isMouthActive = false; // 입이 현재 움직이는 중인지 여부
+
+    // 진폭 립싱크: "레벨" = 입을 벌리는 정도(0=다문 입, 1=최대 벌림). 재생 중인 음성의 순간 음량(RMS)을
+    // 0~1로 정규화한 값이며, StatusManager는 이 숫자만 계산하고 실제 입 blendshape을 움직이는 건
+    // 각 EmotionFace*Controller의 TalkAnimation(레벨 × 100을 weight로 사용)이다.
+    // 블렌드셰이프 없는 구형 캐릭터(FaceTextureChanger)는 아래 updateMouthStatus()의 텍스처 토글 방식 그대로.
+    public float mouthLevelGain = 8f;       // 음량(RMS) → 입 벌림 정도 변환 배율. 클수록 작은 소리에도 입이 크게 벌어짐
+    public float mouthAttackSpeed = 25f;    // 입이 벌어지는 속도(초당 변화량). 25면 0→1까지 최소 0.04초
+    public float mouthReleaseSpeed = 12f;   // 입이 닫히는 속도. 여는 쪽보다 느리게 해 음량 출렁임에 입이 떨리는 것 방지
+    [HideInInspector] public float mouthLevel = 0f;     // 메인 음성(VoiceManager)의 현재 입 벌림 정도 0~1
+    [HideInInspector] public float mouthLevelSub = 0f;  // 서브 음성(SubVoiceManager, Aropla 서브 캐릭터용) 입 벌림 정도 0~1
+    private float[] mouthSampleBuffer = new float[256];
     public bool isScenario = false;  // 튜토리얼 등의 시나리오는 여러가지가 동시에 진행될 수 없음
     public bool isServerConnected = false; // 현재 서버가 연결되어 있는지 여부
     
@@ -229,6 +240,8 @@ public class StatusManager : MonoBehaviour
 
     void Update()
     {
+        UpdateMouthLevels();
+
         if (VoiceManager.Instance.isQueuePlaying)
         {
             if (!isMouthActive)
@@ -248,6 +261,45 @@ public class StatusManager : MonoBehaviour
                 AnimationManager.Instance.TalkEnd();
             }
         }
+    }
+
+    // 재생 중인 음성의 진폭(RMS)을 mouthLevel/mouthLevelSub(0~1)로 갱신
+    void UpdateMouthLevels()
+    {
+        float mainTarget = 0f;
+        if (VoiceManager.Instance != null && VoiceManager.Instance.audioSource != null
+            && VoiceManager.Instance.audioSource.isPlaying)
+        {
+            mainTarget = SampleSourceLevel(VoiceManager.Instance.audioSource);
+        }
+        mouthLevel = SmoothMouthLevel(mouthLevel, mainTarget);
+
+        float subTarget = 0f;
+        AudioSource subSource = SubVoiceManager.Instance != null ? SubVoiceManager.Instance.GetPlayingAudioSource() : null;
+        if (subSource != null)
+        {
+            subTarget = SampleSourceLevel(subSource);
+        }
+        mouthLevelSub = SmoothMouthLevel(mouthLevelSub, subTarget);
+    }
+
+    float SampleSourceLevel(AudioSource source)
+    {
+        source.GetOutputData(mouthSampleBuffer, 0);
+        float sum = 0f;
+        for (int i = 0; i < mouthSampleBuffer.Length; i++)
+        {
+            sum += mouthSampleBuffer[i] * mouthSampleBuffer[i];
+        }
+        float rms = Mathf.Sqrt(sum / mouthSampleBuffer.Length);
+        return Mathf.Clamp01(rms * mouthLevelGain);
+    }
+
+    // attack(열림)은 빠르게, release(닫힘)는 느리게 보간해 프레임 단위 떨림 방지
+    float SmoothMouthLevel(float current, float target)
+    {
+        float speed = target > current ? mouthAttackSpeed : mouthReleaseSpeed;
+        return Mathf.MoveTowards(current, target, speed * Time.deltaTime);
     }
 
     // 입 움직이게 : 13,14 왔다갔다 > 오디오클립 연계로 입후 반응 없어도 멈추게 변경

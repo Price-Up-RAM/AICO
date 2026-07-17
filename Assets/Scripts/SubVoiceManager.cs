@@ -182,6 +182,19 @@ public class SubVoiceManager : MonoBehaviour
         return false;
     }
 
+    // 현재 재생 중인 AudioSource 반환 (StatusManager 진폭 립싱크 레벨 측정용)
+    public AudioSource GetPlayingAudioSource()
+    {
+        foreach (var audioSource in audioSources)
+        {
+            if (audioSource.isPlaying)
+            {
+                return audioSource;
+            }
+        }
+        return null;
+    }
+
     // 현재 재생 중인 AudioSource의 AudioClip을 반환
     public AudioClip GetAudioClip()
     {
