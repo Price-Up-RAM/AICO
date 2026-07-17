@@ -49,6 +49,10 @@ public static class ModelDataLocal
             new ModelFileInfo("Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf", "https://huggingface.co/HauhauCS/Gemma-4-E4B-Uncensored-HauhauCS-Aggressive/resolve/main/Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true", "5.34GB", 9348464640L),
             new ModelFileInfo("mmproj-Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-f16.gguf", "https://huggingface.co/HauhauCS/Gemma-4-E4B-Uncensored-HauhauCS-Aggressive/resolve/main/mmproj-Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-f16.gguf?download=true", "990MB", 788529152L)
         }, "9.46GB"),
+        new ModelOption("qwythos-9b-v2", "Qwythos", new List<ModelFileInfo> {
+            new ModelFileInfo("Qwythos-9B-v2-MTP-Q4_K_M.gguf", "https://huggingface.co/empero-ai/Qwythos-9B-v2-GGUF/resolve/main/Qwythos-9B-v2-MTP-Q4_K_M.gguf?download=true", "5.7GB", 9348464640L),
+            new ModelFileInfo("mmproj-Qwythos-9B-v2-BF16.gguf", "https://huggingface.co/empero-ai/Qwythos-9B-v2-GGUF/resolve/main/mmproj-Qwythos-9B-v2-BF16.gguf?download=true", "922MB", 788529152L)
+        }, "6.6GB"),
         // new ModelOption("qwen3vl-8b", "Qwen3VL(8B)", new List<ModelFileInfo> {
         //     new ModelFileInfo("Qwen3VL-8B-Instruct-Q4_K_M.gguf", "https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/main/Qwen3VL-8B-Instruct-Q4_K_M.gguf?download=true", "8.71GB", 9348464640L),
         //     new ModelFileInfo("mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf", "https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf?download=true", "752MB", 788529152L)

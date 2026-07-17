@@ -332,6 +332,9 @@ public static class LanguageData
         // C01 - 서버 준비 완료 알림
         new Dictionary<string, string> { { "ko", "선생님, 서버가 준비되었어요!" }, { "jp", "先生、サーバーの準備ができましたよ！" }, { "en", "Sensei, the server is now ready!" }},
 
+        // C03 - 서버 부팅 중 안내
+        new Dictionary<string, string> { { "ko", "서버가 실행중이에요! 조금만 기다려주세요 선생님!" }, { "jp", "サーバーは起動中です！もう少しだけお待ちください、先生！" }, { "en", "The server is starting up! Please wait just a little longer, Sensei!" } },
+
         // S01 - 이미지 필요 안내
         new Dictionary<string, string> { { "ko", "그 대답에는 이미지가 필요해보여요." }, { "jp", "その回答には画像が必要そうです。" }, { "en", "That answer seems to require an image." } },
         new Dictionary<string, string> { { "ko", "이미지 영역을 설정하거나 클립보드에 이미지를 담아주셔야해요." }, { "jp", "画像領域を設定するか、クリップボードに画像を入れてください。" }, { "en", "You need to set an image area or put an image in the clipboard." } },

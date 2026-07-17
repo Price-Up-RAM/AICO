@@ -32,13 +32,13 @@ public class InstallerManager : MonoBehaviour
         return Path.Combine(GetGameRootPath(), "install.bat");
     }
 
-    // jarvis_server.exe가 설치되어 있는지 확인
+    // 서버 런처(server_jarvis.exe)가 설치되어 있는지 확인
     public bool IsJarvisServerInstalled()
     {
         UnityEngine.Debug.Log("[Installer] IsJarvisServerInstalled() called");
-        
-        string jarvisServerPath = Path.Combine(GetGameRootPath(), "server.exe");
-        
+
+        string jarvisServerPath = Path.Combine(GetGameRootPath(), JarvisServerManager.ServerExeName);
+
         bool result = File.Exists(jarvisServerPath);  // 파일 존재 여부 확인
         UnityEngine.Debug.Log("[Installer] IsJarvisServerInstalled() result: " + result);
         return result;

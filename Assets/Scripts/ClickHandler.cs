@@ -151,7 +151,9 @@ public class ClickHandler : MonoBehaviour, IPointerClickHandler
                     StartCoroutine(ScenarioCommonManager.Instance.Scenario_C02_AskToStartServer());
                     return;
                 }
-                return; // baseUrl 없음 → 대기
+                // 설치됨 + 프로세스 실행 중 + 응답 대기 = 부팅 중 → 대기 안내
+                StartCoroutine(ScenarioCommonManager.Instance.Run_C03_ServerBooting());
+                return;
             }
         }
 

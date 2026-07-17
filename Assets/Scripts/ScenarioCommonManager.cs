@@ -78,6 +78,20 @@ public class ScenarioCommonManager : MonoBehaviour
         yield return new WaitForSeconds(d1);
     }
 
+    // 서버 부팅 중 안내 — 프로세스는 떠 있으나 아직 응답(health) 전 상태에서 대화를 걸었을 때
+    public IEnumerator Run_C03_ServerBooting()
+    {
+        // 나레이션 동안 isScenario를 세워 연타 클릭의 중복 발화를 기존 게이트로 차단
+        if (StatusManager.Instance.isScenario) yield break;
+        StatusManager.Instance.isScenario = true;
+
+        float d1 = ScenarioUtil.Narration("C03_server_booting_1", "서버가 실행중이에요! 조금만 기다려주세요 선생님!");
+        ScenarioUtil.ShowEmotion("smile");
+        yield return new WaitForSeconds(d1);
+
+        StatusManager.Instance.isScenario = false;
+    }
+
     // 서버 기동 여부 묻는 시나리오
     public IEnumerator Scenario_C02_AskToStartServer()
     {
