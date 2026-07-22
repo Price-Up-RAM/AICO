@@ -1,0 +1,51 @@
+# Privacy Policy
+
+This Policy explains how AICO (the "App") handles users' information.
+
+## 1. Basic Principle: The Developer Does Not Collect Personal Information
+
+The App does not include account (sign-up) functionality, advertising SDKs, or behavioral analytics or tracking tools, and the Developer does not operate any server for the purpose of collecting or storing users' personal information. In principle, data that users create within the App is stored only on the user's device.
+
+## 2. Data Stored on the Device (Local Storage)
+
+The following data is stored only in the App's data folder on the user's device and is not transmitted to the Developer.
+
+- Conversation history (messages exchanged with characters)
+- Settings (the name entered by the user, language, feature on/off states, etc.)
+- Screenshots and clipboard images captured or attached by the user
+- Files saved by the user, such as AI skills and notes
+- Operation log files
+
+Users may delete this data themselves through the in-app deletion feature, by deleting the App's data folder, or by uninstalling the App.
+
+## 3. Cases in Which Data May Be Transmitted Outside the Device
+
+Where the user uses or configures any of the features below, the relevant data is transmitted directly from the user's device to the respective third-party service. The Developer does not receive or store such data.
+
+- Cloud AI mode: Conversation content, attached images (including screenshots and clipboard images), and the configured name are transmitted to the AI service provider selected by the user (Google Gemini, OpenRouter, OpenAI, etc.).
+- Web search feature: Search queries are transmitted to search services (DuckDuckGo, Google, etc.).
+- Translation feature: Sentences to be translated are transmitted to the translation service.
+- Voice input: In principle, voice is converted to text locally; where a remote server is configured, it is transmitted to that server.
+- AI model download: Model file requests are transmitted to distribution sites (Hugging Face, etc.).
+- IoT device control: Control commands are transmitted to the cloud service of the relevant device (SwitchBot, Tuya, etc.).
+- Remote server mode: Where a remote server is configured in place of the local AI server, conversation data is transmitted to the operator of that server.
+
+The third-party services above may be operated by overseas providers, and the transmitted data is subject to the privacy policy of each respective service. Some free AI services may use submitted content to improve their services (for training); accordingly, users are advised not to enter sensitive information in cloud AI mode.
+
+## 4. Notice Regarding Screenshots, Clipboard, and Microphone
+
+Screen captures may include the screens of programs other than the App as well as information of third parties, and the clipboard may retain sensitive information previously copied. These features operate only when the user uses them, and the user is responsible for reviewing the captured or collected content.
+
+## 5. Use by Children
+
+The App is not directed at children under the age of 14 and does not knowingly collect children's personal information.
+
+## 6. Contact
+
+Inquiries regarding this Policy: [contact email]
+
+## 7. Changes to This Policy
+
+If this Policy is changed, notice will be provided through an in-app announcement or the distribution page.
+
+Effective date: [YYYY-MM-DD] (draft)

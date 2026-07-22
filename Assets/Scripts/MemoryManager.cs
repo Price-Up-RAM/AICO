@@ -16,7 +16,8 @@ public class Conversation
     public string role;         // 역할 (user, assistant, system)
     public string type;         // 타입 ("conversation": 일반 대화, "system": 시스템 메시지/트리거/intent)
     public string messageKo;    // 한국어 메시지
-    public string messageJp;    // 일본어 메시지  
+    public string messageJp;    // 일본어 메시지
+    public string messageJa;    // 일본어 메시지 (ja 표준 키 — multi 서버 계약이 이 키를 읽음; 구 경로는 messageJp)
     public string messageEn;    // 영어 메시지
     public string timestamp;    // 타임스탬프
 }

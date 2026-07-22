@@ -2,6 +2,35 @@
 
 앉아서 같이 포모도로 하는 시스템. 오피스 리소스(Desk_Set)는 Synty Polygon Office 발췌.
 
+## Char_toon(Generic 리그) 착석 지원 — CharAvatarSO (2026-07-22)
+
+착석 클립(SitTyping/SitLookAround)은 휴머노이드 muscle 클립이라 Generic 리그(CH0***/Original 계열,
+프리팹 Animator의 Avatar가 NULL)에는 자세가 바인딩되지 않는다. 해결: **착석 구간 한정 아바타 스왑.**
+
+- **CharAvatarSO** (`Scripts/CharAvatarSO.cs`, 에셋 `ScriptableObjects/CharAvatarSO.asset`):
+  charcode→휴머노이드 Avatar 매핑 + `fallbackAvatar`(SimpleBAAvatar). 프리팹에 아바타를 영구
+  할당하면 평상시 generic 경로 커브 애니(Cafe_Idle 등)가 죽기 때문에 반드시 런타임 스왑 전용.
+- **ChillModeManager**: Enter 시 `originalAvatar` 저장 → `ResolveSitAvatar()`로 스왑 → 컨트롤러 교체.
+  Exit 시 아바타/컨트롤러 원복. 스왑은 **아바타 없는(Generic) 캐릭터만** 대상(명시 등록 > 폴백) —
+  자체 아바타 보유 캐릭터(diana/arona 등)는 항상 불변. charcode 중복 데이터(Mika_gmod=ch0069)가
+  있어도 다른 스켈레톤 아바타가 오적용되지 않게 하기 위한 게이트.
+  Exit의 `Play("idle")`는 HasState 가드 추가(토온 컨트롤러에 idle 상태가 없어도 에러 없이 기본 상태 재생).
+- **SimpleBAAvatar** (`Assets/CharAvatars/SimpleBAAvatar.asset`): 사용자가 CH0069 복사본(CH0069B.fbx,
+  Humanoid 임포트)에서 복제해 만든 공용 아바타(구명 CH0069BAvatar). Bip001 코어 19본만 매핑.
+  BA 표준 `bone_root/Bip001/...` 스켈레톤(33종)에서 경로 일치. 래퍼 노드가 있는
+  CH0293(`CH0293/bone_root`)/CH0334(`bone_root/bone_CH_root`)/Momoi·Midori·Miyako·Yuuka_Original
+  (`<이름>_Original/bone_root`)에는 폴백으로 바인딩되지 않음 → 전용 아바타 필요.
+- **CharAvatarGenerator** (`Editor/CharAvatarGenerator.cs`,
+  `Tools → ChillWithYou → 5. Generate Char Avatars (CharAvatarSO)`):
+  Char_toon 프리팹 전수(POC 제외, 루트 charcode+Animator+아바타 NULL 대상, charcode 중복 제거) →
+  캐릭터별 아바타 생성 + SO upsert + ChillModeManager.prefab 배선. 멱등.
+  1) importer 경로: FBX 임시 복사 → Humanoid 임포트(자동 매핑) → Avatar 독립 에셋화 → 임시 삭제.
+  2) builder 경로: 사람 본 경로가 프리팹 계층과 다르면 AvatarBuilder로 프리팹 계층에서 직접 생성
+     (route=builder로 로그 — 프리팹 저장 포즈가 T포즈가 아니면 품질 저하 가능, 시각 확인 대상).
+  batchmode: `-executeMethod CharAvatarGenerator.GenerateBatch`
+- **남은 것**: 토온 캐릭터 ChillSitData 착석 오프셋 튜닝(SitSupport 패널로 캐릭터별 저장),
+  builder 경로 산출물 자세 시각 검수, SitTyping이 diana 비율 기준이라 chibi 손-키보드 정렬 확인.
+
 ## 시점 프리셋 (2026-07-15)
 
 - **ChillSitData.viewPresets**: 책상 배치(deskPositionOffset/RotationOffset/ScaleMultiplier)의 저장

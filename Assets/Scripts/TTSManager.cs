@@ -111,6 +111,20 @@ public class TTSManager : MonoBehaviour
         return ttsSession.stateBySeq != null;
     }
 
+    // 스트림 종료 스탬프 세션. 유휴/재생 종료 판정은 호출부가 재생 상태 폴링으로 수행한다.
+    private int streamCompletedSessionId = -1;
+
+    // 해당 세션에 더 이상 TTS 텍스트가 추가되지 않음을 표시한다 (멀티 대화 턴 종결 스탬프).
+    public void MarkStreamCompleted(int sessionId)
+    {
+        streamCompletedSessionId = sessionId;
+    }
+
+    public bool IsStreamCompleted(int sessionId)
+    {
+        return streamCompletedSessionId == sessionId;
+    }
+
     // 순차 재생 코디네이터. nextSeqToPlay만 바라보며 처리
     private void EvaluateNextPlayback()
     {

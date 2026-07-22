@@ -20,6 +20,7 @@ public class ChillModeManager : MonoBehaviour
 
     [Header("References")]
     public ChillSitData chillSitData;  // 캐릭터별 착석 오프셋 데이터
+    public CharAvatarSO charAvatarData;  // 캐릭터별 착석용 휴머노이드 아바타 매핑 (Generic 리그 캐릭터의 런타임 아바타 스왑용)
     public Transform deskSetRoot;  // Desk_Set 프리팹 루트 (Chill 모드 중 위치/회전/스케일 실시간 조정용)
     public Transform chairRoot;  // 의자 오브젝트 자체 (예: SM_Prop_Chair_05) - 의자를 실제로 옮길 때 대상
     public RectTransform chairSeatPoint;  // 의자 하위, diana가 SetParent될 착석 기준점 (diana 로컬 오프셋 계산용)
@@ -62,6 +63,7 @@ public class ChillModeManager : MonoBehaviour
     private Quaternion originalLocalRotation;  // 원래 로컬 회전
     private Vector3 originalLocalScale;  // 원래 로컬 스케일
     private RuntimeAnimatorController originalController;  // 원래 애니메이터 컨트롤러
+    private Avatar originalAvatar;  // 원래 아바타 (착석용 스왑 복원용 — Generic 캐릭터는 null이 정상값)
     private FallingObject fallingObject;  // 데스크톱 하단 낙하 처리 컴포넌트 (Chill 모드 중 비활성화 대상)
 
     private Vector3 deskOriginalPosition;  // deskSetRoot 원래 로컬 위치 (오프셋 기준점 + Exit 시 복원용)
@@ -124,6 +126,7 @@ public class ChillModeManager : MonoBehaviour
         originalLocalRotation = charRect.localRotation;
         originalLocalScale = charRect.localScale;
         originalController = animator.runtimeAnimatorController;
+        originalAvatar = animator.avatar;
 
         // 데스크톱 바닥으로 끌어내리는 낙하 로직을 Chill 모드 동안 정지
         fallingObject = character.GetComponent<FallingObject>();
@@ -192,6 +195,15 @@ public class ChillModeManager : MonoBehaviour
         // 부모 트랜스폼 급변경으로 클로스(헤어 등) 시뮬레이션이 튀는 것을 방지 (포즈 유지한 채 텔레포트 처리)
         ResetClothTeleport(character);
 
+        // 착석 클립(SitTyping/SitLookAround)은 휴머노이드 muscle 클립이라 유효한 휴머노이드 아바타가 필수.
+        // Generic 리그(Avatar 없음) 캐릭터는 착석 동안만 CharAvatarSO 매핑으로 아바타를 스왑한다.
+        Avatar sitAvatar = ResolveSitAvatar(attrs.charcode, animator);
+        if (sitAvatar != null)
+        {
+            animator.avatar = sitAvatar;
+            Debug.Log($"[ChillMode] 착석용 아바타 스왑: {sitAvatar.name} (원본={(originalAvatar != null ? originalAvatar.name : "없음")})");
+        }
+
         // 공용 리타겟팅 애니메이터로 교체 후 착석 상태 재생
         animator.runtimeAnimatorController = chillAnimatorController;
         bool hasState = animator.HasState(0, Animator.StringToHash(chillStateName));
@@ -256,7 +268,14 @@ public class ChillModeManager : MonoBehaviour
         charRect.localRotation = originalLocalRotation;
         charRect.localScale = originalLocalScale;
         animator.runtimeAnimatorController = originalController;
-        animator.Play("idle", 0, 0);
+        animator.avatar = originalAvatar;  // 착석용으로 스왑했던 아바타 원복 (스왑이 없었다면 동일값 재할당)
+
+        // idle 상태가 없는 컨트롤러(토온 캐릭터 등)는 컨트롤러 재할당만으로 기본 상태부터 재생된다
+        int idleHash = Animator.StringToHash("idle");
+        if (animator.HasState(0, idleHash))
+        {
+            animator.Play(idleHash, 0, 0);
+        }
 
         // 부모 트랜스폼 복귀로 인한 클로스(헤어 등) 시뮬레이션 튐 방지
         ResetClothTeleport(chillCharacter);
@@ -293,6 +312,24 @@ public class ChillModeManager : MonoBehaviour
 
         isChillMode = false;
         chillCharacter = null;
+    }
+
+    // 착석용 아바타 결정 — 아바타가 없는(Generic) 캐릭터만 대상: charcode 명시 등록 > 공용 폴백.
+    // 자체 휴머노이드 아바타를 가진 캐릭터(diana/arona 등)는 항상 불변 — charcode가 중복된 데이터
+    // (예: Mika_gmod가 ch0069를 공유)가 있어도 다른 스켈레톤의 아바타가 오적용되지 않게 하기 위함.
+    private Avatar ResolveSitAvatar(string charcode, Animator animator)
+    {
+        if (charAvatarData == null || animator.avatar != null)
+        {
+            return null;
+        }
+
+        Avatar mapped = charAvatarData.GetMappedAvatar(charcode);
+        if (mapped != null)
+        {
+            return mapped;
+        }
+        return charAvatarData.fallbackAvatar;
     }
 
     // 부모 변경 직후 MagicaCloth의 시뮬레이션을 현재 포즈 유지한 채 텔레포트 처리

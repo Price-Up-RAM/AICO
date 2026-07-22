@@ -206,6 +206,11 @@ public class EmotionBalloonManager : MonoBehaviour
 
     private Sprite GetSpriteByName(string spriteName)
     {
+        // 1순위: 감정 스프라이트 카탈로그 (SO — 코드 수정 없이 데이터 등록으로 관리)
+        Sprite catalogSprite = EmotionSpriteCatalog.GetSprite(spriteName);
+        if (catalogSprite != null) return catalogSprite;
+
+        // 2순위: 기존 직렬화 필드 (카탈로그 미등록 시 폴백)
         switch (spriteName)
         {
             case "Love": return emotionSpriteLove;
@@ -229,7 +234,8 @@ public class EmotionBalloonManager : MonoBehaviour
             case "Think": return emotionSpriteThink;
             case "Verify": return emotionSpriteVerify;
             case "Execute": return emotionSpriteExecute;
-            default: return null;
+            // 3순위: 캐릭터 아이콘 카탈로그 (임의 캐릭터의 힌트 벌룬용 — 미등록이면 null)
+            default: return CharacterIconCatalog.GetIcon(spriteName);
         }
     }
 }

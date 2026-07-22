@@ -47,7 +47,7 @@ public class LanguageManager : MonoBehaviour
     // UI들 변경
     public Text settingsHeaderTitle;
     public Text settingsGeneralPlayerNameLabel;
-    public Text settingsGeneralServerIDLabel;
+    public TMP_Text settingsGeneralServerIDLabel;  // ServerID 패널 라벨 (TMP 기반 패널로 교체됨)
     public Text settingsGeneralAlwaysOnTopLabel;
     public Text settingsGeneralShowChatBoxOnClickLabel;
     public Text settingsGeneralShowTutorialOnChat;
@@ -85,6 +85,7 @@ public class LanguageManager : MonoBehaviour
             case 2: settingServerServerInfoIconTooltipTrigger.tooltip = "Attempts to connect to Google's free API.\nEntering an API key increases the response success rate."; break;
             case 3: settingServerServerInfoIconTooltipTrigger.tooltip = "Attempts to connect to OpenRouter's free API.\nEntering an API key increases the response success rate."; break;
             case 4: settingServerServerInfoIconTooltipTrigger.tooltip = "Performs computation using Google's paid API.\nA valid API key is required."; break;
+            case 10: settingServerServerInfoIconTooltipTrigger.tooltip = "Connects to a server running on your PC by Server ID."; break;
             default: settingServerServerInfoIconTooltipTrigger.tooltip = "Automatically connects to an available server based on priority."; break;
         }
     }

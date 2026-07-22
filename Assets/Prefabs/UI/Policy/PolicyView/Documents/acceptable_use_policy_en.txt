@@ -1,0 +1,43 @@
+# AI Use Policy
+
+This Policy sets forth the rules for the safe use of AICO's AI features (conversation generation and agent features). This Policy forms part of the Terms of Use.
+
+## Article 1 (Prohibited Generation Attempts)
+
+Users shall not use the AI features of this Software to generate, or attempt to generate, any of the following:
+
+- Sexual content involving children or minors
+- Non-consensual sexual synthetic media (deepfakes) depicting real persons and defamatory content
+- Content that promotes violence, discrimination, or hatred against specific individuals or groups
+- Code intended to compromise the systems of others, such as malware or hacking tools
+- Content intended for use in deceptive practices such as fraud, impersonation, or spam
+- Any other content that violates applicable laws and regulations
+
+## Article 2 (Restrictions on Use of AI Agent Features)
+
+The AI agent features (mouse and keyboard control, program execution, clipboard access, and screen capture) may be used only under the following conditions:
+
+- They shall be used only on devices and accounts that the user owns or is duly authorized to use.
+- They shall not be used for automated operation of, unauthorized access to, or monitoring of another person's devices, accounts, or systems.
+- They shall not be used for automation that violates the terms of service of other services (e.g., automated operation on services that prohibit macros).
+- Automated operation is prohibited in environments where erroneous operation could cause serious harm, such as medical or financial systems.
+
+## Article 3 (Prohibition on Circumventing Safeguards)
+
+Users shall not attempt to circumvent or disable the content filters, safeguards, or feature restrictions included in this Software.
+
+## Article 4 (Reporting Inappropriate Output)
+
+If the AI generates inappropriate or unlawful content, please report it to the contact below. Reports will be used to improve the filters and safeguards.
+
+- Reports and inquiries: [contact email]
+
+## Article 5 (Measures upon Violation)
+
+If use in violation of this Policy is confirmed, the developer may restrict the relevant features, terminate the license (Article 3 of the Terms of Use), and take measures in accordance with applicable laws and the policies of distribution platforms.
+
+## Article 6 (Amendments to This Policy)
+
+Any changes to this Policy will be announced through in-app notices or the distribution page.
+
+Effective date: [YYYY-MM-DD] (draft)

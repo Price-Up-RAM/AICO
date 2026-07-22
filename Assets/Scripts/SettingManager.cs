@@ -57,9 +57,10 @@ public class SettingManager : MonoBehaviour
         1,  // Dropdown [1] → Local
         2,  // Dropdown [2] → Google
         // 3,  // Dropdown [3] → OpenRouter
-        9   // Dropdown [3] → Custom (실제 idx는 9)
+        9,  // Dropdown [3] → Custom (실제 idx는 9)
+        10  // Dropdown [4] → Server (server_id로 원격 PC 서버 접속)
     };
-    
+
     // 역매핑 Dictionary (server_type_idx → Dropdown Index)
     private static readonly Dictionary<int, int> ServerTypeIdxToDropdownIndex = new Dictionary<int, int>
     {
@@ -67,7 +68,8 @@ public class SettingManager : MonoBehaviour
         { 1, 1 },  // Local → Dropdown [1]
         { 2, 2 },  // Google → Dropdown [2]
         // { 3, 3 },  // OpenRouter → Dropdown [3]
-        { 9, 3 }   // Custom → Dropdown [4]
+        { 9, 3 },  // Custom → Dropdown [3]
+        { 10, 4 }  // Server → Dropdown [4]
     };
     [SerializeField] private Dropdown serverLocalModeTypeDropdown;
     [SerializeField] private Dropdown serverLocalModelTypeDropdown;
@@ -93,6 +95,7 @@ public class SettingManager : MonoBehaviour
     [SerializeField] private GameObject serverUIOpenRouterGameObject;
     [SerializeField] private GameObject serverUIChatGPTGameObject;
     [SerializeField] private GameObject serverUICustomGameObject;
+    [SerializeField] private GameObject serverUIServerGameObject;  // Server 타입 (server_id 입력) 패널
     [SerializeField] private Toggle isAskedTurnOnServerToggle;  // Lite, Full 일때 활성화 되는 무언가. 그냥 문답무용으로 키는 방향으로 진행했을때의 영향도도 파악 필요.
 
     [Header("Conversation")]  // 구 AI Field. 변수도 관련 변수로 설정되어있음.
@@ -1145,6 +1148,7 @@ public class SettingManager : MonoBehaviour
             case 2: return "Google";
             // case 3: return "OpenRouter";
             case 9: return "Custom";
+            case 10: return "Server";
             default: return "Auto";
         }
     }
@@ -1483,6 +1487,7 @@ public class SettingManager : MonoBehaviour
         serverUIOpenRouterGameObject.SetActive(false);
         serverUIChatGPTGameObject.SetActive(false);
         serverUICustomGameObject.SetActive(false);
+        if (serverUIServerGameObject != null) serverUIServerGameObject.SetActive(false);
         serverGeminikeyTestResultText.text = "";
         serverOpenRouterkeyTestResultText.text = "";
 
@@ -1507,6 +1512,10 @@ public class SettingManager : MonoBehaviour
 
             case 9: // Custom
                 serverUICustomGameObject.SetActive(true);
+                break;
+
+            case 10: // Server (server_id로 원격 PC 서버 접속)
+                if (serverUIServerGameObject != null) serverUIServerGameObject.SetActive(true);
                 break;
 
             default:
