@@ -186,6 +186,12 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         }));
     }
 
+    /// <summary>외부(PomodoroMenuFallback 등)에서 컨텍스트 메뉴를 여는 공개 진입점 — 커서 위치 기준 표시.</summary>
+    public void OpenMenu()
+    {
+        TriggerMenu();
+    }
+
     private void TriggerMenu()
     {
         this.m_ContextMenu.Clear();
@@ -471,6 +477,17 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
                     else
                     {
                         Debug.Log("[SitSupport] 씬에 SitSupport가 없습니다. Tools → ChillWithYou → Install SitSupport Into SampleScene 실행 필요");
+                    }
+                }),
+                (LanguageData.Translate("DeskSupport", targetLang), delegate {
+                    // 책상 꾸미기 패널 (DeskSupportData 편집: 머티리얼 스킨/장식 슬롯) — 씬에 DeskSupport 프리팹 설치 필요
+                    if (DeskSupportScript.Instance != null)
+                    {
+                        DeskSupportScript.Instance.TogglePanel();
+                    }
+                    else
+                    {
+                        Debug.Log("[DeskSupport] 씬에 DeskSupport가 없습니다. Tools → ChillWithYou → 7. Install DeskSupport Into SampleScene 실행 필요");
                     }
                 }),
             });

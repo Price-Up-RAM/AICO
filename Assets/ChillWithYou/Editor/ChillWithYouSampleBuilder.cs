@@ -10,10 +10,10 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
-/// ChillWithYou 데모 빌더 — 본편(ChillModeManager/ChillSitData/HY Motion Animator) 기준.
+/// ChillWithYou 데모 빌더 — 본편(ChillModeManager/ChillSitData/PomodoroDeskAnimator) 기준.
 /// 1) POC 프리팹 정비: 매니저 의존 마스코트 스크립트만 제거한 캐릭터 복사본 3종
 ///    (charcode는 본편과 동일: diana / arona_tripo / arona — 데모 튜닝값이 그대로 본편 데이터가 되도록).
-///    + HY Motion Animator의 LookAround 트리거 배선 수정(멱등).
+///    + PomodoroDeskAnimator의 LookAround 트리거 배선 수정(멱등).
 /// 2) ChillWithYouSample 씬 베이크: 본편 Canvas_Char 환경 + Desk_Set(본편처럼 transform 0) +
 ///    ChillModeManager 프리팹(참조 배선) + 데모 캐릭터 + SitSupport 패널(공용) + 캐릭터 교체 패널(데모 전용).
 /// 사용: Tools → ChillWithYou → 1~4 순서대로. batchmode는 BuildAll(데모까지) / BuildAllAndInstall(본편 설치 포함).
@@ -28,7 +28,7 @@ public static class ChillWithYouSampleBuilder
     private const string DeskSetPrefabPath = "Assets/ChillWithYou/Prefabs/Desk_Set.prefab";
     private const string ChillManagerPrefabPath = "Assets/ChillWithYou/Prefabs/ChillModeManager.prefab";
     private const string SitDataPath = "Assets/ChillWithYou/ScriptableObjects/ChillSitData.asset";
-    private const string ChillControllerPath = "Assets/ChillWithYou/Materials/Animation/HY Motion Animator.controller";
+    private const string ChillControllerPath = "Assets/ChillWithYou/Materials/Animation/PomodoroDeskAnimator.controller";
     private const string SuitBoldFontPath = "Assets/FontAssets/SUIT-Bold.asset";
     private const string ScenePath = "Assets/ChillWithYou/ChillWithYouSample.unity";
 
@@ -53,19 +53,27 @@ public static class ChillWithYouSampleBuilder
         {
             throw new System.Exception("[ChillWithYou] SitSupport 프리팹 빌드 실패.");
         }
+        if (!DeskSupportBuilder.BuildDeskSupportPrefab())
+        {
+            throw new System.Exception("[ChillWithYou] DeskSupport 프리팹 빌드 실패.");
+        }
         if (!BuildSampleScene())
         {
             throw new System.Exception("[ChillWithYou] ChillWithYouSample 씬 베이크 실패.");
         }
     }
 
-    /// <summary>batchmode 진입점: 전체 빌드 + 본편 SampleScene에 SitSupport 설치(씬 파일만 수정).</summary>
+    /// <summary>batchmode 진입점: 전체 빌드 + 본편 SampleScene에 SitSupport/DeskSupport 설치(씬 파일만 수정).</summary>
     public static void BuildAllAndInstall()
     {
         BuildAll();
         if (!SitSupportBuilder.InstallSampleScene())
         {
             throw new System.Exception("[ChillWithYou] SampleScene 설치 실패.");
+        }
+        if (!DeskSupportBuilder.InstallSampleScene())
+        {
+            throw new System.Exception("[ChillWithYou] DeskSupport SampleScene 설치 실패.");
         }
     }
 
@@ -205,6 +213,18 @@ public static class ChillWithYouSampleBuilder
             sitScript.panel.SetActive(true);
         }
 
+        // DeskSupport 패널(공용) — 데모에서는 항상 표시
+        GameObject deskSupportPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(DeskSupportBuilder.PrefabPath);
+        if (deskSupportPrefab != null)
+        {
+            GameObject deskSupport = (GameObject)PrefabUtility.InstantiatePrefab(deskSupportPrefab);
+            DeskSupportScript deskScript = deskSupport.GetComponent<DeskSupportScript>();
+            if (deskScript != null && deskScript.panel != null)
+            {
+                deskScript.panel.SetActive(true);
+            }
+        }
+
         // 캐릭터 교체 패널(데모 전용) + 컨트롤러
         BuildDemoCharPanel(canvasRt, poc, pocPrefab, manager);
 
@@ -286,7 +306,7 @@ public static class ChillWithYouSampleBuilder
         return true;
     }
 
-    /// <summary>HY Motion Animator의 LookAround 배선 수정(멱등).</summary>
+    /// <summary>PomodoroDeskAnimator의 LookAround 배선 수정(멱등).</summary>
     private static bool FixChillControllerWiring()
     {
         AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ChillControllerPath);
@@ -347,7 +367,7 @@ public static class ChillWithYouSampleBuilder
             EditorUtility.SetDirty(back);
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
-            Debug.Log("[ChillWithYou] HY Motion Animator LookAround 배선 수정 완료");
+            Debug.Log("[ChillWithYou] PomodoroDeskAnimator LookAround 배선 수정 완료");
         }
         return true;
     }
@@ -402,29 +422,36 @@ public static class ChillWithYouSampleBuilder
         uiCanvas.sortingOrder = 101;
         ConfigureScaler(uiCanvasGO.GetComponent<CanvasScaler>());
 
-        // SitSupport 패널(좌측, 폭 380) 오른쪽에 배치
+        // SitSupport 패널(좌측, 폭 380) 오른쪽에 배치. 버튼은 런타임에 매니저 목록으로 동적 생성
+        // (높이는 ChillWithYouDemoController가 행 수에 맞춰 조절)
         GameObject panel = CreateUIObject("DemoCharPanel", uiCanvasGO.transform, new Vector2(410f, -16f), new Vector2(380f, 106f));
         panel.AddComponent<Image>().color = PanelColor;
 
         CreateText(panel.transform, "Title", "캐릭터 (데모 전용)", 20f,
             new Vector2(14f, -10f), new Vector2(352f, 22f), font, HeaderColor, TextAlignmentOptions.Left);
 
+        // 버튼 컨테이너 — 타이틀 아래 전체 영역
+        GameObject buttons = CreateUIObject("Buttons", panel.transform, new Vector2(0f, -42f), new Vector2(380f, 64f));
+
+        // 씬 전용 싱글톤 매니저 — 데모의 가변값(캐릭터 목록/스폰 위치/착석 지연) 소유.
+        // 캐릭터 추가는 이 GO의 인스펙터에서 characters에 항목을 더하면 된다 (버튼 자동 생성).
+        GameObject managerGO = new GameObject("ChillWithYouSampleManager");
+        ChillWithYouSampleManager sampleManager = managerGO.AddComponent<ChillWithYouSampleManager>();
+        sampleManager.chillManager = manager;
+        sampleManager.charParent = canvasRt;
+        sampleManager.currentCharacter = pocInstance;
+        sampleManager.characters = new System.Collections.Generic.List<ChillWithYouSampleManager.CharacterEntry>
+        {
+            new ChillWithYouSampleManager.CharacterEntry { label = "Diana", prefab = pocPrefab },
+            new ChillWithYouSampleManager.CharacterEntry { label = "Arona6", prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Arona6PrefabPath) },
+            new ChillWithYouSampleManager.CharacterEntry { label = "SFM", prefab = AssetDatabase.LoadAssetAtPath<GameObject>(AronaSfmPrefabPath) },
+        };
+
         GameObject demoGO = new GameObject("ChillWithYouDemo");
         ChillWithYouDemoController demo = demoGO.AddComponent<ChillWithYouDemoController>();
-        demo.chillManager = manager;
-        demo.charParent = canvasRt;
-        demo.currentCharacter = pocInstance;
-        demo.characterPrefabs = new[]
-        {
-            pocPrefab,
-            AssetDatabase.LoadAssetAtPath<GameObject>(Arona6PrefabPath),
-            AssetDatabase.LoadAssetAtPath<GameObject>(AronaSfmPrefabPath),
-        };
-        demo.characterButtons = new Button[3];
-        TMP_Text unused;
-        demo.characterButtons[0] = CreateButton(panel.transform, "CharDiana", "Diana", new Vector2(14f, -42f), new Vector2(112f, 34f), font, out unused);
-        demo.characterButtons[1] = CreateButton(panel.transform, "CharArona6", "Arona6", new Vector2(134f, -42f), new Vector2(112f, 34f), font, out unused);
-        demo.characterButtons[2] = CreateButton(panel.transform, "CharAronaSFM", "SFM", new Vector2(254f, -42f), new Vector2(112f, 34f), font, out unused);
+        demo.panelRect = panel.GetComponent<RectTransform>();
+        demo.buttonContainer = buttons.GetComponent<RectTransform>();
+        demo.buttonFont = font;
     }
 
     private static void ConfigureScaler(CanvasScaler scaler)

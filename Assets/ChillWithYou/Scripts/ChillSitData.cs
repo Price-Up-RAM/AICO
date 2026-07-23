@@ -54,6 +54,19 @@ public class ChillSitData : ScriptableObject
         return viewPresets[index];
     }
 
+    // charcode 전용 엔트리 존재 여부 (GetOffset의 defaultOffset 폴백과 구분용)
+    public bool HasOffset(string charcode)
+    {
+        foreach (CharacterSitOffset offset in perCharacterOffsets)
+        {
+            if (offset.charcode == charcode)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // charcode에 해당하는 오프셋 반환, 없으면 defaultOffset 반환
     public CharacterSitOffset GetOffset(string charcode)
     {

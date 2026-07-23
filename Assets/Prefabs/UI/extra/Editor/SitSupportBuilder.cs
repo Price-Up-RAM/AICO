@@ -97,27 +97,27 @@ public static class SitSupportBuilder
 
             CreateText(panel.transform, "CharHeader", "캐릭터 착석 오프셋", 20f,
                 new Vector2(14f, -88f), new Vector2(352f, 22f), font, HeaderColor, TextAlignmentOptions.Left);
-            script.charXSlider = CreateSliderRow(panel.transform, "CharX", "위치 X", -114f, -10f, 10f, pos.x, font, out script.charXValueLabel, pos.x.ToString("0.00"));
-            script.charYSlider = CreateSliderRow(panel.transform, "CharY", "위치 Y", -148f, -10f, 10f, pos.y, font, out script.charYValueLabel, pos.y.ToString("0.00"));
-            script.charZSlider = CreateSliderRow(panel.transform, "CharZ", "위치 Z", -182f, -10f, 10f, pos.z, font, out script.charZValueLabel, pos.z.ToString("0.00"));
-            script.charScaleSlider = CreateSliderRow(panel.transform, "CharScale", "크기", -216f, 0.1f, 30f, scale, font, out script.charScaleValueLabel, scale.ToString("0.00"));
-            script.charRotYSlider = CreateSliderRow(panel.transform, "CharRotY", "회전 Y", -250f, 0f, 360f, rotY, font, out script.charRotYValueLabel, rotY.ToString("0") + "°");
+            script.charXSlider = CreateSliderRow(panel.transform, "CharX", "위치 X", -114f, -10f, 10f, pos.x, font, out script.charXValueInput, pos.x.ToString("0.00"));
+            script.charYSlider = CreateSliderRow(panel.transform, "CharY", "위치 Y", -148f, -10f, 10f, pos.y, font, out script.charYValueInput, pos.y.ToString("0.00"));
+            script.charZSlider = CreateSliderRow(panel.transform, "CharZ", "위치 Z", -182f, -10f, 10f, pos.z, font, out script.charZValueInput, pos.z.ToString("0.00"));
+            script.charScaleSlider = CreateSliderRow(panel.transform, "CharScale", "크기", -216f, 0.1f, 30f, scale, font, out script.charScaleValueInput, scale.ToString("0.00"));
+            script.charRotYSlider = CreateSliderRow(panel.transform, "CharRotY", "회전 Y", -250f, 0f, 360f, rotY, font, out script.charRotYValueInput, rotY.ToString("0"));
 
             CreateText(panel.transform, "ChairHeader", "의자 오프셋", 20f,
                 new Vector2(14f, -288f), new Vector2(352f, 22f), font, HeaderColor, TextAlignmentOptions.Left);
-            script.chairXSlider = CreateSliderRow(panel.transform, "ChairX", "의자 X", -314f, -1f, 1f, chair.x, font, out script.chairXValueLabel, chair.x.ToString("0.00"));
-            script.chairYSlider = CreateSliderRow(panel.transform, "ChairY", "의자 Y", -348f, -1f, 1f, chair.y, font, out script.chairYValueLabel, chair.y.ToString("0.00"));
-            script.chairZSlider = CreateSliderRow(panel.transform, "ChairZ", "의자 Z", -382f, -1f, 1f, chair.z, font, out script.chairZValueLabel, chair.z.ToString("0.00"));
+            script.chairXSlider = CreateSliderRow(panel.transform, "ChairX", "의자 X", -314f, -1f, 1f, chair.x, font, out script.chairXValueInput, chair.x.ToString("0.00"));
+            script.chairYSlider = CreateSliderRow(panel.transform, "ChairY", "의자 Y", -348f, -1f, 1f, chair.y, font, out script.chairYValueInput, chair.y.ToString("0.00"));
+            script.chairZSlider = CreateSliderRow(panel.transform, "ChairZ", "의자 Z", -382f, -1f, 1f, chair.z, font, out script.chairZValueInput, chair.z.ToString("0.00"));
 
             CreateText(panel.transform, "DeskHeader", "책상 (착석 지점 기준)", 20f,
                 new Vector2(14f, -420f), new Vector2(352f, 22f), font, HeaderColor, TextAlignmentOptions.Left);
             // 앵커 정확값은 런타임 Start에서 재계산되므로 베이크는 근사값(deskPos)이어도 무방
             script.deskXSlider = CreateSliderRow(panel.transform, "DeskX", "위치 X", -446f,
-                Mathf.Min(-1280f, deskPos.x), Mathf.Max(1280f, deskPos.x), deskPos.x, font, out script.deskXValueLabel, deskPos.x.ToString("0"));
+                Mathf.Min(-1280f, deskPos.x), Mathf.Max(1280f, deskPos.x), deskPos.x, font, out script.deskXValueInput, deskPos.x.ToString("0"));
             script.deskYSlider = CreateSliderRow(panel.transform, "DeskY", "위치 Y", -480f,
-                Mathf.Min(-800f, deskPos.y), Mathf.Max(800f, deskPos.y), deskPos.y, font, out script.deskYValueLabel, deskPos.y.ToString("0"));
+                Mathf.Min(-800f, deskPos.y), Mathf.Max(800f, deskPos.y), deskPos.y, font, out script.deskYValueInput, deskPos.y.ToString("0"));
             script.deskScaleSlider = CreateSliderRow(panel.transform, "DeskScale", "전체 크기", -514f,
-                Mathf.Min(50f, deskScale), Mathf.Max(1000f, deskScale), deskScale, font, out script.deskScaleValueLabel, deskScale.ToString("0"));
+                Mathf.Min(50f, deskScale), Mathf.Max(1000f, deskScale), deskScale, font, out script.deskScaleValueInput, deskScale.ToString("0"));
 
             CreateText(panel.transform, "AngleLabel", "책상 각도", 20f,
                 new Vector2(14f, -548f), new Vector2(120f, 24f), font, LabelColor, TextAlignmentOptions.Left);
@@ -218,14 +218,53 @@ public static class SitSupportBuilder
     // ---------------------------------------------------------------- UI 헬퍼 (ChillWithYouSampleBuilder와 동일 규약)
 
     private static Slider CreateSliderRow(Transform panel, string name, string label, float y,
-        float min, float max, float value, TMP_FontAsset font, out TMP_Text valueLabel, string valueText)
+        float min, float max, float value, TMP_FontAsset font, out TMP_InputField valueInput, string valueText)
     {
         CreateText(panel, name + "Label", label, 18f,
             new Vector2(14f, y), new Vector2(94f, 24f), font, LabelColor, TextAlignmentOptions.Left);
-        Slider slider = CreateSlider(panel, name + "Slider", new Vector2(110f, y), new Vector2(162f, 24f), min, max, value);
-        valueLabel = CreateText(panel, name + "Value", valueText, 18f,
-            new Vector2(282f, y), new Vector2(86f, 24f), font, Color.white, TextAlignmentOptions.Right);
+        Slider slider = CreateSlider(panel, name + "Slider", new Vector2(110f, y), new Vector2(148f, 24f), min, max, value);
+        valueInput = CreateInputField(panel, name + "Value", valueText,
+            new Vector2(264f, y + 1f), new Vector2(102f, 26f), font);
         return slider;
+    }
+
+    /// <summary>숫자 직접 입력 필드 — 값 표시 겸용. 슬라이더 범위 밖 값(대형 스케일 등)을 타이핑으로 넣는 용도.</summary>
+    private static TMP_InputField CreateInputField(Transform parent, string name, string text,
+        Vector2 pos, Vector2 size, TMP_FontAsset font)
+    {
+        GameObject go = CreateUIObject(name, parent, pos, size);
+        Image bg = go.AddComponent<Image>();
+        bg.color = new Color(0.16f, 0.18f, 0.22f, 1f);
+        TMP_InputField input = go.AddComponent<TMP_InputField>();
+        input.targetGraphic = bg;
+
+        GameObject area = CreateUIObject("Text Area", go.transform, Vector2.zero, Vector2.zero);
+        RectTransform areaRt = area.GetComponent<RectTransform>();
+        areaRt.anchorMin = Vector2.zero;
+        areaRt.anchorMax = Vector2.one;
+        areaRt.pivot = new Vector2(0.5f, 0.5f);
+        areaRt.anchoredPosition = Vector2.zero;
+        areaRt.sizeDelta = new Vector2(-12f, -4f);
+        area.AddComponent<RectMask2D>();
+
+        TMP_Text textComp = CreateText(area.transform, "Text", text, 18f, Vector2.zero, Vector2.zero,
+            font, Color.white, TextAlignmentOptions.Right);
+        RectTransform textRt = textComp.rectTransform;
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.pivot = new Vector2(0.5f, 0.5f);
+        textRt.anchoredPosition = Vector2.zero;
+        textRt.sizeDelta = Vector2.zero;
+
+        input.textViewport = areaRt;
+        input.textComponent = textComp;
+        input.lineType = TMP_InputField.LineType.SingleLine;
+        input.contentType = TMP_InputField.ContentType.DecimalNumber;
+        input.customCaretColor = true;
+        input.caretColor = Color.white;
+        input.selectionColor = new Color(0.3f, 0.55f, 0.95f, 0.6f);
+        input.text = text;
+        return input;
     }
 
     private static Slider CreateSlider(Transform parent, string name, Vector2 pos, Vector2 size,

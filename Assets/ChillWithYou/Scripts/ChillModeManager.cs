@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.Serialization;
 using MagicaCloth2;
 
 // 칠윗유(Chill With You) 모드 진입/종료 관리
@@ -24,7 +25,8 @@ public class ChillModeManager : MonoBehaviour
     public Transform deskSetRoot;  // Desk_Set 프리팹 루트 (Chill 모드 중 위치/회전/스케일 실시간 조정용)
     public Transform chairRoot;  // 의자 오브젝트 자체 (예: SM_Prop_Chair_05) - 의자를 실제로 옮길 때 대상
     public RectTransform chairSeatPoint;  // 의자 하위, diana가 SetParent될 착석 기준점 (diana 로컬 오프셋 계산용)
-    public RuntimeAnimatorController chillAnimatorController;  // HY Motion Animator (공용 리타겟팅)
+    [FormerlySerializedAs("chillAnimatorController")]
+    public RuntimeAnimatorController pomodoroDeskAnimator;  // PomodoroDeskAnimator (공용 리타겟팅 착석 컨트롤러, 구명 HY Motion Animator)
     public string chillStateName = "SitTyping";  // 착석 시 재생할 상태 이름
 
     [Header("Desk_Set 오프셋 (에디터 튜닝용)")]
@@ -85,9 +87,9 @@ public class ChillModeManager : MonoBehaviour
             return;
         }
 
-        if (chillSitData == null || chairSeatPoint == null || chillAnimatorController == null)
+        if (chillSitData == null || chairSeatPoint == null || pomodoroDeskAnimator == null)
         {
-            Debug.Log($"[ChillMode] 참조 누락: chillSitData={chillSitData}, chairSeatPoint={chairSeatPoint}, chillAnimatorController={chillAnimatorController}");
+            Debug.Log($"[ChillMode] 참조 누락: chillSitData={chillSitData}, chairSeatPoint={chairSeatPoint}, pomodoroDeskAnimator={pomodoroDeskAnimator}");
             return;
         }
 
@@ -166,6 +168,29 @@ public class ChillModeManager : MonoBehaviour
             return;
         }
 
+        // 미등록 캐릭터 첫 착석: 모델마다 기본 스케일 단위가 크게 달라(수만 배 모델 등) defaultOffset의
+        // 절대 스케일로는 극단적으로 작거나 크게 앉는다. "진입 직전 화면상 크기(char_size 설정분 제외)"를
+        // 시트 공간으로 환산한 값을 초기 scaleMultiplier로 삼는 전용 엔트리를 만들어 시작한다.
+        // 이후 미세 조정은 SitSupport에서 하고 [데이터 저장]으로 확정한다.
+        if (!chillSitData.HasOffset(attrs.charcode))
+        {
+            // 데스크 배율은 착석 후 Update(ApplyDeskOffset)에서 적용되므로 시트 스케일에 선반영해 환산
+            float seatLossy = chairSeatPoint.lossyScale.x * deskScaleMultiplier;
+            float charLossy = charRect.lossyScale.x;
+            if (seatLossy > 0.0001f && charLossy > 0f)
+            {
+                float sizeFactor = 1f;
+                if (SettingManager.Instance != null && SettingManager.Instance.settings.char_size > 0f)
+                {
+                    sizeFactor = SettingManager.Instance.settings.char_size / 100f;
+                }
+                ChillSitData.CharacterSitOffset created = chillSitData.GetOrCreateOffset(attrs.charcode);
+                created.scaleMultiplier = charLossy / sizeFactor / seatLossy;
+                offset = created;
+                Debug.Log($"[ChillMode] {attrs.charcode} 첫 착석 — 크기 자동 시드: scaleMultiplier={created.scaleMultiplier:F2}");
+            }
+        }
+
         // chairRoot 위치/회전 오프셋 적용 (캐릭터의 조상이므로 SetParent 전에 먼저 반영)
         if (chairRoot != null)
         {
@@ -205,9 +230,9 @@ public class ChillModeManager : MonoBehaviour
         }
 
         // 공용 리타겟팅 애니메이터로 교체 후 착석 상태 재생
-        animator.runtimeAnimatorController = chillAnimatorController;
+        animator.runtimeAnimatorController = pomodoroDeskAnimator;
         bool hasState = animator.HasState(0, Animator.StringToHash(chillStateName));
-        Debug.Log($"[ChillMode] Animator 교체됨={chillAnimatorController.name}, HasState({chillStateName})={hasState}");
+        Debug.Log($"[ChillMode] Animator 교체됨={pomodoroDeskAnimator.name}, HasState({chillStateName})={hasState}");
         animator.Play(chillStateName, 0, 0);
 
         // 배치가 모두 끝난 뒤 다시 활성화

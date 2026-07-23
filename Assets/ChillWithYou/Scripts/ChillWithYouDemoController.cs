@@ -1,93 +1,113 @@
-using System.Collections;
+using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// ChillWithYouSample 데모 전용 컨트롤러 — 캐릭터 교체 + 자동 착석만 담당.
-/// 착석 오프셋 튜닝 UI는 공용 SitSupport 패널(SitSupportScript)이 맡는다
-/// (캐릭터 교체는 SitSupport가 charcode 변경을 폴링해 자동으로 슬라이더를 리로드).
+/// ChillWithYouSample 데모 전용 컨트롤러 — 캐릭터 교체 버튼 UI만 담당.
+/// 데이터(캐릭터 목록)와 교체/재착석 로직은 ChillWithYouSampleManager(싱글톤)가 소유하고,
+/// 이 컨트롤러는 그 목록으로 버튼을 동적 생성해 SwitchCharacter(index)를 호출할 뿐이다.
+/// 목록이 바뀌면(OnCharactersChanged) 버튼을 다시 그린다 — 캐릭터 추가는 매니저 인스펙터/API로.
+/// 착석 오프셋 튜닝 UI는 공용 SitSupport 패널(SitSupportScript)이 맡는다.
 /// 참조는 씬 베이크 시(ChillWithYouSampleBuilder) 주입된다.
 /// </summary>
 public class ChillWithYouDemoController : MonoBehaviour
 {
-    [Header("씬 참조")]
-    public ChillModeManager chillManager;
-    public RectTransform charParent;     // 캐릭터 스폰 부모 (Canvas_Char)
-    public GameObject currentCharacter;
+    [Header("UI (빌더 주입)")]
+    public RectTransform panelRect;        // DemoCharPanel — 버튼 행 수에 맞춰 높이 조절
+    public RectTransform buttonContainer;  // 버튼이 생성될 컨테이너
+    public TMP_FontAsset buttonFont;       // SUIT-Bold
 
-    [Header("캐릭터 프리팹 (버튼 순서와 동일)")]
-    public GameObject[] characterPrefabs;
-    public Button[] characterButtons;
+    // 빌더(SitSupportBuilder/ChillWithYouSampleBuilder)와 동일한 다크 테마 값
+    private static readonly Color ButtonColor = new Color(0.18f, 0.26f, 0.4f, 1f);
 
-    private const int CharLayer = 3;
-    private const float EnterDelaySeconds = 0.5f; // MagicaCloth 등 초기화 후 착석
+    private const float PanelHeaderHeight = 42f;  // 타이틀 영역
+    private const float RowHeight = 40f;
+    private const int ButtonsPerRow = 3;
+
+    private readonly List<GameObject> spawnedButtons = new List<GameObject>();
 
     private void Start()
     {
-        if (chillManager != null && currentCharacter != null)
+        if (ChillWithYouSampleManager.Instance != null)
         {
-            chillManager.overrideCharacter = currentCharacter;
+            ChillWithYouSampleManager.Instance.OnCharactersChanged += RebuildButtons;
         }
-
-        if (characterButtons != null)
-        {
-            for (int i = 0; i < characterButtons.Length; i++)
-            {
-                int index = i; // 클로저 캡처용 복사
-                if (characterButtons[i] != null)
-                {
-                    characterButtons[i].onClick.AddListener(() => SwapCharacter(index));
-                }
-            }
-        }
-
-        StartCoroutine(AutoEnter());
+        RebuildButtons();
     }
 
-    private IEnumerator AutoEnter()
+    private void OnDestroy()
     {
-        yield return new WaitForSeconds(EnterDelaySeconds);
-        if (chillManager != null && !chillManager.IsChillMode)
+        if (ChillWithYouSampleManager.Instance != null)
         {
-            chillManager.EnterChillMode();
+            ChillWithYouSampleManager.Instance.OnCharactersChanged -= RebuildButtons;
         }
     }
 
-    /// <summary>일어나기 → 캐릭터 교체 → 재착석. 책상/의자는 ChillModeManager가 관리하므로 그대로.</summary>
-    public void SwapCharacter(int index)
+    /// <summary>매니저의 캐릭터 목록으로 버튼 전체 재생성 (3개/행, 패널 높이 자동).</summary>
+    private void RebuildButtons()
     {
-        if (characterPrefabs == null || index < 0 || index >= characterPrefabs.Length) return;
-        GameObject prefab = characterPrefabs[index];
-        if (prefab == null || chillManager == null) return;
-
-        if (chillManager.IsChillMode)
+        foreach (GameObject go in spawnedButtons)
         {
-            chillManager.ExitChillMode(); // 원상 복구 후 교체 (착석 중 파괴 방지)
+            if (go != null) Destroy(go);
+        }
+        spawnedButtons.Clear();
+
+        ChillWithYouSampleManager manager = ChillWithYouSampleManager.Instance;
+        if (manager == null || buttonContainer == null) return;
+
+        int count = manager.Count;
+        for (int i = 0; i < count; i++)
+        {
+            int index = i; // 클로저 캡처용 복사
+            Button button = CreateButton(manager.GetLabel(i),
+                new Vector2(14f + (i % ButtonsPerRow) * 120f, -(i / ButtonsPerRow) * RowHeight));
+            button.onClick.AddListener(() => manager.SwitchCharacter(index));
         }
 
-        if (currentCharacter != null)
+        // 행 수에 맞춰 패널 높이 조절 (버튼 0개여도 1행 높이 확보)
+        if (panelRect != null)
         {
-            Destroy(currentCharacter);
+            int rows = Mathf.Max(1, Mathf.CeilToInt(count / (float)ButtonsPerRow));
+            panelRect.sizeDelta = new Vector2(panelRect.sizeDelta.x, PanelHeaderHeight + rows * RowHeight + 8f);
         }
-
-        GameObject next = Instantiate(prefab, charParent);
-        next.name = prefab.name;
-        RectTransform rt = next.transform as RectTransform;
-        if (rt != null) rt.anchoredPosition3D = new Vector3(0f, -450f, 0f);
-        SetLayerRecursive(next, CharLayer); // Main Camera 컬링(3|6) 대응
-
-        currentCharacter = next;
-        chillManager.overrideCharacter = next;
-
-        StartCoroutine(AutoEnter());
     }
 
-    private static void SetLayerRecursive(GameObject go, int layer)
+    private Button CreateButton(string label, Vector2 pos)
     {
-        go.layer = layer;
-        foreach (Transform child in go.transform)
-        {
-            SetLayerRecursive(child.gameObject, layer);
-        }
+        GameObject go = new GameObject("CharButton_" + label, typeof(RectTransform));
+        go.layer = buttonContainer.gameObject.layer;
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.SetParent(buttonContainer, false);
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot = new Vector2(0f, 1f);
+        rt.anchoredPosition = pos;
+        rt.sizeDelta = new Vector2(112f, 34f);
+
+        Image img = go.AddComponent<Image>();
+        img.color = ButtonColor;
+        Button button = go.AddComponent<Button>();
+        button.targetGraphic = img;
+
+        GameObject textGO = new GameObject("Label", typeof(RectTransform));
+        textGO.layer = go.layer;
+        RectTransform textRt = textGO.GetComponent<RectTransform>();
+        textRt.SetParent(rt, false);
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.pivot = new Vector2(0.5f, 0.5f);
+        textRt.anchoredPosition = Vector2.zero;
+        textRt.sizeDelta = Vector2.zero;
+        TextMeshProUGUI tmp = textGO.AddComponent<TextMeshProUGUI>();
+        if (buttonFont != null) tmp.font = buttonFont;
+        tmp.text = label;
+        tmp.fontSize = 20f;
+        tmp.color = Color.white;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.raycastTarget = false;
+
+        spawnedButtons.Add(go);
+        return button;
     }
 }

@@ -2,6 +2,43 @@
 
 앉아서 같이 포모도로 하는 시스템. 오피스 리소스(Desk_Set)는 Synty Polygon Office 발췌.
 
+## PomodoroMenuFallback — 포모도로 복귀 수단 (2026-07-23)
+
+캐릭터가 극소/비가시 상태로 착석하면 캐릭터 우클릭 메뉴를 열 수 없어 복귀 수단이 사라지는 문제의 해결.
+Desk_Set 프리팹/콜라이더 수정 없이 전역 입력 폴백으로 구현 (`Scripts/PomodoroMenuFallback.cs`,
+ChillModeManager.prefab에 부착 — 양쪽 씬 프리팹 인스턴스로 자동 전파).
+
+- **발동 영역 판정 = 기존 신호 3개 조합** (콜라이더/레이어 불필요):
+  `IsPomodoroMode()` + `TransparentWindow.IsOnOpaquePixel`(커서가 렌더된 픽셀 위 — 앱 클릭 캡처와
+  동일 기준) + `!EventSystem.IsPointerOverGameObject()`(UI·캐릭터 콜라이더 위면 각자 핸들러가 처리).
+  = "포모도로 중 디오라마의 빈 픽셀 위".
+- **제스처는 menutrigger와 동일**: 우클릭 즉시 / 더블클릭 0.3초 / 좌클릭 0.5초 홀드(IsDragging 가드).
+- 발동 시 현재 캐릭터 `MenuTrigger.OpenMenu()`(신규 public 래퍼)로 포워딩 — 완전히 같은 메뉴.
+  포워딩 불가 시 `SetMode(Chat)` 직접 호출이 최후의 탈출구.
+- 데모 씬은 ChatModeManager 부재로 게이트에서 자동 비활성.
+
+## PomodoroDeskAnimator 리네임 + DeskSupport (2026-07-23)
+
+- **리네임**: 착석 컨트롤러 `HY Motion Animator.controller` → **`PomodoroDeskAnimator.controller`**
+  (경로 동일: `Materials/Animation/`, GUID 보존 — 파일/메타 리네임 + m_Name 수정).
+  ChillModeManager 필드도 `chillAnimatorController` → **`pomodoroDeskAnimator`**
+  ([FormerlySerializedAs]로 기존 씬/프리팹 데이터 호환, 프리팹 YAML 키도 갱신).
+  이하 문서의 "HY Motion Animator" 표기는 전부 현재의 PomodoroDeskAnimator를 뜻한다.
+- **DeskSupport** (책상 꾸미기 패널 — SitSupport와 동일 공용 프리팹 규약):
+  - `Scripts/DeskSupportData.cs` + `ScriptableObjects/DeskSupportData.asset`:
+    스킨 머티리얼 목록(기본 PolygonOffice_Material_01~04_A) / 장식 목록(기본: 테스트 큐브·구,
+    `Prefabs/Deco/`) / **deskId별** 상태(skinIndex + 슬롯별 장식 id) — 책상 종류 확장 대비 키 구조.
+  - `Scripts/DeskSupportScript.cs` + `Prefabs/DeskSupport.prefab`: 루트 상시 활성 + 패널 기본 숨김.
+    Start 후 저장 상태 자동 적용(본편에서도 스킨/장식 복원). 스킨 버튼(선택 강조)과 슬롯 버튼
+    (클릭=없음→장식1→…순환)은 SO 기반 런타임 생성. [데이터 저장]=에디터 전용 디스크 영속.
+    스킨 교체는 렌더러 sharedMaterials 중 "스킨 후보에 속한" 원소만 교체(유리/스크린 불변),
+    장식 슬롯 하위 렌더러 제외.
+  - `Editor/DeskSupportBuilder.cs`: `Tools → ChillWithYou → 6. Build DeskSupport Prefab`(테스트 장식
+    생성 + SO 생성/보정 + **Desk_Set.prefab에 DecoSlot_01~03 마커 추가**(멱등, 상판 bounds 근사 —
+    위치는 에디터에서 마커 이동으로 조정) + 패널 베이크) / `7. Install DeskSupport Into SampleScene`.
+  - 본편 열기: 우클릭 Dev → **DeskSupport** (menutrigger, SitSupport 항목 아래). 데모: 항상 표시(x804).
+  - BuildAll에 DeskSupport 빌드+데모 배치 포함, BuildAllAndInstall에 본편 설치 포함.
+
 ## Char_toon(Generic 리그) 착석 지원 — CharAvatarSO (2026-07-22)
 
 착석 클립(SitTyping/SitLookAround)은 휴머노이드 muscle 클립이라 Generic 리그(CH0***/Original 계열,
@@ -30,6 +67,44 @@
   batchmode: `-executeMethod CharAvatarGenerator.GenerateBatch`
 - **남은 것**: 토온 캐릭터 ChillSitData 착석 오프셋 튜닝(SitSupport 패널로 캐릭터별 저장),
   builder 경로 산출물 자세 시각 검수, SitTyping이 diana 비율 기준이라 chibi 손-키보드 정렬 확인.
+
+## ChillWithYouSampleManager — 데모 가변화 (2026-07-23)
+
+데모 씬 전용 싱글톤 매니저(`Scripts/ChillWithYouSampleManager.cs`, 씬 GO `ChillWithYouSampleManager`).
+하드코딩이던 값들을 가변 데이터로 승격:
+
+- **characters** (label+prefab 리스트): 데모 캐릭터 목록. 씬에서 인스펙터로 항목을 추가하거나
+  런타임 API(`AddCharacter`/`RemoveCharacterAt`/`SetCharacters`)로 갈아끼우면
+  `OnCharactersChanged` → 데모 패널 버튼이 자동 재생성된다(3개/행, 패널 높이 자동).
+  캐릭터 카탈로그 SO가 생기면 SetCharacters로 흘려 넣는 연동 지점.
+- **SwitchCharacter(index | prefab)**: 일어나기→교체→재착석 (구 DemoController.SwapCharacter 이관).
+  목록 미등록 프리팹도 직접 투입 가능. **spawnPosition/enterDelaySeconds**도 인스펙터 가변.
+- **원본 프리팹 안전 투입**: 스폰 시점에 마스코트 스크립트(FallingObject/MenuTrigger/Click·Drag·
+  Wheel핸들러/AnimationController/EmotionFaceArona*)를 자동 제거(StripDemoUnsafeComponents,
+  빌더 ProcessPocPrefab과 동일 목록). 데모 씬에 본편 매니저/위젯이 없어 나던 매 프레임 NRE
+  (menutrigger.cs:88 RadialMenuAction null) 해결 — POC 사전 복사본 없이 임의 캐릭터 등록 가능.
+- **ChillWithYouDemoController**는 순수 UI로 축소: 매니저 목록으로 버튼 동적 생성만 담당
+  (빌더는 buttons 컨테이너/panelRect/SUIT-Bold만 주입, 고정 버튼 3개 베이크 제거).
+- 주의: 씬을 리베이크(`2. Build ChillWithYouSample Scene`)하면 매니저 GO가 기본 3종
+  (Diana/Arona6/SFM POC)으로 재생성된다 — 인스펙터로 추가한 항목은 씬 저장분이므로 리베이크 시 소실.
+
+## 대형 스케일 모델 착석 대응 (2026-07-23)
+
+CH0069류는 평상시 localScale이 수만(예: 67200)인 모델이라 defaultOffset의 절대 scaleMultiplier로는
+의자 위에 극소 크기로 앉았고, SitSupport 크기 슬라이더(max 30)로는 도달 자체가 불가능했다.
+
+- **첫 착석 자동 크기 시드** (`ChillModeManager.EnterChillMode` + `ChillSitData.HasOffset`):
+  ChillSitData에 전용 엔트리가 없는 charcode가 앉으면, "진입 직전 화면상 크기(전역 char_size 설정분
+  제외)"를 시트 공간으로 환산(charLossy / sizeFactor / (seatLossy × deskScaleMultiplier))한 값을
+  scaleMultiplier 초기값으로 하는 전용 엔트리를 자동 생성한다. 어떤 스케일 단위의 모델이든 첫 착석부터
+  대략 맞는 크기로 앉고, 이후 SitSupport 미세 조정 → [데이터 저장]으로 확정.
+  포모도로 중 착석 크기는 의도적으로 char_size와 무관(디오라마 자체 배율 discipline) — 시드에서
+  char_size를 나눠 두므로 설정값과 무관하게 동일한 착석 크기가 나온다.
+- **SitSupport 수치 직접 입력**: 각 수치 행의 값 라벨(TMP_Text)을 **TMP_InputField**로 교체
+  (`SitSupportScript`의 *ValueInput 필드 + `HookInput`, 빌더 `CreateInputField`).
+  타이핑으로 슬라이더 범위 밖 값을 넣으면 범위를 자동 확장하며 즉시 적용(데이터 로드 시 확장하는
+  기존 SetSliderValueSilently와 대칭). 회전 Y는 0~360 정규화. 적용 파이프라인은 슬라이더 리스너 공용.
+  비착석 중에는 입력 필드도 슬라이더와 함께 잠긴다.
 
 ## 시점 프리셋 (2026-07-15)
 

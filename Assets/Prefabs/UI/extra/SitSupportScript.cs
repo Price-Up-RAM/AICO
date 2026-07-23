@@ -30,33 +30,35 @@ public class SitSupportScript : MonoBehaviour
     public Button pauseButton;
     public TMP_Text pauseButtonLabel;
 
+    // 값 표시는 입력 필드가 겸한다: 직접 타이핑하면 슬라이더 범위를 넘는 값(대형 스케일 모델 등)도
+    // 범위를 자동 확장하며 즉시 적용된다 (예: 기본 스케일 20000+ 모델의 착석 크기).
     [Header("UI - 캐릭터 착석 오프셋")]
     public Slider charXSlider;
-    public TMP_Text charXValueLabel;
+    public TMP_InputField charXValueInput;
     public Slider charYSlider;
-    public TMP_Text charYValueLabel;
+    public TMP_InputField charYValueInput;
     public Slider charZSlider;
-    public TMP_Text charZValueLabel;
+    public TMP_InputField charZValueInput;
     public Slider charScaleSlider;
-    public TMP_Text charScaleValueLabel;
+    public TMP_InputField charScaleValueInput;
     public Slider charRotYSlider;
-    public TMP_Text charRotYValueLabel;
+    public TMP_InputField charRotYValueInput;
 
     [Header("UI - 의자 오프셋")]
     public Slider chairXSlider;
-    public TMP_Text chairXValueLabel;
+    public TMP_InputField chairXValueInput;
     public Slider chairYSlider;
-    public TMP_Text chairYValueLabel;
+    public TMP_InputField chairYValueInput;
     public Slider chairZSlider;
-    public TMP_Text chairZValueLabel;
+    public TMP_InputField chairZValueInput;
 
     [Header("UI - 책상 (시트 앵커 기준)")]
     public Slider deskXSlider;
-    public TMP_Text deskXValueLabel;
+    public TMP_InputField deskXValueInput;
     public Slider deskYSlider;
-    public TMP_Text deskYValueLabel;
+    public TMP_InputField deskYValueInput;
     public Slider deskScaleSlider;
-    public TMP_Text deskScaleValueLabel;
+    public TMP_InputField deskScaleValueInput;
     public TMP_Text angleValueLabel;
     public Button turntableButton;
     public TMP_Text turntableButtonLabel;
@@ -135,6 +137,19 @@ public class SitSupportScript : MonoBehaviour
         HookSlider(deskXSlider, OnDeskAnchorChanged);
         HookSlider(deskYSlider, OnDeskAnchorChanged);
         HookSlider(deskScaleSlider, OnDeskScaleChanged);
+
+        // 입력 필드 → 슬라이더 (범위 밖 값은 범위를 넓혀 반영, 적용 파이프라인은 슬라이더 리스너 공용)
+        HookInput(charXValueInput, charXSlider, false);
+        HookInput(charYValueInput, charYSlider, false);
+        HookInput(charZValueInput, charZSlider, false);
+        HookInput(charScaleValueInput, charScaleSlider, false);
+        HookInput(charRotYValueInput, charRotYSlider, true);
+        HookInput(chairXValueInput, chairXSlider, false);
+        HookInput(chairYValueInput, chairYSlider, false);
+        HookInput(chairZValueInput, chairZSlider, false);
+        HookInput(deskXValueInput, deskXSlider, false);
+        HookInput(deskYValueInput, deskYSlider, false);
+        HookInput(deskScaleValueInput, deskScaleSlider, false);
 
         if (viewApplyButtons != null)
         {
@@ -291,6 +306,35 @@ public class SitSupportScript : MonoBehaviour
         if (slider != null) slider.onValueChanged.AddListener(action);
     }
 
+    /// <summary>입력 필드 확정(엔터/포커스 아웃) 시 파싱해 슬라이더로 반영 — 범위 밖 값은 범위를 넓힌다.
+    /// 적용 자체는 슬라이더 onValueChanged 리스너(기존 파이프라인)를 그대로 경유한다.</summary>
+    private void HookInput(TMP_InputField input, Slider slider, bool normalizeAngle)
+    {
+        if (input == null || slider == null) return;
+        input.onEndEdit.AddListener(text =>
+        {
+            if (float.TryParse(text, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float value))
+            {
+                if (normalizeAngle) value = NormalizeAngle(value);
+                if (value < slider.minValue) slider.minValue = value;
+                if (value > slider.maxValue) slider.maxValue = value;
+                slider.value = value;
+            }
+            // 파싱 실패 시(또는 동일값 재입력) 표시를 실제 슬라이더 값으로 재동기
+            RefreshCharacterLabels();
+            RefreshChairLabels();
+            RefreshDeskLabels();
+        });
+    }
+
+    /// <summary>입력 필드 표시 갱신 — 사용자가 타이핑 중(포커스)일 때는 덮어쓰지 않는다.</summary>
+    private static void SetInputText(TMP_InputField input, string text)
+    {
+        if (input == null || input.isFocused) return;
+        if (input.text != text) input.SetTextWithoutNotify(text);
+    }
+
     // ---------------------------------------------------------------- 모드/재생
 
     /// <summary>착석 토글 — 본편은 Pomodoro 모드(타이머 UI/채팅 차단 포함), 데모는 착석만.</summary>
@@ -359,6 +403,17 @@ public class SitSupportScript : MonoBehaviour
         {
             if (slider != null) slider.interactable = on;
         }
+
+        TMP_InputField[] inputs =
+        {
+            charXValueInput, charYValueInput, charZValueInput, charScaleValueInput, charRotYValueInput,
+            chairXValueInput, chairYValueInput, chairZValueInput,
+            deskXValueInput, deskYValueInput, deskScaleValueInput,
+        };
+        foreach (TMP_InputField input in inputs)
+        {
+            if (input != null) input.interactable = on;
+        }
     }
 
     private void TogglePause()
@@ -416,18 +471,18 @@ public class SitSupportScript : MonoBehaviour
 
     private void RefreshCharacterLabels()
     {
-        if (charXValueLabel != null && charXSlider != null) charXValueLabel.text = charXSlider.value.ToString("0.00");
-        if (charYValueLabel != null && charYSlider != null) charYValueLabel.text = charYSlider.value.ToString("0.00");
-        if (charZValueLabel != null && charZSlider != null) charZValueLabel.text = charZSlider.value.ToString("0.00");
-        if (charScaleValueLabel != null && charScaleSlider != null) charScaleValueLabel.text = charScaleSlider.value.ToString("0.00");
-        if (charRotYValueLabel != null && charRotYSlider != null) charRotYValueLabel.text = charRotYSlider.value.ToString("0") + "°";
+        if (charXSlider != null) SetInputText(charXValueInput, charXSlider.value.ToString("0.00"));
+        if (charYSlider != null) SetInputText(charYValueInput, charYSlider.value.ToString("0.00"));
+        if (charZSlider != null) SetInputText(charZValueInput, charZSlider.value.ToString("0.00"));
+        if (charScaleSlider != null) SetInputText(charScaleValueInput, charScaleSlider.value.ToString("0.00"));
+        if (charRotYSlider != null) SetInputText(charRotYValueInput, charRotYSlider.value.ToString("0"));
     }
 
     private void RefreshChairLabels()
     {
-        if (chairXValueLabel != null && chairXSlider != null) chairXValueLabel.text = chairXSlider.value.ToString("0.00");
-        if (chairYValueLabel != null && chairYSlider != null) chairYValueLabel.text = chairYSlider.value.ToString("0.00");
-        if (chairZValueLabel != null && chairZSlider != null) chairZValueLabel.text = chairZSlider.value.ToString("0.00");
+        if (chairXSlider != null) SetInputText(chairXValueInput, chairXSlider.value.ToString("0.00"));
+        if (chairYSlider != null) SetInputText(chairYValueInput, chairYSlider.value.ToString("0.00"));
+        if (chairZSlider != null) SetInputText(chairZValueInput, chairZSlider.value.ToString("0.00"));
     }
 
     private void LoadSlidersFromSitData(string charcode)
@@ -584,9 +639,9 @@ public class SitSupportScript : MonoBehaviour
 
     private void RefreshDeskLabels()
     {
-        if (deskXValueLabel != null && deskXSlider != null) deskXValueLabel.text = deskXSlider.value.ToString("0");
-        if (deskYValueLabel != null && deskYSlider != null) deskYValueLabel.text = deskYSlider.value.ToString("0");
-        if (deskScaleValueLabel != null && deskScaleSlider != null) deskScaleValueLabel.text = deskScaleSlider.value.ToString("0");
+        if (deskXSlider != null) SetInputText(deskXValueInput, deskXSlider.value.ToString("0"));
+        if (deskYSlider != null) SetInputText(deskYValueInput, deskYSlider.value.ToString("0"));
+        if (deskScaleSlider != null) SetInputText(deskScaleValueInput, deskScaleSlider.value.ToString("0"));
     }
 
     private void UpdateAngleLabel()
