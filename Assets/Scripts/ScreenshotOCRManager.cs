@@ -14,8 +14,13 @@ using TMPro;
 public class ScreenshotOCRManager : MonoBehaviour
 {
     // Windows API 선언 (GetSystemMetrics만 필요)
+    // MR 포팅: Quest/Android에서는 Unity의 Screen 해상도로 대체한다. 호출부 수정 불필요.
+#if UNITY_STANDALONE_WIN
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
+#else
+    private static int GetSystemMetrics(int nIndex) => nIndex == 0 ? Screen.width : Screen.height;
+#endif
 
     private const int SM_CXSCREEN = 0;  // 주 모니터 너비
     private const int SM_CYSCREEN = 1;  // 주 모니터 높이

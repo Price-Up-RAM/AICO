@@ -40,9 +40,13 @@ public class ScreenshotManager : MonoBehaviour
     private Vector3 startMousePosition;
     private Coroutine selectAreaCoroutine; // 영역 선택 코루틴 참조
 
+    // MR 포팅: Win32/GDI P/Invoke는 Windows 스탠드얼론에서만 선언한다.
+    // Quest/Android에서는 같은 시그니처의 스텁으로 대체되어, 핸들이 IntPtr.Zero가 되고
+    // 캡처 계열 메서드는 아래 #if 가드에서 조기 반환한다.
+#if UNITY_STANDALONE_WIN
     [DllImport("user32.dll")]
     private static extern IntPtr GetDC(IntPtr hwnd);
-    
+
     [DllImport("user32.dll")]
     private static extern IntPtr GetDesktopWindow();
 
@@ -80,6 +84,23 @@ public class ScreenshotManager : MonoBehaviour
 
     [DllImport("user32.dll")]
     private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+#else
+    private static IntPtr GetDC(IntPtr hwnd) => IntPtr.Zero;
+    private static IntPtr GetDesktopWindow() => IntPtr.Zero;
+    private static IntPtr GetWindowDC(IntPtr hWnd) => IntPtr.Zero;
+    private static IntPtr CreateCompatibleDC(IntPtr hdc) => IntPtr.Zero;
+    private static IntPtr CreateCompatibleBitmap(IntPtr hdc, int nWidth, int nHeight) => IntPtr.Zero;
+    private static IntPtr SelectObject(IntPtr hdc, IntPtr bmp) => IntPtr.Zero;
+    private static bool BitBlt(IntPtr hdcDest, int xDest, int yDest, int wDest, int hDest,
+                               IntPtr hdcSrc, int xSrc, int ySrc, int Rop) => false;
+    private static bool DeleteObject(IntPtr hObject) => false;
+    private static bool DeleteDC(IntPtr hdc) => false;
+    private static int ReleaseDC(IntPtr hWnd, IntPtr hDC) => 0;
+    // 화면 크기는 Unity Screen으로 대체
+    private static int GetSystemMetrics(int nIndex) => nIndex == 0 ? Screen.width : Screen.height;
+    private static IntPtr GetActiveWindow() => IntPtr.Zero;
+    private static bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity) => false;
+#endif
 
     private const int SRCCOPY = 0x00CC0020;
     
@@ -671,6 +692,11 @@ public class ScreenshotManager : MonoBehaviour
 
     private void CaptureDesktopArea(int x, int y, int width, int height, string filePath)
     {
+#if !UNITY_STANDALONE_WIN
+        // MR 포팅: 캡처할 데스크톱 화면이 없고 System.Drawing도 사용할 수 없다.
+        Debug.LogWarning("[ScreenshotManager] 데스크톱 캡처는 Windows 전용입니다. 건너뜁니다.");
+        return;
+#else
         // Get the desktop window and its DC
         IntPtr desktopHwnd = GetDesktopWindow();
         IntPtr desktopDC = GetWindowDC(desktopHwnd);
@@ -695,6 +721,7 @@ public class ScreenshotManager : MonoBehaviour
         DeleteObject(bitmap);
         DeleteDC(memoryDC);
         ReleaseDC(desktopHwnd, desktopDC);
+#endif
     }
 
     // 메모리에 바로 캡처 (파일 저장 없이)
@@ -776,6 +803,11 @@ public class ScreenshotManager : MonoBehaviour
     // 메모리에 직접 캡처하는 메서드
     private byte[] CaptureDesktopAreaToMemory(int x, int y, int width, int height)
     {
+#if !UNITY_STANDALONE_WIN
+        // MR 포팅: 캡처할 데스크톱 화면이 없고 System.Drawing도 사용할 수 없다.
+        Debug.LogWarning("[ScreenshotManager] 데스크톱 캡처는 Windows 전용입니다. null을 반환합니다.");
+        return null;
+#else
         IntPtr desktopHwnd = GetDesktopWindow();
         IntPtr desktopDC = GetWindowDC(desktopHwnd);
         IntPtr memoryDC = CreateCompatibleDC(desktopDC);
@@ -801,6 +833,7 @@ public class ScreenshotManager : MonoBehaviour
         ReleaseDC(desktopHwnd, desktopDC);
 
         return imageBytes;
+#endif
     }
 
     // 전체 화면 캡처 (Hybrid 방식 적용)

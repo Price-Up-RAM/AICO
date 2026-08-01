@@ -1,10 +1,17 @@
 using System;
-using System.Drawing;
-using System.Windows.Forms;
-using System.IO; 
+using System.IO;
 using UnityEngine;
 using System.Runtime.InteropServices;
+// MR 포팅: System.Drawing / System.Windows.Forms는 Windows 스탠드얼론 전용이다.
+// Android(Quest)에서는 어셈블리 자체가 없으므로 using부터 가드한다.
+#if UNITY_STANDALONE_WIN
+using System.Drawing;
+using System.Windows.Forms;
+#endif
 
+// 트레이 아이콘 관리자 (Windows 전용).
+// MR/Android 빌드에서는 트레이라는 개념이 없으므로 컴포넌트 껍데기만 남기고 전부 no-op이 된다.
+// 씬/프리팹의 직렬화 데이터가 깨지지 않도록 public 필드와 메서드 시그니처는 모든 플랫폼에서 유지한다.
 public class TrayIconManager : MonoBehaviour
 {
 
@@ -22,9 +29,12 @@ public class TrayIconManager : MonoBehaviour
         }
     }
 
+    public UnityEngine.UI.Image iconImage;
+
+#if UNITY_STANDALONE_WIN
+
     private NotifyIcon trayIcon; // Windows Forms NotifyIcon
     private bool isMinimized = false; // 창이 최소화 상태인지 여부
-    public UnityEngine.UI.Image iconImage;
 
     // 외부 DLL(user32.dll)에서 GetActiveWindow 함수를 가져옴. 이 함수는 현재 활성화된 창의 핸들을 반환합니다.
     [DllImport("user32.dll")]
@@ -137,8 +147,8 @@ public class TrayIconManager : MonoBehaviour
         trayIcon.Visible = true;
         HideWindow();
         UnityEngine.Debug.Log("창 최소화됨");
-        
-        
+
+
     }
 
     // 창 복원
@@ -148,7 +158,7 @@ public class TrayIconManager : MonoBehaviour
         CurrentCharToMiddle(null, null);
         // 애니메이션 별도 관리
         AnimationManager.Instance.Show();
-        
+
         isMinimized = false;
         trayIcon.Visible = true;
         ShowWindowManually();
@@ -210,4 +220,20 @@ public class TrayIconManager : MonoBehaviour
         trayIcon.Visible = false;
         trayIcon.Dispose();
     }
+
+#else
+
+    // ===== MR / Android 스텁 =====
+    // 트레이 아이콘·작업 표시줄이 존재하지 않으므로 모든 동작이 no-op이다.
+    // 외부에서 호출하더라도 안전하도록 public 시그니처는 그대로 유지한다.
+
+    public static IntPtr GetActiveWindow() => IntPtr.Zero;
+
+    public void HideWindow() { }
+
+    public void ShowWindowManually() { }
+
+    public void MinimizeWindow(object sender, EventArgs e) { }
+
+#endif
 }

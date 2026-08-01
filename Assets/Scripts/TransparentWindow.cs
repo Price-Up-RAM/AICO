@@ -219,8 +219,17 @@ public class TransparentWindow : MonoBehaviour
     private int _displayIndex;  // 현재 모니터 인덱스
 
     // 외부 DLL(user32.dll)에서 MessageBox 함수를 가져옴. 이 함수는 메시지 박스를 표시합니다.
+    // MR 포팅: Quest/Android에는 네이티브 메시지 박스가 없으므로 로그로 대체한다.
+#if UNITY_STANDALONE_WIN
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int MessageBox(IntPtr hWnd, string text, string caption, uint type);
+#else
+    public static int MessageBox(IntPtr hWnd, string text, string caption, uint type)
+    {
+        Debug.Log($"[MessageBox/{caption}] {text}");
+        return 0;
+    }
+#endif
 
     // 메시지 박스를 표시하는 함수
     public void ShowMessageBox(string message)

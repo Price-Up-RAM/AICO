@@ -20,6 +20,10 @@ public class ClipboardManager : MonoBehaviour
     }
 
     // Windows API 선언
+    // MR 포팅: Win32 P/Invoke는 Windows 스탠드얼론에서만 선언한다.
+    // Quest/Android에서는 같은 시그니처의 스텁으로 대체된다. OpenClipboard가 false를 반환하므로
+    // 기존 클립보드 메서드들은 각자의 실패 처리 경로로 자연스럽게 빠져나간다. 호출부 수정 불필요.
+#if UNITY_STANDALONE_WIN
     [DllImport("user32.dll")]
     private static extern bool OpenClipboard(IntPtr hWndNewOwner);
 
@@ -79,6 +83,30 @@ public class ClipboardManager : MonoBehaviour
 
     [DllImport("kernel32.dll")]
     private static extern IntPtr GlobalFree(IntPtr hMem);
+#else
+    // ===== MR / Android 스텁 =====
+    private static bool OpenClipboard(IntPtr hWndNewOwner) => false;
+    private static bool CloseClipboard() => false;
+    private static bool IsClipboardFormatAvailable(uint format) => false;
+    private static IntPtr GetClipboardData(uint uFormat) => IntPtr.Zero;
+    private static uint EnumClipboardFormats(uint format) => 0;
+    private static IntPtr CreateCompatibleDC(IntPtr hdc) => IntPtr.Zero;
+    private static IntPtr CreateCompatibleBitmap(IntPtr hdc, int nWidth, int nHeight) => IntPtr.Zero;
+    private static IntPtr SelectObject(IntPtr hdc, IntPtr hgdiobj) => IntPtr.Zero;
+    private static bool DeleteObject(IntPtr hObject) => false;
+    private static bool DeleteDC(IntPtr hdc) => false;
+    private static IntPtr GetDC(IntPtr hWnd) => IntPtr.Zero;
+    private static int ReleaseDC(IntPtr hWnd, IntPtr hDC) => 0;
+    private static IntPtr GlobalLock(IntPtr hMem) => IntPtr.Zero;
+    private static bool GlobalUnlock(IntPtr hMem) => false;
+    private static int GlobalSize(IntPtr hMem) => 0;
+    // 시퀀스 번호가 항상 0이면 CheckClipboardChange가 변경을 감지하지 않는다.
+    private static uint GetClipboardSequenceNumber() => 0;
+    private static bool EmptyClipboard() => false;
+    private static IntPtr SetClipboardData(uint uFormat, IntPtr hMem) => IntPtr.Zero;
+    private static IntPtr GlobalAlloc(uint uFlags, UIntPtr dwBytes) => IntPtr.Zero;
+    private static IntPtr GlobalFree(IntPtr hMem) => IntPtr.Zero;
+#endif
 
     private const uint GMEM_MOVEABLE = 0x0002;
 
@@ -235,6 +263,10 @@ public class ClipboardManager : MonoBehaviour
     // 클립보드에서 이미지를 byte[]로 가져오기 (파일 저장 없이)
     public byte[] GetImageBytesFromClipboard()
     {
+#if !UNITY_STANDALONE_WIN
+        // MR 포팅: System.Drawing 미지원 + 클립보드 이미지 개념 없음.
+        return null;
+#else
         try
         {
             // 클립보드 열기
@@ -318,11 +350,16 @@ public class ClipboardManager : MonoBehaviour
             Debug.LogError($"Clipboard 이미지 로드 실패: {ex.Message}");
             return null;
         }
+#endif
     }
 
     // 클립보드에서 이미지를 가져와서 파일로 저장
     public bool SaveImageFromClipboard()
     {
+#if !UNITY_STANDALONE_WIN
+        // MR 포팅: System.Drawing 미지원 + 클립보드 이미지 개념 없음.
+        return false;
+#else
         try
         {
             // 클립보드 열기
@@ -413,6 +450,7 @@ public class ClipboardManager : MonoBehaviour
             Debug.LogError($"Clipboard 이미지 저장 실패: {ex.Message}");
             return false;
         }
+#endif
     }
 
     // 클립보드에서 텍스트를 가져와서 변수에 저장
@@ -517,6 +555,10 @@ public class ClipboardManager : MonoBehaviour
             return false;
         }
 
+#if !UNITY_STANDALONE_WIN
+        // MR 포팅: System.Drawing 미지원 + 클립보드 이미지 개념 없음.
+        return false;
+#else
         try
         {
             // byte[]를 Bitmap으로 변환
@@ -566,6 +608,7 @@ public class ClipboardManager : MonoBehaviour
             Debug.LogError($"[ClipboardManager] 클립보드에 이미지 복사 실패: {ex.Message}");
             return false;
         }
+#endif
     }
 
     // 파일 경로의 이미지를 클립보드에 복사

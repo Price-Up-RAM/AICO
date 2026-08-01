@@ -1,11 +1,15 @@
 using System;
-using System.Drawing;
 using System.Runtime.InteropServices;
 using System.IO;
 using UnityEngine;
+// MR 포팅: System.Drawing은 Windows 스탠드얼론에서만 사용 가능하다 (Android/IL2CPP 미지원).
+#if UNITY_STANDALONE_WIN
+using System.Drawing;
+#endif
 
 public class Win32ScreenCapture : MonoBehaviour
 {
+#if UNITY_STANDALONE_WIN
     // P/Invoke functions from gdi32.dll and user32.dll
     [DllImport("user32.dll")]
     private static extern IntPtr GetDesktopWindow();
@@ -37,9 +41,15 @@ public class Win32ScreenCapture : MonoBehaviour
 
     // Constants
     private const int SRCCOPY = 0x00CC0020;
+#endif
 
     public void CaptureDesktop(string filePath)
     {
+#if !UNITY_STANDALONE_WIN
+        // MR 포팅: 캡처할 데스크톱 화면이 존재하지 않는다.
+        Debug.LogWarning("[Win32ScreenCapture] 데스크톱 캡처는 Windows 전용입니다. 건너뜁니다.");
+        return;
+#else
         // Get the desktop window and its DC
         IntPtr desktopHwnd = GetDesktopWindow();
         IntPtr desktopDC = GetWindowDC(desktopHwnd);
@@ -68,5 +78,6 @@ public class Win32ScreenCapture : MonoBehaviour
         DeleteObject(bitmap);
         DeleteDC(memoryDC);
         ReleaseDC(desktopHwnd, desktopDC);
+#endif
     }
 }

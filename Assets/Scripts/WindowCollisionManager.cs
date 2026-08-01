@@ -41,6 +41,15 @@ public class WindowCollisionManager : MonoBehaviour
     private const int SW_SHOWMAXIMIZED = 3; // 최대화된 창
     private const int SW_SHOWMINIMIZED = 2; // 최소화된 창
 
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    // MR 포팅: Win32 P/Invoke는 Windows 스탠드얼론에서만 선언한다.
+    // Quest/Android에서는 같은 시그니처의 스텁으로 대체된다.
+    //   - EnumWindows가 콜백을 호출하지 않으므로 GetAllWindowsRect()는 빈 리스트를 반환하고,
+    //   - FindWindow가 Zero를 반환하므로 AddTaskbarRect()/GetTopOfCollisionRect()가 자연히 no-op이 된다.
+    // 결과적으로 GetTopOfCollisionRect()는 -99999f(충돌 없음)를 반환하고,
+    // FallingObject는 bottomBoundary까지 그대로 낙하한다. 호출부 수정 불필요.
+#if UNITY_STANDALONE_WIN
     [DllImport("user32.dll")]
     private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
@@ -67,8 +76,34 @@ public class WindowCollisionManager : MonoBehaviour
 
     [DllImport("user32.dll")]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+#else
+    // 열거할 창이 없으므로 콜백을 호출하지 않고 즉시 종료한다.
+    private static bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam) => false;
 
-    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    private static bool GetWindowRect(IntPtr hWnd, out RECT lpRect)
+    {
+        lpRect = default;
+        return false;
+    }
+
+    private static bool IsWindowVisible(IntPtr hWnd) => false;
+
+    private static int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount) => 0;
+
+    private static bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT lpwndpl) => false;
+
+    private static IntPtr FindWindow(string lpClassName, string lpWindowName) => IntPtr.Zero;
+
+    private static uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId)
+    {
+        lpdwProcessId = 0;
+        return 0;
+    }
+
+    private static uint GetCurrentProcessId() => 0;
+
+    private static int GetWindowLong(IntPtr hWnd, int nIndex) => 0;
+#endif
 
     public List<Rect> windowRects = new List<Rect>();  // 충돌범위 상위 15%
     public List<Rect> windowAllRects = new List<Rect>();  // 충돌 범위포함 전체
