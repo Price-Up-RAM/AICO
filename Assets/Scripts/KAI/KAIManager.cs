@@ -10,25 +10,34 @@ public class KAIManager : MonoBehaviour
     private const string AicoCharcode = "aico";      // Assets/Char/Aico/Aico.prefab의 CharAttributes.charcode
     private const string AicoPrefabKey = "naost";    // PrefabDataLocal 프리팹 키 (character_database.json AICO 항목)
 
-    private const float SweepInterval = 0.25f;       // MenuTrigger 교체 스윕 주기
+    // 스윕은 씬 전체(비활성 포함)를 훑기 때문에 비싸다. Quest 실측에서 오브젝트 2588개 기준 약 3.9ms.
+    // 그래서 평시에는 느린 안전망 주기로만 돌리고, 실제로 필요한 순간(초기화·캐릭터 교체)에는 즉시 스윕한다.
+    private const float SweepIntervalFast = 0.25f;   // 초기 구동 중 스윕 주기 (캐릭터 스폰 대기)
+    private const float SweepIntervalIdle = 5f;      // 안정화 후 안전망 스윕 주기
+    private const float FastPhaseSeconds = 10f;      // 이 시간까지는 빠른 주기를 유지
     private const float ForceInterval = 1f;          // 캐릭터 고정 재시도 주기
 
     private float sweepTimer;
     private float forceTimer;
+    private float elapsed;
 
     private void Start()
     {
         Debug.Log("[KAIManager] KAI 프로토타입 씬 활성 — 캐릭터 AICO 고정 + MenuTriggerKAI 적용");
+        SweepMenuTriggers();   // 초기 1회는 즉시 처리
     }
 
     private void Update()
     {
+        elapsed += Time.deltaTime;
+
         ForceAicoIfNeeded();
 
         sweepTimer -= Time.deltaTime;
         if (sweepTimer <= 0f)
         {
-            sweepTimer = SweepInterval;
+            // 초기 10초 동안은 캐릭터 스폰을 놓치지 않도록 촘촘히, 그 이후에는 안전망으로만 돈다.
+            sweepTimer = (elapsed < FastPhaseSeconds) ? SweepIntervalFast : SweepIntervalIdle;
             SweepMenuTriggers();
         }
     }
@@ -77,6 +86,9 @@ public class KAIManager : MonoBehaviour
     // 비활성 오브젝트 포함, 씬의 모든 MenuTrigger를 같은 GameObject의 MenuTriggerKAI로 교체
     private void SweepMenuTriggers()
     {
+        // 배열을 할당하기 전에 존재 여부만 먼저 확인한다. 평시에는 남은 MenuTrigger가 0개라 여기서 끝난다.
+        if (FindAnyObjectByType<MenuTrigger>(FindObjectsInactive.Include) == null) return;
+
         MenuTrigger[] triggers = FindObjectsByType<MenuTrigger>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach (MenuTrigger trigger in triggers)
         {

@@ -98,6 +98,9 @@ public class PhysicsManager : MonoBehaviour
 
     private void StateControlRoutine()
     {
+        // 제어 대상 캐릭터가 없으면 할 일이 없다 (MR 씬에서 캐릭터 스폰 전/CharManager 비활성 상태).
+        if (animator == null) return;
+
         walkProbability = SettingManager.Instance.settings.char_mobility * 2;  // 좌,우 각각 최대 30%
         idleProbability = 100f - walkProbability;
 
@@ -276,6 +279,11 @@ public class PhysicsManager : MonoBehaviour
     // animator의 유틸성 함수
     private bool HasParameter(Animator animator, string paramName)
     {
+        // 캐릭터가 아직 스폰되지 않았거나(MR 씬 초기화 중) CharManager가 비활성이면 animator가 null이다.
+        // 가드가 없으면 3초 주기 StateControlRoutine에서 매번 NullReferenceException이 발생한다.
+        // animator가 없으면 해당 파라미터도 존재하지 않으므로 false가 의미상 옳다.
+        if (animator == null) return false;
+
         foreach (AnimatorControllerParameter param in animator.parameters)
         {
             if (param.name == paramName) return true;

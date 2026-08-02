@@ -49,6 +49,11 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
 
     private void Update()
     {
+        // MR 포팅 널 가드:
+        // m_ContextMenu / m_RadialMenuAction 은 Start()에서 WidgetUtility.Find 로 Canvases/Canvas 하위 위젯을 찾는다.
+        // 해당 캔버스가 비활성이거나(성능 테스트·월드스페이스 전환 중) 위젯이 없는 씬에서는 null이 되는데,
+        // 가드가 없으면 매 프레임 NullReferenceException이 발생하고 스택 트레이스 문자열 생성으로
+        // 프레임당 수 KB의 GC 할당이 폭주한다. (Quest 실측: 프레임당 2회, 초당 ~800KB)
         // itemCheck가 null이 아닌데, active가 아님 = 메뉴가 꺼짐
         if (itemChkFlag)
         {
@@ -59,16 +64,19 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
                 return;
             }
 
-            // 메뉴가 보이는 중
-            if (!m_ContextMenu.IsVisible)  // 자체제공함수
+            // 메뉴가 보이는 중 (메뉴가 아예 없으면 '꺼짐'으로 간주해 플래그를 해제한다)
+            if (m_ContextMenu == null || !m_ContextMenu.IsVisible)  // 자체제공함수
             {
-                StatusManager.Instance.IsOptioning = false;
+                if (StatusManager.Instance != null)
+                {
+                    StatusManager.Instance.IsOptioning = false;
+                }
                 itemChkFlag = false; // 한번 처리 후 flag 초기화
             }
         }
 
         // 좌클릭 상태 체크
-        if (isLeftClickHeld && !StatusManager.Instance.IsDragging)
+        if (isLeftClickHeld && StatusManager.Instance != null && !StatusManager.Instance.IsDragging)
         {
             leftClickHoldTime += Time.deltaTime;
             if (leftClickHoldTime >= 0.5f) // 0.5초 이상 누르면 우클릭 동작 실행
@@ -85,8 +93,8 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             clickCount = 0; // 더블클릭 시간 초과 시 리셋
         }
 
-        // Radial Menu Action이 보이는 중
-        if (m_RadialMenuAction.IsVisible)  // 자체제공함수
+        // Radial Menu Action이 보이는 중 (위젯이 없는 씬에서는 건너뛴다)
+        if (m_RadialMenuAction != null && m_RadialMenuAction.IsVisible)  // 자체제공함수
         {
             UpdateRadialMenuActionPosition();
         }
