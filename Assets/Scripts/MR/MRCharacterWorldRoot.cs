@@ -91,6 +91,12 @@ public class MRCharacterWorldRoot : MonoBehaviour
     [Tooltip("이 시간까지 CharManager 스폰을 기다린 뒤 폴백을 생성한다(초). 0이면 폴백 비활성.")]
     [SerializeField] private float fallbackDelaySeconds = 8f;
 
+    [Header("이동 범위 제한")]
+    [Tooltip("PhysicsManager가 픽셀 공간 안에서 좌우로 걷는 범위를 미터로 제한한다.\n" +
+             "원래 경계는 Canvas_Char 폭(±960픽셀)이라 1/120 스케일에서 ±8m가 되어 방을 벗어난다.\n" +
+             "0이면 제한하지 않는다. Phase 2의 방 안 자율 이동이 들어오면 대체된다.")]
+    [SerializeField] private float wanderRangeMeters = 0.6f;
+
     [Header("디버그")]
     [SerializeField] private bool verboseLog = true;
 
@@ -177,6 +183,7 @@ public class MRCharacterWorldRoot : MonoBehaviour
 
         if (current == _lastCharacter)
         {
+            ClampWanderRange();
             RepositionWhenTrackingArrives();
             LogTracking();
             return;
@@ -477,6 +484,30 @@ public class MRCharacterWorldRoot : MonoBehaviour
         if (_lastCharacter == null) return;
         PlaceInFrontOfUser(_lastCharacter);
         DiagnoseVisibility(_lastCharacter);
+    }
+
+    // =========================================================
+    // 이동 범위 제한
+    // =========================================================
+    // PhysicsManager는 픽셀 공간 안에서 anchoredPosition.x를 좌우로 움직인다.
+    // 자체 경계가 Canvas_Char 폭(±960픽셀)이라 월드로 환산하면 ±8m가 되어 방을 벗어난다.
+    // 래퍼 스케일을 역산해 미터 단위로 제한한다.
+    private void ClampWanderRange()
+    {
+        if (wanderRangeMeters <= 0f) return;
+        if (_lastCharacter == null) return;
+        if (!(_lastCharacter.transform is RectTransform rt)) return;
+
+        float pixelScale = (usePixelSpaceWrapper && _pixelSpace != null) ? _pixelSpace.localScale.x : 1f;
+        if (pixelScale <= 0.000001f) return;
+
+        float limitPx = wanderRangeMeters / pixelScale;   // 미터 → 픽셀 공간 단위
+        Vector2 ap = rt.anchoredPosition;
+        float clampedX = Mathf.Clamp(ap.x, -limitPx, limitPx);
+
+        if (Mathf.Approximately(clampedX, ap.x)) return;
+
+        rt.anchoredPosition = new Vector2(clampedX, ap.y);
     }
 
     // =========================================================

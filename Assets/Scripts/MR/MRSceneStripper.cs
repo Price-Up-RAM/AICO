@@ -88,13 +88,6 @@ public class MRSceneStripper : MonoBehaviour
         // --- 기타 데스크톱 전용 ---
         typeof(DebugManager),                   // Process.Start("explorer.exe" / "notepad.exe")
 
-        // --- 캔버스 픽셀 좌표계에 묶인 이동 시스템 ---
-        // PhysicsManager는 Win32를 쓰지 않지만 캐릭터를 RectTransform.anchoredPosition으로 걷게 한다.
-        // moveSpeed = 120(픽셀/초)이 월드 공간에서는 초속 120m가 되어 캐릭터가 순식간에 날아가고,
-        // anchoredPosition 쓰기가 매 프레임 localPosition.z = -70(캔버스 깊이 상수)을 되살려
-        // 캐릭터를 카메라 뒤 70m로 밀어낸다. Quest 실측으로 확인된 문제다.
-        // Phase 2에서 MRUK 바닥 위를 걷는 3D 이동으로 대체한다.
-        typeof(PhysicsManager),
     };
 
     // =========================================================
@@ -134,6 +127,13 @@ public class MRSceneStripper : MonoBehaviour
         // --- 캐릭터 / 애니메이션 ---
         typeof(AnimationManager), typeof(AnimationPlayerManager), typeof(EmotionManager),
         typeof(SettingCharManager), typeof(ChangeCharManager),
+
+        // PhysicsManager — 캔버스 픽셀 좌표로 캐릭터를 걷게 한다(moveSpeed 120픽셀/초).
+        // MRCharacterWorldRoot의 '픽셀 공간 래퍼' 안에서는 이 값이 자연스러운 미터 속도로
+        // 환산되므로(1/120 스케일 → 1.0 m/s) 그대로 사용할 수 있다.
+        // ⚠ usePixelSpaceWrapper를 끄면 초속 120m로 날아가므로 그때는 반드시 비활성화할 것.
+        // 이동 범위 제한은 MRCharacterWorldRoot의 wanderRangeMeters가 담당한다.
+        typeof(PhysicsManager),
 
         // --- 대화 / 시나리오 ---
         typeof(DialogueManager), typeof(DialogueCacheManager), typeof(ChoiceManager),
