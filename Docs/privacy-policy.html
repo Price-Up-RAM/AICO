@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>개인정보처리방침 - MY-Little-Jarvis</title>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 26px;
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        h2 {
+            font-size: 20px;
+            color: #2c3e50;
+            margin-top: 30px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        h3 {
+            font-size: 16px;
+            color: #444;
+        }
+        p, li {
+            font-size: 14px;
+            color: #555;
+        }
+        ul {
+            margin-bottom: 20px;
+        }
+        .notice {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .footer {
+            margin-top: 50px;
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>MY-Little-Jarvis 개인정보처리방침</h1>
+    
+    <div class="notice">
+        <strong>MY-Little-Jarvis (이하 '앱')</strong>은(는) 사용자의 개인정보 보호를 매우 중요하게 생각하며, 「개인정보 보호법」, 「정보통신망 이용촉진 및 정보보호 등에 관한 법률」 등 관련 법령을 준수하고 있습니다. 본 개인정보처리방침은 앱이 어떤 개인정보를 수집하고, 어떻게 이용하며, 어떻게 보호하는지에 대해 설명합니다.
+    </div>
+
+    <h2>1. 수집하는 개인정보의 항목 및 수집 방법</h2>
+    <p>본 앱은 원활한 AI 어시스턴트 서비스 제공을 위해 아래와 같은 정보 및 기기 권한을 필요로 하며, 해당 데이터는 앱의 핵심 기능(AI 응답, 음성 인식, 화면 인식) 처리를 위해서만 사용됩니다.</p>
+    <ul>
+        <li><strong>음성 데이터 (마이크 권한)</strong>: 사용자의 음성을 텍스트로 변환하여 AI에게 전달하기 위해 수집됩니다. (관련 권한: RECORD_AUDIO, FOREGROUND_SERVICE_MICROPHONE)</li>
+        <li><strong>화면 데이터 (미디어 프로젝션 권한)</strong>: 화면의 현재 상태를 AI가 인식하여 상황에 맞는 답변이나 조작을 돕기 위해 사용됩니다. (관련 권한: SYSTEM_ALERT_WINDOW, FOREGROUND_SERVICE_MEDIA_PROJECTION)</li>
+        <li><strong>대화 내용 및 사용자 설정</strong>: AI와의 채팅 내용(텍스트/이미지) 및 API 키 설정(Gemini 등)이 수집됩니다.</li>
+    </ul>
+    <p>※ 앱은 별도의 회원가입이나 계정 시스템을 운영하지 않으며, 사용자를 특정할 수 있는 이름, 연락처 등의 고유 식별 정보는 수집하지 않습니다.</p>
+
+    <h2>2. 개인정보의 수집 및 이용 목적</h2>
+    <p>수집된 정보는 다음의 목적을 위해서만 이용됩니다.</p>
+    <ul>
+        <li><strong>음성 및 화면 데이터</strong>: 사용자 명령 인식, 맥락 파악 및 맞춤형 AI 응답(Live-Generated AI) 제공</li>
+        <li><strong>대화 기록</strong>: 이전 대화 맥락(Memory) 유지를 통한 연속적인 어시스턴트 경험 제공</li>
+    </ul>
+
+    <h2>3. 개인정보의 보관 및 파기</h2>
+    <p>본 앱은 원칙적으로 개인정보를 기기 내부에만 로컬로 저장하며, 외부 서버에 영구적으로 보관하지 않습니다.</p>
+    <ul>
+        <li><strong>로컬 저장</strong>: 대화 기록(conversation_memory) 및 설정값은 사용자의 기기에 암호화되지 않은 형태(평문)로 저장됩니다.</li>
+        <li><strong>파기 방법</strong>: 사용자가 앱을 삭제(언인스톨)하거나 기기의 앱 설정에서 '데이터 지우기'를 실행하면 모든 로컬 데이터가 즉시 파기됩니다.</li>
+        <li><strong>API 전송 데이터</strong>: AI 응답 생성을 위해 클라우드 서비스로 전송된 데이터는 응답이 완료된 후 해당 서비스의 정책에 따라 처리됩니다.</li>
+    </ul>
+
+    <h2>4. 개인정보의 제3자 제공 및 국외 이전</h2>
+    <p>본 앱은 자체 서버에 사용자의 개인정보를 보관하지 않으나, AI 모델 연산 및 부가 기능을 위해 아래와 같은 외부 클라우드 서비스(제3자)로 데이터가 전송(국외 이전)될 수 있습니다.</p>
+    <ul>
+        <li><strong>이전되는 국가</strong>: 미국 등 (해당 클라우드 서비스의 서버 위치에 따름)</li>
+        <li><strong>제공받는 자 (선택적)</strong>: Google (Gemini API, Web Search), OpenAI, OpenRouter, DeepL 등 사용자가 설정하거나 앱에 내장된 AI API 제공사</li>
+        <li><strong>제공되는 정보</strong>: 사용자의 질의 내용(텍스트), 마이크 음성, 화면 캡처 이미지</li>
+        <li><strong>제공 목적</strong>: AI 추론 결과 생성, 음성 텍스트 변환(STT), 번역, 웹 검색 결과 반환</li>
+        <li><strong>보유 및 이용 기간</strong>: 해당 제3자 서비스의 개인정보처리방침에 따름. (예: Google Gemini 무료 등급의 경우 입력 데이터가 모델 학습에 사용될 수 있습니다.)</li>
+    </ul>
+
+    <h2>5. 사용자(정보주체)의 권리 및 행사 방법</h2>
+    <p>사용자는 언제든지 앱의 권한(마이크, 다른 앱 위에 표시 등)을 기기 설정에서 철회할 수 있습니다. 권한 철회 시 음성 인식, 화면 공유 등 일부 핵심 기능의 사용이 제한될 수 있습니다. 대화 기록 등 수집된 데이터를 삭제하고자 하는 경우 앱을 삭제함으로써 권리를 행사할 수 있습니다.</p>
+
+    <h2>6. 아동의 개인정보 보호</h2>
+    <p>본 앱은 만 14세 미만의 아동을 대상으로 하지 않으며, 아동의 개인정보를 의도적으로 수집하지 않습니다. (미국 COPPA 및 관련 법령 준수)</p>
+
+    <h2>7. 개인정보 보호책임자 및 연락처</h2>
+    <p>앱 이용과 관련하여 개인정보 보호에 대한 문의, 불만 처리 등이 필요하신 경우 아래 연락처로 문의해 주시기 바랍니다.</p>
+    <ul>
+        <li><strong>개발자/팀명</strong>: MY-Little-Jarvis Team (AICO)</li>
+        <li><strong>이메일</strong>: [이메일 주소 입력란]</li>
+        <li><strong>웹사이트</strong>: [웹사이트 또는 저장소 링크 입력란]</li>
+    </ul>
+
+    <h2>8. 개인정보처리방침의 변경</h2>
+    <p>본 개인정보처리방침은 법령 또는 서비스 변경에 따라 수정될 수 있으며, 내용의 변경이 있을 경우 앱 내 업데이트 안내 또는 앱 스토어 상세 페이지를 통해 사전 공지할 것입니다.</p>
+
+    <div class="footer">
+        <p>시행일자: 2026년 08월 05일</p>
+    </div>
+
+</body>
+</html>
