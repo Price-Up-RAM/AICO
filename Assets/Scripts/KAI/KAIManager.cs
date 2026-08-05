@@ -7,6 +7,22 @@ using UnityEngine;
 
 public class KAIManager : MonoBehaviour
 {
+    private static KAIManager instance;
+
+    // SampleSceneKAI에 이 매니저가 있으면 접근성 모드로 취급한다.
+    // 다른 컴포넌트의 Awake가 먼저 실행돼도 씬 검색으로 정확히 판별한다.
+    public static bool IsAccessibilityModeActive
+    {
+        get
+        {
+            if (instance == null)
+            {
+                instance = FindAnyObjectByType<KAIManager>();
+            }
+            return instance != null;
+        }
+    }
+
     private const string AicoCharcode = "aico";      // Assets/Char/Aico/Aico.prefab의 CharAttributes.charcode
     private const string AicoPrefabKey = "naost";    // PrefabDataLocal 프리팹 키 (character_database.json AICO 항목)
 
@@ -20,6 +36,19 @@ public class KAIManager : MonoBehaviour
     private float sweepTimer;
     private float forceTimer;
     private float elapsed;
+
+    private void Awake()
+    {
+        instance = this;
+    }
+
+    private void OnDestroy()
+    {
+        if (instance == this)
+        {
+            instance = null;
+        }
+    }
 
     private void Start()
     {

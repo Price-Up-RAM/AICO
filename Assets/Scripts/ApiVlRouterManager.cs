@@ -303,12 +303,15 @@ public class ApiVlRouterManager : MonoBehaviour
 
         if (!completedConversation)
         {
-            string resultSprite = "No";
-            if (result.success)
+            if (!KAIManager.IsAccessibilityModeActive)
             {
-                resultSprite = "Yes";
+                string resultSprite = "No";
+                if (result.success)
+                {
+                    resultSprite = "Yes";
+                }
+                EmotionBalloonManager.Instance.ShowEmotionBalloonForSec(CharManager.Instance.GetCurrentCharacter(), resultSprite, 3f, 0f);
             }
-            EmotionBalloonManager.Instance.ShowEmotionBalloonForSec(CharManager.Instance.GetCurrentCharacter(), resultSprite, 3f, 0f);
 
             string statusText = "실패";
             if (result.success)
@@ -1194,6 +1197,12 @@ public class ApiVlRouterManager : MonoBehaviour
     // 상태 말풍선 표시
     private void SetRouterStatusBalloon(string spriteKey)
     {
+        if (KAIManager.IsAccessibilityModeActive)
+        {
+            ClearRouterStatusBalloon();
+            return;
+        }
+
         NoticeManager.Instance.ShowNoticeEmotionBalloon(spriteKey);
     }
 

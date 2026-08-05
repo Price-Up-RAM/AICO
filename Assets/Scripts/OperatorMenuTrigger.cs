@@ -14,6 +14,7 @@ public class OperatorMenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerU
     private ContextMenu m_ContextMenuSub;
     private RadialMenu m_RadialMenuAction;
     private CharAttributes _charAttributes;
+    private TransparentWindow _transparentWindow;
 
     // 롱프레스 감지
     private bool isLeftClickHeld = false;
@@ -47,6 +48,8 @@ public class OperatorMenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerU
             m_ContextMenuSub = WidgetUtility.Find<ContextMenu>("ContextMenuSub");
         if (m_RadialMenuAction == null)
             m_RadialMenuAction = WidgetUtility.Find<RadialMenu>("RadialMenuAction");
+        if (_transparentWindow == null)
+            _transparentWindow = FindObjectOfType<TransparentWindow>();
         if (_charAttributes == null)
         {
             _charAttributes = GetComponent<CharAttributes>();
@@ -549,7 +552,14 @@ public class OperatorMenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerU
 
         // Exit
         m_ContextMenu.AddMenuItem(LanguageData.Translate("Exit", targetLang), delegate {
-            Application.Quit();
+            if (_transparentWindow != null)
+            {
+                _transparentWindow.Quit();
+            }
+            else
+            {
+                Application.Quit();
+            }
         });
 
         // 메뉴 보이기

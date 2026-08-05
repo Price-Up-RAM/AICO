@@ -500,7 +500,14 @@ public class MenuTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 
         // Exit
         m_ContextMenu.AddMenuItem(LanguageData.Translate("Exit", targetLang), delegate {
-            Application.Quit();
+            if (_transparentWindow != null)
+            {
+                _transparentWindow.Quit();
+            }
+            else
+            {
+                Application.Quit();
+            }
         });
 
         // 메뉴 보이기

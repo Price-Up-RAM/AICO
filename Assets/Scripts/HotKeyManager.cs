@@ -318,8 +318,8 @@ public class HotkeyManager : MonoBehaviour
         bindings.Add(new HotkeyBinding { catalogKey = HotKeyCatalog.F9, actionName = HotKeyActionType.ActionChatChar.ToString() });
         bindings.Add(new HotkeyBinding { catalogKey = HotKeyCatalog.F10, actionName = HotKeyActionType.ActionCharAction.ToString() });
         bindings.Add(new HotkeyBinding { catalogKey = HotKeyCatalog.F11, actionName = HotKeyActionType.ActionDance.ToString() });
-        bindings.Add(new HotkeyBinding { catalogKey = HotKeyCatalog.F12, actionName = HotKeyActionType.ActionChangeClothes.ToString() });
-        bindings.Add(new HotkeyBinding { catalogKey = HotKeyCatalog.Ctrl_1, actionName = HotKeyActionType.ActionChangeChar.ToString() });
+        bindings.Add(new HotkeyBinding { catalogKey = HotKeyCatalog.F12, actionName = HotKeyActionType.ActionNone.ToString() });
+        bindings.Add(new HotkeyBinding { catalogKey = HotKeyCatalog.Ctrl_1, actionName = HotKeyActionType.ActionNone.ToString() });
         bindings.Add(new HotkeyBinding { catalogKey = HotKeyCatalog.Ctrl_2, actionName = HotKeyActionType.ActionShowChatHistory.ToString() });
         bindings.Add(new HotkeyBinding { catalogKey = HotKeyCatalog.Ctrl_3, actionName = HotKeyActionType.ActionStartTalk.ToString() });
         bindings.Add(new HotkeyBinding { catalogKey = HotKeyCatalog.Ctrl_4, actionName = HotKeyActionType.ActionStartTikitaka.ToString() });

@@ -63,9 +63,40 @@ public class ChatBalloonManager : MonoBehaviour
     private void Awake()
     {
         HideChatBalloon(); // 시작 시 chatBalloon 숨기기
-        
+
+        ApplyImageFeatureAvailability();
+
         // imageUseBtn에 우클릭 이벤트 추가
         SetupImageUseBtnRightClick();
+    }
+
+    // 접근성 모드에서는 이미지 첨부 기능을 끄고 Button/Toggle의 기본 Disabled 색상을 사용한다.
+    private void ApplyImageFeatureAvailability()
+    {
+        bool isAvailable = !KAIManager.IsAccessibilityModeActive;
+
+        if (imageUseToggle != null)
+        {
+            imageUseToggle.interactable = isAvailable;
+        }
+
+        if (imageUseBtn != null)
+        {
+            Button imageButton = imageUseBtn.GetComponent<Button>();
+            if (imageButton != null)
+            {
+                imageButton.interactable = isAvailable;
+            }
+        }
+
+        if (!isAvailable)
+        {
+            useImageInfo = "off";
+            isManualOff = true;
+            ignoreClipboard = true;
+            lastImageSource = "none";
+            RefreshUseImageIcon();
+        }
     }
 
     // imageUseBtn에 우클릭 이벤트 설정
@@ -99,6 +130,11 @@ public class ChatBalloonManager : MonoBehaviour
     // 현재 이미지 소스의 이미지 미리보기
     private void ShowCurrentImage()
     {
+        if (KAIManager.IsAccessibilityModeActive)
+        {
+            return;
+        }
+
         string imageSource = GetImageSource();
         ScreenshotManager sm = FindObjectOfType<ScreenshotManager>();
         
@@ -220,6 +256,11 @@ public class ChatBalloonManager : MonoBehaviour
     
     public bool GetImageUse()
     {
+        if (KAIManager.IsAccessibilityModeActive)
+        {
+            return false;
+        }
+
         if (imageUseToggle.isOn)
         {
             return true;
@@ -357,6 +398,16 @@ public class ChatBalloonManager : MonoBehaviour
     // SettingManager 값을 읽어서 useImageInfo 초기화
     public void InitUseImageInfo()
     {
+        if (KAIManager.IsAccessibilityModeActive)
+        {
+            useImageInfo = "off";
+            isManualOff = true;
+            ignoreClipboard = true;
+            lastImageSource = "none";
+            RefreshUseImageIcon();
+            return;
+        }
+
         int imageModeIdx = SettingManager.Instance.settings.ai_use_image_idx; // 0: off, 1: on(auto), 2: force
         
         // 플래그 초기화 (설정에서 다시 읽어오면 수동 상태 해제)
@@ -450,6 +501,11 @@ public class ChatBalloonManager : MonoBehaviour
     // 이미지 클릭 시 호출되는 함수
     public void changeUseImageInfo()
     {
+        if (KAIManager.IsAccessibilityModeActive)
+        {
+            return;
+        }
+
         // 현재 상태에 따라 전환
         if (useImageInfo == "auto")
         {
@@ -477,12 +533,24 @@ public class ChatBalloonManager : MonoBehaviour
     // 현재 useImageInfo를 반환하는 메서드 (APIManager에서 사용)
     public string GetUseImageInfo()
     {
+        if (KAIManager.IsAccessibilityModeActive)
+        {
+            return "off";
+        }
+
         return useImageInfo;
     }
     
     // 마지막 이미지 소스 설정 (외부에서 호출)
     public void SetLastImageSource(string source)
     {
+        if (KAIManager.IsAccessibilityModeActive)
+        {
+            lastImageSource = "none";
+            RefreshUseImageIcon();
+            return;
+        }
+
         lastImageSource = source;
         Debug.Log($"[ChatBalloonManager] Last image source set to: {source}");
         
@@ -499,6 +567,11 @@ public class ChatBalloonManager : MonoBehaviour
     // 현재 어떤 이미지 소스를 사용해야 하는지 반환 ("clipboard", "screenshot", "none")
     public string GetImageSource()
     {
+        if (KAIManager.IsAccessibilityModeActive)
+        {
+            return "none";
+        }
+
         // OFF 상태거나 수동으로 OFF한 경우
         if (useImageInfo == "off" || isManualOff)
         {

@@ -11,13 +11,19 @@ using TMPro;
 
 public class ServerManager : MonoBehaviour
 {
+    private const int LocalServerTypeIndex = 1;
+    private const int RemoteServerTypeIndex = 10;
+    private const string DefaultTunnelDomain = "60000123.xyz";
+
     public string baseUrl = "";
+    public string tunnelDomain = DefaultTunnelDomain;  // Cloudflare 터널 고정 URL 루트 도메인
     private Dictionary<string, string> serverUrlCache = new Dictionary<string, string>();  // server_id별 URL 캐시
 
     private string ngrokUrl;
     private string ngrokStatus;
     private bool isConnected = false;  // 일단 1회라도 연결된적이 있는지(불가역)
     private float connectTimer = 0f;  // 타이머 변수
+    private string resolvedConnectionKey = "";  // 서버 타입/ID 변경 뒤 이전 baseUrl 재사용 방지
 
     public Text serverStatusText;
 
@@ -61,7 +67,7 @@ public class ServerManager : MonoBehaviour
     public void GetBaseUrl(Action<string> callback)
     {
         // 이미 연결되어 있고 값이 있으면 즉시 반환
-        if (isConnected && !string.IsNullOrEmpty(baseUrl))
+        if (isConnected && !string.IsNullOrEmpty(baseUrl) && resolvedConnectionKey == GetConnectionKey())
         {
             callback?.Invoke(baseUrl);
             return;
@@ -69,6 +75,14 @@ public class ServerManager : MonoBehaviour
 
         // 값이 없으면 코루틴으로 조회 후 콜백 호출
         StartCoroutine(GetBaseUrlCoroutine(callback));
+    }
+
+    private string GetConnectionKey()
+    {
+        SettingManager.SettingsData settings = SettingManager.Instance != null ? SettingManager.Instance.settings : null;
+        int serverType = settings != null ? settings.server_type_idx : 0;
+        string serverId = settings != null && settings.server_id != null ? settings.server_id.Trim().ToLowerInvariant() : "";
+        return serverType + ":" + serverId;
     }
 
     private IEnumerator GetBaseUrlCoroutine(Action<string> callback)
@@ -118,6 +132,24 @@ public class ServerManager : MonoBehaviour
 
     private IEnumerator GetServerUrlCoroutine(string server_id, Action<string> onComplete)
     {
+        // 일반 서버 ID는 Cloudflare 고정 주소를 직접 조립한다.
+        // dev_voice/temp 등 동적 게시 서버는 기존 Supabase 폴백을 사용한다.
+        string normalizedServerId;
+        if (!IsLegacyPublishedServerId(server_id) && TryNormalizeServerId(server_id, out normalizedServerId))
+        {
+            string cfUrl = BuildTunnelUrl(normalizedServerId);
+            bool cfReachable = false;
+            yield return StartCoroutine(IsUrlReachable(cfUrl + "/health", result => cfReachable = result));
+            if (cfReachable)
+            {
+                serverUrlCache[normalizedServerId] = cfUrl;
+                Debug.Log($"[GetServerUrlFromServerId] CF 직조립 성공: server_id={normalizedServerId}, url={cfUrl}");
+                onComplete?.Invoke(cfUrl);
+                yield break;
+            }
+        }
+
+        // 동적 게시 서버 및 전환기 폴백
         string ngrokSupabaseUrl = "https://lxmkzckwzasvmypfoapl.supabase.co/storage/v1/object/sign/json_bucket/my_little_jarvis_plus_ngrok_server.json?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJqc29uX2J1Y2tldC9teV9saXR0bGVfamFydmlzX3BsdXNfbmdyb2tfc2VydmVyLmpzb24iLCJpYXQiOjE3MzM4Mzg4MjYsImV4cCI6MjA0OTE5ODgyNn0.ykDVTXYVXNnKJL5lXILSk0iOqt0_7UeKZqOd1Qv_pSY&t=2024-12-10T13%3A53%3A47.907Z";
         string supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx4bWt6Y2t3emFzdm15cGZvYXBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzM4MzUxNzQsImV4cCI6MjA0OTQxMTE3NH0.zmEKHhIcQa4ODekS2skgknlXi8Hbd8JjpjBlFZpPsJ8";
 
@@ -170,63 +202,164 @@ public class ServerManager : MonoBehaviour
 
     public TextMeshProUGUI baseUrlText;
 
-    // Base URL 설정 (FetchNgrokJsonData 이후)
+    // 선택된 서버 타입에 따라 Base URL 설정
     private IEnumerator SetBaseUrl()
     {
-        // 1. Fetch ngrok URL
-        yield return StartCoroutine(FetchNgrokJsonData());
+        SettingManager.SettingsData settings = SettingManager.Instance != null ? SettingManager.Instance.settings : null;
+        int serverType = settings != null ? settings.server_type_idx : 0;
+        string serverId = settings != null ? settings.server_id : "";
+        string requestedConnectionKey = serverType + ":" + (serverId ?? "").Trim().ToLowerInvariant();
 
-        // 2. Determine and set base URL
-        yield return StartCoroutine(DetermineBaseUrl());
+        // Local과 일반 Server는 Supabase를 조회하지 않는다.
+        // Auto 및 temp 같은 레거시 동적 ID에만 게시 URL 폴백을 준비한다.
+        bool fixedRemoteServer = serverType == RemoteServerTypeIndex && !IsLegacyPublishedServerId(serverId);
+        if (serverType != LocalServerTypeIndex && !fixedRemoteServer)
+        {
+            yield return StartCoroutine(FetchNgrokJsonData());
+        }
+        else
+        {
+            ngrokUrl = null;
+            ngrokStatus = null;
+        }
+
+        string resolvedBaseUrl = "";
+        yield return StartCoroutine(DetermineBaseUrl(serverType, serverId, result => resolvedBaseUrl = result));
+
+        // /health 확인 중 설정이 바뀌었다면 이전 요청 결과를 현재 연결로 확정하지 않는다.
+        if (requestedConnectionKey != GetConnectionKey())
+        {
+            yield return StartCoroutine(SetBaseUrl());
+            yield break;
+        }
+
+        baseUrl = resolvedBaseUrl;
 
         if (!string.IsNullOrEmpty(baseUrl))
         {
             isConnected = true;
+            resolvedConnectionKey = requestedConnectionKey;
             Debug.Log("Final Base URL: " + baseUrl);
             baseUrlText.text = baseUrl;
         }
         else
         {
+            isConnected = false;
+            resolvedConnectionKey = "";
             // Debug.LogError("Base URL 설정 실패");
         }
     }
 
     // URL 순서대로 확인하고 baseUrl 설정
-    private IEnumerator DetermineBaseUrl()
+    private IEnumerator DetermineBaseUrl(int serverType, string serverId, Action<string> onComplete)
     {
         bool isReachable = false;
 
-        // 1. Check localhost connection
-        yield return StartCoroutine(IsUrlReachable("http://127.0.0.1:5000/health", result => isReachable = result));
-        if (isReachable)
+        // Local 선택 시에는 localhost만 사용한다.
+        if (serverType == LocalServerTypeIndex)
         {
-            baseUrl = "http://127.0.0.1:5000";
+            yield return StartCoroutine(IsUrlReachable("http://127.0.0.1:5000/health", result => isReachable = result));
+            onComplete?.Invoke(isReachable ? "http://127.0.0.1:5000" : "");
             yield break;
         }
 
-        // 2. Check ngrokUrl
-        // Debug.Log("ngrokUrl : " + ngrokUrl);
+        // Server 선택 시 일반 ID는 https://{server_id}.60000123.xyz만 사용한다.
+        if (serverType == RemoteServerTypeIndex && !IsLegacyPublishedServerId(serverId))
+        {
+            string normalizedServerId;
+            if (!TryNormalizeServerId(serverId, out normalizedServerId))
+            {
+                Debug.LogError("[ServerManager] 서버 ID 형식이 올바르지 않습니다: " + serverId);
+                onComplete?.Invoke("");
+                yield break;
+            }
+
+            string cfUrl = BuildTunnelUrl(normalizedServerId);
+            yield return StartCoroutine(IsUrlReachable(cfUrl + "/health", result => isReachable = result));
+            onComplete?.Invoke(isReachable ? cfUrl : "");
+            yield break;
+        }
+
+        // Server에서 temp/dev_voice를 명시한 경우에는 localhost로 바꾸지 않고 게시 URL만 사용한다.
+        if (serverType == RemoteServerTypeIndex)
+        {
+            if (!string.IsNullOrEmpty(ngrokUrl))
+            {
+                yield return StartCoroutine(IsUrlReachable(ngrokUrl + "/health", result => isReachable = result));
+            }
+            onComplete?.Invoke(isReachable ? ngrokUrl : "");
+            yield break;
+        }
+
+        // Auto 등 기존 모드는 localhost를 우선 유지한다.
+        yield return StartCoroutine(IsUrlReachable("http://127.0.0.1:5000/health", result => isReachable = result));
+        if (isReachable)
+        {
+            onComplete?.Invoke("http://127.0.0.1:5000");
+            yield break;
+        }
+
+        // temp 등 레거시 동적 서버는 Supabase 게시 URL을 폴백으로 사용한다.
         if (!string.IsNullOrEmpty(ngrokUrl))
         {
             yield return StartCoroutine(IsUrlReachable(ngrokUrl + "/health", result => isReachable = result));
             if (isReachable)
             {
-                baseUrl = ngrokUrl;
+                onComplete?.Invoke(ngrokUrl);
                 yield break;
             }
         }
 
-        // 3. Check loca.lt connection
+        // AICO의 기존 Auto 폴백 유지
         yield return StartCoroutine(IsUrlReachable("https://minmin496969.loca.lt/health", result => isReachable = result));
         if (isReachable)
         {
-            baseUrl = "https://minmin496969.loca.lt";
+            onComplete?.Invoke("https://minmin496969.loca.lt");
             yield break;
         }
 
-        // 4. If all checks fail
-        // Debug.LogError("URL 조합 실패");
-        baseUrl = "";
+        onComplete?.Invoke("");
+    }
+
+    private string BuildTunnelUrl(string serverId)
+    {
+        return "https://" + serverId + "." + GetTunnelDomain();
+    }
+
+    private string GetTunnelDomain()
+    {
+        return string.IsNullOrWhiteSpace(tunnelDomain) ? DefaultTunnelDomain : tunnelDomain.Trim().Trim('.');
+    }
+
+    private static bool IsLegacyPublishedServerId(string serverId)
+    {
+        return string.Equals(serverId, "temp", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(serverId, "dev_voice", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryNormalizeServerId(string value, out string serverId)
+    {
+        serverId = string.IsNullOrEmpty(value) ? "" : value.Trim().ToLowerInvariant();
+        if (serverId.Length < 3 || serverId.Length > 32 ||
+            !IsLowerAlphaNumeric(serverId[0]) || !IsLowerAlphaNumeric(serverId[serverId.Length - 1]))
+        {
+            return false;
+        }
+
+        for (int i = 1; i < serverId.Length - 1; i++)
+        {
+            char c = serverId[i];
+            if (!IsLowerAlphaNumeric(c) && c != '-')
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static bool IsLowerAlphaNumeric(char c)
+    {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
     }
 
     // URL 연결 가능 여부 확인
@@ -272,6 +405,11 @@ public class ServerManager : MonoBehaviour
         {
             serverStatusText.text = "Local";
             Debug.Log("서버 상태: Local");
+        }
+        else if (baseUrl.Contains(GetTunnelDomain()))
+        {
+            serverStatusText.text = "Tunnel";
+            Debug.Log("서버 상태: Tunnel");
         }
         else if (baseUrl.Contains("ngrok"))
         {

@@ -244,21 +244,20 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
                     }
                 }
             ),
-            (LanguageData.Translate("Set Screenshot Area", targetLang), async delegate {
-                // Full 버전 이상인지 확인
-                if (!await InstallStatusManager.Instance.CheckAndOperateFullAsync())
-                {
-                    return;
-                }
-
-                ScreenshotManager sm = FindObjectOfType<ScreenshotManager>();
-                if (sm != null) sm.ToggleScreenshotArea();
-            }),
+            // 접근성 모드에서는 메뉴 항목을 유지하되 ContextMenu의 Disabled 색상으로 표시한다.
+            (LanguageData.Translate("Set Screenshot Area", targetLang), (UnityAction)null),
         });
 
         // Exit
         m_ContextMenu.AddMenuItem(LanguageData.Translate("Exit", targetLang), delegate {
-            Application.Quit();
+            if (_transparentWindow != null)
+            {
+                _transparentWindow.Quit();
+            }
+            else
+            {
+                Application.Quit();
+            }
         });
 
         // 메뉴 보이기

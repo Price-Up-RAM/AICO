@@ -30,14 +30,14 @@ public enum HotKeyActionType
     [DisplayText("Dance")]
     ActionDance,
     
-    [DisplayText("Change Clothes")]
-    ActionChangeClothes,
+    // [DisplayText("Change Clothes")]
+    // ActionChangeClothes,
     
-    [DisplayText("Change Costume")]
-    ActionChangeCostume,
+    // [DisplayText("Change Costume")]
+    // ActionChangeCostume,
     
-    [DisplayText("Change Char")]
-    ActionChangeChar,
+    // [DisplayText("Change Char")]
+    // ActionChangeChar,
     
     [DisplayText("New Chat")]
     ActionNewChat,
@@ -63,17 +63,17 @@ public enum HotKeyActionType
     [DisplayText("Show Screenshot")]
     ActionExecuteAreaScreenshot,
 
-    [DisplayText("OCR")]
-    ActionOCR,
+    // [DisplayText("OCR")]
+    // ActionOCR,
 
-    [DisplayText("OCR1")]
-    ActionOCR1,
+    // [DisplayText("OCR1")]
+    // ActionOCR1,
 
-    [DisplayText("OCR2")]
-    ActionOCR2,
+    // [DisplayText("OCR2")]
+    // ActionOCR2,
 
-    [DisplayText("OCR3")]
-    ActionOCR3,
+    // [DisplayText("OCR3")]
+    // ActionOCR3,
 
     // [DisplayText("VL_TEST")]
     // ActionVL_TEST,
@@ -81,20 +81,20 @@ public enum HotKeyActionType
     // [DisplayText("VL_RUN")]
     // ActionVL_RUN,
 
-    [DisplayText("VL_BASkip")]
-    ActionVL_BASkip,
+    // [DisplayText("VL_BASkip")]
+    // ActionVL_BASkip,
 
-    [DisplayText("VL_BAReader")]
-    ActionVL_BAReader,
+    // [DisplayText("VL_BAReader")]
+    // ActionVL_BAReader,
 
-    [DisplayText("Dev Mode")]
-    ActionDevMode,
+    // [DisplayText("Dev Mode")]
+    // ActionDevMode,
 
     [DisplayText("Stop Meme")]
     ActionStopMeme,
 
-    [DisplayText("Clear Cache")]
-    ActionClearCache,
+    // [DisplayText("Clear Cache")]
+    // ActionClearCache,
 
     // 동작 없음 (항상 맨 뒤)
     [DisplayText("None")]

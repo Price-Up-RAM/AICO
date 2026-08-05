@@ -52,10 +52,6 @@ public class APIManager : MonoBehaviour
     // 스크린샷 전송 방식 (true: 캡처→전송→저장, false: 기존 파일 전송)
     private bool isSendScreenshotFirst = true;
 
-    // 서버 관련
-    public string ngrokUrl = null;  // 없으면 없는데로 오케이
-    public string ngrokStatus = null;  // open, closed  TODO : Close일때 서버켜달라고 요청하기
-
     // 싱글톤 인스턴스
     private static APIManager instance;
     public static APIManager Instance
@@ -79,14 +75,6 @@ public class APIManager : MonoBehaviour
         // 로그 파일 생성
         Directory.CreateDirectory(Path.GetDirectoryName(logFilePath)); // 디렉토리가 없으면 생성
         File.AppendAllText(logFilePath, $"Log started at: {DateTime.Now}\n");
-    }
-
-    private void Start()
-    {
-        // #if !UNITY_EDITOR
-        // supabase에서 ngrok url 가져오기 (에디터에서는 제외)
-        CallFetchNgrokJsonData();
-        // #endif    
     }
 
     // Update에서 TTS 관련 로직은 TTSManager로 이동됨
@@ -514,9 +502,13 @@ public class APIManager : MonoBehaviour
         }
     }
 
+    // 구 Settings 프리팹 이벤트 호환용. 서버 ID 변경 후 새 Local/Server 규칙으로 상태를 다시 확인한다.
     public void CallFetchNgrokJsonData()
     {
-        StartCoroutine(FetchNgrokJsonData());
+        if (ServerManager.Instance != null)
+        {
+            ServerManager.Instance.CallCheckServerStatus();
+        }
     }
 
     // 스무고개 게임 호출
@@ -2831,79 +2823,6 @@ public class APIManager : MonoBehaviour
 
     // TTS 관련 함수들 (GetKoWavFromAPI, GetJpWavFromAPI, GetHowlingFromAPI, ReadFully, SaveWavToFile, GetWavDuration)은
     // TTSManager.cs로 이동되었습니다.
-
-    [System.Serializable]
-    public class NgrokJsonResponse
-    {
-        public string url;
-        public string status;  // open, closed
-    }
-
-    // JSON 파일을 다운로드하고 url 값을 반환
-    private IEnumerator FetchNgrokJsonData()
-    {
-        // string ngrokSupabaseUrl = "https://lxmkzckwzasvmypfoapl.supabase.co/storage/v1/object/private/json_bucket/my_little_jarvis_plus_ngrok_server.json";
-
-        string server_id = "temp";
-        try
-        {
-            server_id = SettingManager.Instance.settings.server_id;
-        }
-        catch (Exception ex)
-        {
-            Debug.Log("Setting server_id failed. use init value");
-        }
-
-        Debug.Log("server_id : " + server_id);
-        string ngrokSupabaseUrl = "https://lxmkzckwzasvmypfoapl.supabase.co/storage/v1/object/sign/json_bucket/my_little_jarvis_plus_ngrok_server.json?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJqc29uX2J1Y2tldC9teV9saXR0bGVfamFydmlzX3BsdXNfbmdyb2tfc2VydmVyLmpzb24iLCJpYXQiOjE3MzM4Mzg4MjYsImV4cCI6MjA0OTE5ODgyNn0.ykDVTXYVXNnKJL5lXILSk0iOqt0_7UeKZqOd1Qv_pSY&t=2024-12-10T13%3A53%3A47.907Z";
-        string supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx4bWt6Y2t3emFzdm15cGZvYXBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzM4MzUxNzQsImV4cCI6MjA0OTQxMTE3NH0.zmEKHhIcQa4ODekS2skgknlXi8Hbd8JjpjBlFZpPsJ8";
-
-        using (UnityWebRequest request = UnityWebRequest.Get(ngrokSupabaseUrl))
-        {
-            // 인증 헤더 추가
-            request.SetRequestHeader("Authorization", $"Bearer {supabaseApiKey}");
-
-            // 서버 요청
-            yield return request.SendWebRequest();
-
-            // 에러 처리
-            if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
-            {
-                Debug.LogError($"Error fetching JSON data: {request.error}");
-            }
-            else
-            {
-                // JSON 데이터를 문자열로 가져옴
-                string jsonResponse = request.downloadHandler.text;
-
-                // JSON 데이터 파싱
-                var fullData = JsonConvert.DeserializeObject<Dictionary<string, NgrokJsonResponse>>(jsonResponse);
-                if (fullData != null && fullData.ContainsKey(server_id))
-                {
-                    NgrokJsonResponse data = fullData[server_id];
-                    Debug.Log($"Fetched URL: {data.url}");
-
-                    ngrokUrl = data.url;
-                    ngrokStatus = data.status;
-
-                    if (ngrokStatus == "closed")
-                    {
-                        NoticeBalloonManager.Instance.ModifyNoticeBalloonText("Supabase Server Closed");
-                    }
-                    else if (ngrokStatus != "open")
-                    {
-                        NoticeBalloonManager.Instance.ModifyNoticeBalloonText("Supabase Server Not Opened");
-                    }
-                }
-                else
-                {
-                    ngrokUrl = null;
-                    ngrokStatus = null;
-                    Debug.LogError($"Server ID '{server_id}' not found in JSON data.");
-                }
-            }
-        }
-    }
 
     // 현재 선택된 모델 ID 가져오기
     private string GetCurrentModelId()

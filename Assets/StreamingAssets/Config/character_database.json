@@ -229,7 +229,7 @@
           "spriteAddress": "mika_sprite",
           "prefabAddress": "mika",
           "isLocal": true,
-          "isSelectable": false
+          "isSelectable": true
         },
         {
           "name": "Swimsuit",
