@@ -88,6 +88,16 @@ public class MRSceneStripper : MonoBehaviour
         // --- 기타 데스크톱 전용 ---
         typeof(DebugManager),                   // Process.Start("explorer.exe" / "notepad.exe")
 
+        // --- 캔버스 픽셀 좌표계에 묶인 이동 시스템 ---
+        // PhysicsManager는 Win32를 쓰지 않지만 캐릭터를 RectTransform.anchoredPosition으로 걷게 한다.
+        // 래퍼 없이는 moveSpeed 120(픽셀/초)이 초속 120m가 되어 캐릭터가 날아간다 (Quest 실측 확인).
+        //
+        // 참고 — MRCharacterWorldRoot의 픽셀 공간 래퍼(1/120) 안에서는 이 값이 약 1.0 m/s로
+        // 자연스럽게 환산되므로 기술적으로는 그대로 켤 수 있다. 실제로 검증도 됐다.
+        // 다만 이동 방식은 Phase 2에서 '방 안 자율 이동'으로 설계하기로 했으므로 그때까지 꺼둔다.
+        // 켤 경우 MRCharacterWorldRoot의 wanderRangeMeters로 범위를 제한할 것
+        // (자체 경계가 Canvas_Char 폭이라 ±8m까지 걸어간다).
+        typeof(PhysicsManager),
     };
 
     // =========================================================
@@ -127,13 +137,6 @@ public class MRSceneStripper : MonoBehaviour
         // --- 캐릭터 / 애니메이션 ---
         typeof(AnimationManager), typeof(AnimationPlayerManager), typeof(EmotionManager),
         typeof(SettingCharManager), typeof(ChangeCharManager),
-
-        // PhysicsManager — 캔버스 픽셀 좌표로 캐릭터를 걷게 한다(moveSpeed 120픽셀/초).
-        // MRCharacterWorldRoot의 '픽셀 공간 래퍼' 안에서는 이 값이 자연스러운 미터 속도로
-        // 환산되므로(1/120 스케일 → 1.0 m/s) 그대로 사용할 수 있다.
-        // ⚠ usePixelSpaceWrapper를 끄면 초속 120m로 날아가므로 그때는 반드시 비활성화할 것.
-        // 이동 범위 제한은 MRCharacterWorldRoot의 wanderRangeMeters가 담당한다.
-        typeof(PhysicsManager),
 
         // --- 대화 / 시나리오 ---
         typeof(DialogueManager), typeof(DialogueCacheManager), typeof(ChoiceManager),
