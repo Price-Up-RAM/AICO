@@ -12,7 +12,7 @@ public enum InventorySection
 }
 
 // InventorySystem UI 창. 창 1개가 스토어 1개(MAIN 또는 활성 캐릭터)를 표시한다.
-// - 베이크된 프리팹(InventoryPanel.prefab) 전용: BindExisting으로 참조만 연결한다 (런타임 자가 구축 없음)
+// - 베이크된 프리팹(InventoryPanel.prefab) 전용: 모든 UI 참조는 프리팹에 직렬화한다 (런타임 이름 탐색/자가 구축 없음)
 // - 표시·숨김은 반드시 CanvasGroup(alpha/interactable/blocksRaycasts)만 조작한다 (SetActive 금지)
 // - 그리드: 8열 x 6행 = 48칸 고정 (빈 칸 포함), 푸터의 < > 로 페이지 이동
 // - 드래그 앤 드롭: 칸 = 위치 이동/스왑/병합, 반대 섹션 창 = 이동, 캐릭터(3D) = 이동 + 장착
@@ -35,8 +35,12 @@ public class InventoryView : MonoBehaviour
     [SerializeField] private Button prevButton;               // 푸터 이전 페이지 버튼
     [SerializeField] private Button nextButton;               // 푸터 다음 페이지 버튼
     [SerializeField] private TMP_Text pageLabel;              // 푸터 페이지 표시 ("1 / 1")
+    [SerializeField] private GameObject mainCurrencyArea;     // MAIN 전용: +100 디버그 + 현재 골드
+    [SerializeField] private Button debugGoldButton;
+    [SerializeField] private TMP_Text goldBalanceText;
 
     private int currentPage;  // 현재 페이지 (0부터)
+    private CurrencyManager subscribedWallet;
 
     public InventorySection Section
     {
@@ -76,11 +80,9 @@ public class InventoryView : MonoBehaviour
         return manager != null ? manager.ActiveCharcode : null;
     }
 
-    // 참조가 비어 있으면 이름 기반 바인딩 → 버튼 배선 (베이크된 프리팹 전용)
+    // 베이크된 직렬화 참조에 버튼 동작만 연결한다.
     private void Awake()
     {
-        BindExisting();
-
         if (slotTemplate == null)
         {
             // 런타임 코드 조립은 하지 않는다 — UI는 베이크된 프리팹이 완결 상태여야 한다.
@@ -108,6 +110,11 @@ public class InventoryView : MonoBehaviour
         {
             nextButton.onClick.AddListener(OnNextPageClicked);
         }
+
+        if (debugGoldButton != null)
+        {
+            debugGoldButton.onClick.AddListener(OnDebugGoldClicked);
+        }
     }
 
     // 이벤트 구독 + 최초 그리드 구성
@@ -115,6 +122,16 @@ public class InventoryView : MonoBehaviour
     {
         InventoryEvents.OnStoreChanged += HandleStoreChanged;
         InventoryEvents.OnActiveOwnerChanged += HandleActiveOwnerChanged;
+
+        if (Application.isPlaying)
+        {
+            subscribedWallet = CurrencyManager.Instance;
+            if (subscribedWallet != null)
+            {
+                subscribedWallet.CurrencyChanged += HandleCurrencyChanged;
+            }
+        }
+
         Rebuild();
     }
 
@@ -123,6 +140,12 @@ public class InventoryView : MonoBehaviour
     {
         InventoryEvents.OnStoreChanged -= HandleStoreChanged;
         InventoryEvents.OnActiveOwnerChanged -= HandleActiveOwnerChanged;
+
+        if (subscribedWallet != null)
+        {
+            subscribedWallet.CurrencyChanged -= HandleCurrencyChanged;
+            subscribedWallet = null;
+        }
     }
 
     // 스토어 변경 → 내 스토어일 때만 갱신 (장착 토글 하이라이트 포함)
@@ -141,10 +164,38 @@ public class InventoryView : MonoBehaviour
         Rebuild();
     }
 
+    private void HandleCurrencyChanged(string currencyKey)
+    {
+        if (currencyKey == CurrencyManager.GoldKey)
+        {
+            RefreshGoldBalance();
+        }
+    }
+
     // ── 표시/숨김 (CanvasGroup만 조작) ───────────────────────────
 
     // 현재 표시 상태 (UIManager 등 외부의 토글 판정용)
     public bool IsVisible => canvasGroup != null && canvasGroup.alpha > 0.5f;
+
+    public static bool IsSectionVisible(InventorySection targetSection)
+    {
+        InventoryView[] views = Resources.FindObjectsOfTypeAll<InventoryView>();
+        for (int i = 0; i < views.Length; i++)
+        {
+            InventoryView view = views[i];
+            if (view == null || view.gameObject.scene.IsValid() == false)
+            {
+                continue;
+            }
+
+            if (view.section == targetSection && view.gameObject.activeInHierarchy && view.IsVisible)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     // 패널 표시
     public void Show()
@@ -154,6 +205,7 @@ public class InventoryView : MonoBehaviour
             return;
         }
 
+        TranslateBakedLabels();
         canvasGroup.alpha = 1f;
         canvasGroup.interactable = true;
         canvasGroup.blocksRaycasts = true;
@@ -207,19 +259,36 @@ public class InventoryView : MonoBehaviour
             return;
         }
 
+        bool isMain = section == InventorySection.Main;
+        if (mainCurrencyArea != null)
+        {
+            mainCurrencyArea.SetActive(isMain);
+        }
+
         // 타이틀 갱신
         if (headerText != null)
         {
-            if (section == InventorySection.Main)
+            RectTransform titleRect = headerText.rectTransform;
+            if (isMain)
             {
-                headerText.text = "INVENTORY - MAIN";
+                headerText.text = TranslateUi("INVENTORY");
+                headerText.alignment = TextAlignmentOptions.MidlineLeft;
+                titleRect.offsetMin = new Vector2(40f, 0f);
+                titleRect.offsetMax = new Vector2(-310f, 0f);
             }
             else
             {
                 string charcode = manager.ActiveCharcode;
-                headerText.text = "INVENTORY - CHAR" + (string.IsNullOrEmpty(charcode) ? "" : $" ({charcode})");
+                headerText.text = string.IsNullOrEmpty(charcode)
+                    ? TranslateUi("INVENTORY")
+                    : string.Format(TranslateUi("INVENTORY ({0})"), charcode);
+                headerText.alignment = TextAlignmentOptions.Center;
+                titleRect.offsetMin = Vector2.zero;
+                titleRect.offsetMax = Vector2.zero;
             }
         }
+
+        RefreshGoldBalance();
 
         // 페이지 계산 (스토어가 없어도 빈 1페이지는 그린다)
         InvStore store = section == InventorySection.Main ? manager.GetMainStore() : manager.GetActiveCharStore();
@@ -248,7 +317,7 @@ public class InventoryView : MonoBehaviour
             else
             {
                 cell.gameObject.name = "Cell_" + slotIndex + "_" + stack.key;
-                InventoryEntry meta = manager.Catalog != null ? manager.Catalog.Get(stack.key) : null;
+                ItemEntry meta = manager.Catalog != null ? manager.Catalog.Get(stack.key) : null;
                 bool equipped = section == InventorySection.Char && manager.IsEquippedOnActive(stack.key);
                 cell.Setup(this, slotIndex, stack.key, stack.count, meta, equipped);
             }
@@ -310,6 +379,22 @@ public class InventoryView : MonoBehaviour
         Rebuild();
     }
 
+    // 장착 불가 캐릭터 사전 차단 — 차단 시 캐릭터 안내 대사 1회 (판정은 매니저의 주입 resolver 경유)
+    // 소유 이동(MoveMainToChar 등)은 막지 않고 장착으로 이어지는 동작만 이 게이트를 거친다.
+    private bool BlockEquipIfUnsupported()
+    {
+        if (InventorySystemManager.Instance == null || InventorySystemManager.Instance.CanEquipOnActive())
+        {
+            return false;
+        }
+
+        if (ScenarioCommonManager.Instance != null)
+        {
+            StartCoroutine(ScenarioCommonManager.Instance.Run_C90_equip_unsupported());
+        }
+        return true;
+    }
+
     // ── 슬롯 클릭 위임 (InventorySlotView가 호출) ────────────────
 
     // 좌클릭: MAIN = 활성 캐릭터로 1개 이동 / CHAR = 장착 가능하면 장착·해제 토글
@@ -321,8 +406,24 @@ public class InventoryView : MonoBehaviour
             return;
         }
 
+        ItemEntry clickedItem = manager.Catalog != null ? manager.Catalog.Get(key) : null;
+        if (clickedItem != null && clickedItem.useType == ItemUseType.Anchor)
+        {
+            return;
+        }
+
+        if (section == InventorySection.Main && clickedItem != null && clickedItem.isMainOnly)
+        {
+            return;
+        }
+
         if (section == InventorySection.Main)
         {
+            if (IsSectionVisible(InventorySection.Char) == false)
+            {
+                return;
+            }
+
             if (string.IsNullOrEmpty(manager.ActiveCharcode))
             {
                 Debug.LogWarning("[InventoryView] 활성 캐릭터가 없어 이동할 수 없습니다.");
@@ -335,6 +436,11 @@ public class InventoryView : MonoBehaviour
         {
             if (manager.IsEquippable(key))
             {
+                // 장착 시도(미장착 상태)만 사전 차단 — 해제 토글은 허용
+                if (manager.IsEquippedOnActive(key) == false && BlockEquipIfUnsupported())
+                {
+                    return;
+                }
                 manager.ToggleEquip(key);
             }
             else
@@ -353,22 +459,23 @@ public class InventoryView : MonoBehaviour
             return;
         }
 
-        InventoryEntry meta = manager.Catalog != null ? manager.Catalog.Get(key) : null;
+        ItemEntry meta = manager.Catalog != null ? manager.Catalog.Get(key) : null;
         InvStore store = section == InventorySection.Main ? manager.GetMainStore() : manager.GetActiveCharStore();
         InvItemStack stack = store != null ? store.FindBySlot(slotIndex) : null;
         int count = stack != null ? stack.count : 0;
 
-        string title = meta != null && string.IsNullOrEmpty(meta.displayName) == false ? meta.displayName : key;
+        string title = TranslateUi(meta != null && string.IsNullOrEmpty(meta.displayName) == false ? meta.displayName : key);
 
-        string body = $"수량 {count}";
-        if (meta != null && string.IsNullOrEmpty(meta.category) == false)
+        string body = string.Format(TranslateUi("수량 {0}"), count);
+        string category = manager.Catalog != null ? manager.Catalog.CategoryForKey(key) : null;
+        if (string.IsNullOrEmpty(category) == false)
         {
-            body += $" · {meta.category}";
+            body += " · " + TranslateUi(category);
         }
 
         if (meta != null && string.IsNullOrEmpty(meta.description) == false)
         {
-            body += "\n" + meta.description;
+            body += "\n" + TranslateUi(meta.description);
         }
 
         InventoryTooltip.Show(RootCanvas(), screenPos, title, body, MenuFont());
@@ -385,27 +492,48 @@ public class InventoryView : MonoBehaviour
 
         InventoryTooltip.Hide();  // 메뉴가 열리는 동안 툴팁 정리
 
-        InventoryEntry meta = manager.Catalog != null ? manager.Catalog.Get(key) : null;
+        ItemEntry meta = manager.Catalog != null ? manager.Catalog.Get(key) : null;
 
         List<InventoryMenuEntry> entries = new List<InventoryMenuEntry>();
 
         // 1) 상세
         entries.Add(new InventoryMenuEntry
         {
-            label = "상세",
+            label = TranslateUi("상세"),
             action = () => ShowDetail(manager, key, slotIndex, screenPos, meta)
         });
 
-        // 2) 장착/해제 (장착 가능한 아이템만)
-        if (manager.IsEquippable(key))
+        // 2) Anchor 배치
+        if (meta != null && meta.useType == ItemUseType.Anchor)
+        {
+            entries.Add(new InventoryMenuEntry
+            {
+                label = TranslateUi("배치"),
+                action = () => AnchorManager.Instance.TryPlaceAtDefault(
+                    OwnerId(),
+                    slotIndex,
+                    key)
+            });
+        }
+
+        // 3) 장착/해제 (Equip 타입이면서 장착 가능한 아이템만)
+        if (manager.IsEquippable(key) && (section != InventorySection.Main || meta == null || meta.isMainOnly == false))
         {
             if (section == InventorySection.Char)
             {
                 bool equipped = manager.IsEquippedOnActive(key);
                 entries.Add(new InventoryMenuEntry
                 {
-                    label = equipped ? "해제" : "장착",
-                    action = () => manager.ToggleEquip(key)
+                    label = TranslateUi(equipped ? "해제" : "장착"),
+                    action = () =>
+                    {
+                        // 장착 시도만 사전 차단 — 해제는 허용
+                        if (equipped == false && BlockEquipIfUnsupported())
+                        {
+                            return;
+                        }
+                        manager.ToggleEquip(key);
+                    }
                 });
             }
             else
@@ -413,13 +541,19 @@ public class InventoryView : MonoBehaviour
                 // MAIN에서 장착 = 캐릭터로 1개 이동 후 장착
                 entries.Add(new InventoryMenuEntry
                 {
-                    label = "장착",
+                    label = TranslateUi("장착"),
                     action = () =>
                     {
                         string charcode = manager.ActiveCharcode;
                         if (string.IsNullOrEmpty(charcode))
                         {
                             Debug.LogWarning("[InventoryView] 활성 캐릭터가 없어 장착할 수 없습니다.");
+                            return;
+                        }
+
+                        // 장착 불가 캐릭터는 이동 전에 차단 — 아이템이 조용히 CHAR 스토어로 옮겨지는 것 방지
+                        if (BlockEquipIfUnsupported())
+                        {
                             return;
                         }
 
@@ -432,12 +566,12 @@ public class InventoryView : MonoBehaviour
             }
         }
 
-        // 3) 이동 (스택 통째: MAIN → CHAR / CHAR → MAIN, 목적지 빈 칸 자동 배치)
-        if (section == InventorySection.Main)
+        // 4) 이동 (스택 통째: MAIN → CHAR / CHAR → MAIN, 목적지 빈 칸 자동 배치)
+        if (section == InventorySection.Main && (meta == null || meta.isMainOnly == false))
         {
             entries.Add(new InventoryMenuEntry
             {
-                label = "CHAR로 이동",
+                label = TranslateUi("CHAR로 이동"),
                 action = () =>
                 {
                     string charcode = manager.ActiveCharcode;
@@ -447,7 +581,8 @@ public class InventoryView : MonoBehaviour
                         return;
                     }
 
-                    MoveWithAmountPrompt(manager, InventorySystemManager.MainOwnerId, slotIndex, charcode, -1, $"'{key}' 이동 수량");
+                    MoveWithAmountPrompt(manager, InventorySystemManager.MainOwnerId, slotIndex, charcode, -1,
+                        string.Format(TranslateUi("'{0}' 이동 수량"), key));
                 }
             });
         }
@@ -455,7 +590,7 @@ public class InventoryView : MonoBehaviour
         {
             entries.Add(new InventoryMenuEntry
             {
-                label = "MAIN으로 이동",
+                label = TranslateUi("MAIN으로 이동"),
                 action = () =>
                 {
                     string charcode = manager.ActiveCharcode;
@@ -464,7 +599,8 @@ public class InventoryView : MonoBehaviour
                         return;
                     }
 
-                    MoveWithAmountPrompt(manager, charcode, slotIndex, InventorySystemManager.MainOwnerId, -1, $"'{key}' 이동 수량");
+                    MoveWithAmountPrompt(manager, charcode, slotIndex, InventorySystemManager.MainOwnerId, -1,
+                        string.Format(TranslateUi("'{0}' 이동 수량"), key));
                 }
             });
         }
@@ -509,26 +645,27 @@ public class InventoryView : MonoBehaviour
     }
 
     // 상세 팝업 열기 (이름/설명/수량/분류)
-    private void ShowDetail(InventorySystemManager manager, string key, int slotIndex, Vector2 screenPos, InventoryEntry meta)
+    private void ShowDetail(InventorySystemManager manager, string key, int slotIndex, Vector2 screenPos, ItemEntry meta)
     {
         InvStore store = section == InventorySection.Main ? manager.GetMainStore() : manager.GetActiveCharStore();
         InvItemStack stack = store != null ? store.FindBySlot(slotIndex) : null;
         int count = stack != null ? stack.count : 0;
 
-        string title = meta != null && string.IsNullOrEmpty(meta.displayName) == false ? meta.displayName : key;
+        string title = TranslateUi(meta != null && string.IsNullOrEmpty(meta.displayName) == false ? meta.displayName : key);
         string body = "";
         if (meta != null && string.IsNullOrEmpty(meta.description) == false)
         {
-            body += meta.description + "\n\n";
+            body += TranslateUi(meta.description) + "\n\n";
         }
 
-        body += $"수량: {count}";
-        if (meta != null && string.IsNullOrEmpty(meta.category) == false)
+        body += string.Format(TranslateUi("수량: {0}"), count);
+        string category = manager.Catalog != null ? manager.Catalog.CategoryForKey(key) : null;
+        if (string.IsNullOrEmpty(category) == false)
         {
-            body += $"\n분류: {meta.category}";
+            body += "\n" + string.Format(TranslateUi("분류: {0}"), TranslateUi(category));
         }
 
-        body += $"\n키: {key}";
+        body += "\n" + string.Format(TranslateUi("키: {0}"), key);
 
         InventoryMenu.ShowDetail(RootCanvas(), screenPos, title, body, MenuFont());
     }
@@ -591,8 +728,42 @@ public class InventoryView : MonoBehaviour
             return;
         }
 
-        // 3) UI 밖 드롭 → 캐릭터(3D) 위인지 스크린 바운드로 판정
+        ItemEntry worldItem = manager.Catalog != null ? manager.Catalog.Get(key) : null;
+        if (worldItem == null)
+        {
+            return;
+        }
+
+        // Anchor와 Equip은 서로의 대상을 절대 처리하지 않는다.
+        if (worldItem.useType == ItemUseType.Anchor)
+        {
+            AnchorManager.Instance.TryPlaceAtScreenPosition(
+                fromOwner,
+                fromSlot,
+                key,
+                screenPos);
+            return;
+        }
+
+        if (worldItem.useType != ItemUseType.Equip || manager.IsEquippable(key) == false)
+        {
+            return;
+        }
+
+        // Equip 아이템이 Anchor 대상에 닿으면 캐릭터 이동/장착으로 폴백하지 않는다.
+        if (AnchorManager.Instance.IsPointerOverAnchor(screenPos))
+        {
+            return;
+        }
+
+        // 3) UI 밖 Equip 드롭 → 캐릭터(3D) 위인지 스크린 바운드로 판정
         if (IsPointerOverCharacter(manager, screenPos) == false)
+        {
+            return;
+        }
+
+        // 장착 불가 캐릭터는 이동 전에 차단 — 아이템이 조용히 CHAR 스토어로 옮겨지는 것 방지 + 안내 대사
+        if (BlockEquipIfUnsupported())
         {
             return;
         }
@@ -729,6 +900,32 @@ public class InventoryView : MonoBehaviour
         manager.SortStore(ownerId);
     }
 
+    private void OnDebugGoldClicked()
+    {
+        if (section != InventorySection.Main)
+        {
+            return;
+        }
+
+        CurrencyManager wallet = CurrencyManager.Instance;
+        if (wallet != null)
+        {
+            wallet.Earn(CurrencyManager.GoldKey, 100);
+        }
+    }
+
+    private void RefreshGoldBalance()
+    {
+        if (goldBalanceText == null)
+        {
+            return;
+        }
+
+        CurrencyManager wallet = CurrencyManager.Instance;
+        int gold = wallet != null ? wallet.Gold : 0;
+        goldBalanceText.text = $"{gold:N0} G";
+    }
+
     // 이 창이 속한 최상위 캔버스
     private Canvas RootCanvas()
     {
@@ -742,87 +939,26 @@ public class InventoryView : MonoBehaviour
         return headerText != null ? headerText.font : null;
     }
 
-    // ── 이름 기반 바인딩 (베이크된 프리팹용) ─────────────────────
-
-    // 비어 있는 참조만 자식 이름 탐색으로 채운다
-    private void BindExisting()
+    private void TranslateBakedLabels()
     {
-        if (canvasGroup == null)
+        foreach (TMP_Text target in GetComponentsInChildren<TMP_Text>(true))
         {
-            canvasGroup = GetComponent<CanvasGroup>();
-        }
-
-        if (headerText == null)
-        {
-            headerText = FindDeepComponent<TMP_Text>("Header");
-        }
-
-        if (grid == null)
-        {
-            grid = FindDeepChild(transform, "Grid");
-        }
-
-        if (slotTemplate == null)
-        {
-            slotTemplate = FindDeepComponent<InventorySlotView>("SlotTemplate");
-        }
-
-        if (sortButton == null)
-        {
-            sortButton = FindDeepComponent<Button>("SortButton");
-        }
-
-        if (closeButton == null)
-        {
-            closeButton = FindDeepComponent<Button>("CloseButton");
-        }
-
-        if (prevButton == null)
-        {
-            prevButton = FindDeepComponent<Button>("PrevButton");
-        }
-
-        if (nextButton == null)
-        {
-            nextButton = FindDeepComponent<Button>("NextButton");
-        }
-
-        if (pageLabel == null)
-        {
-            pageLabel = FindDeepComponent<TMP_Text>("PageLabel");
+            if (target != null && !string.IsNullOrEmpty(target.text))
+            {
+                target.text = TranslateUi(target.text);
+            }
         }
     }
 
-    // 이름으로 자손 트랜스폼 탐색 (비활성 포함)
-    private static Transform FindDeepChild(Transform parent, string name)
+    private static string TranslateUi(string text)
     {
-        if (parent == null)
+        if (string.IsNullOrEmpty(text) || SettingManager.Instance == null ||
+            SettingManager.Instance.settings == null ||
+            string.IsNullOrEmpty(SettingManager.Instance.settings.ui_language))
         {
-            return null;
+            return text;
         }
 
-        for (int i = 0; i < parent.childCount; i++)
-        {
-            Transform child = parent.GetChild(i);
-            if (child.name == name)
-            {
-                return child;
-            }
-
-            Transform found = FindDeepChild(child, name);
-            if (found != null)
-            {
-                return found;
-            }
-        }
-
-        return null;
-    }
-
-    // 이름으로 자손에서 컴포넌트 탐색
-    private T FindDeepComponent<T>(string name) where T : Component
-    {
-        Transform found = FindDeepChild(transform, name);
-        return found != null ? found.GetComponent<T>() : null;
+        return LanguageDataInventory.Translate(text, SettingManager.Instance.settings.ui_language);
     }
 }

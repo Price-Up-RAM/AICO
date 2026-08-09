@@ -280,6 +280,7 @@ public class CharManager : MonoBehaviour
         
         Debug.Log("currentCharacterInitLocalScale : "+ currentCharacterInitLocalScale);
 
+        VrmSpringBoneController.Attach(currentCharacter);
         setDragHandlerVar(currentCharacter);
         setClickHandlerVar(currentCharacter);
         setPhysicsManagerVar(currentCharacter);
@@ -459,6 +460,8 @@ public class CharManager : MonoBehaviour
                 return;
             }
         }
+
+        VrmSpringBoneController.Attach(currentCharacter);
 
         // Handler에 값 setting
         setDragHandlerVar(currentCharacter);

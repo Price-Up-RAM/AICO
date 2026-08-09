@@ -10,7 +10,7 @@ using System.Collections.Generic;
 [Serializable]
 public class InvItemStack
 {
-    public string key;      // 아이템 식별 키 (InventoryCatalog/EquipCatalog와 동일 문자열 공간)
+    public string key;      // 아이템 식별 키 (ItemCatalog/EquipCatalog와 동일 문자열 공간)
     public int count = 1;   // 보유 개수
     public int slot = -1;   // 그리드 칸 인덱스 (0부터. -1 = 미배정 → NormalizeSlots가 자동 배정)
 }
