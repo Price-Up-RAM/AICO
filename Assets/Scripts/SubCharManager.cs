@@ -244,6 +244,7 @@ public class SubCharManager : MonoBehaviour
 
         // 기본 size 변경 > 필요할 경우 넣어주기
         setCharSize(character);
+        VrmSpringBoneController.Attach(character);
         // currentCharacterInitLocalScale = currentCharacter.transform.localScale.x;
         // setCharSize();
 
