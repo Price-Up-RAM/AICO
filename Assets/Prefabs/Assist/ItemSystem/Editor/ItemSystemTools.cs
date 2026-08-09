@@ -7,11 +7,11 @@ using UnityEngine;
 // + 카테고리 레지스트리(ItemCatalog) 등록. StoreTools의 additive 관용구를 따른다
 // (기존 엔트리/행은 불변 + 누락 기본 키만 추가, 기본 키의 빈 icon과 기본 카테고리 행의 빈 catalog만 보충
 //  — 인스펙터 편집이 재실행에도 보존된다).
-// 예외: 이번 라운드에 한해 ItemEntry 플래그 5종의 1회 스키마 마이그레이션이 기존 행에도 기본값을 기록한다
+// 예외: 이번 라운드에 한해 ItemEntry 플래그 6종의 1회 스키마 마이그레이션이 기존 행에도 기본값을 기록한다
 // (각 마이그레이션 블록의 주석 참조 — 다음 라운드에 블록 제거로 불변 원칙 복귀).
 public static class ItemSystemTools
 {
-    // ItemEntry 플래그 5종의 카테고리별 기본값 묶음 (신규 행 기록 + 1회 스키마 마이그레이션 공용)
+    // ItemEntry 플래그의 카테고리별 기본값 묶음 (신규 행 기록 + 1회 스키마 마이그레이션 공용)
     private struct ItemFlagDefaults
     {
         public bool isBuyable;      // 상점 구매 가능
@@ -49,7 +49,6 @@ public static class ItemSystemTools
     }
 
     // ── 1) 카탈로그 생성/갱신: 카테고리별 카탈로그 5종 → 카테고리 레지스트리(ItemCatalog) ──
-    [MenuItem("Tools/ItemSystem/1. Create Catalog")]
     public static ItemCatalog CreateCatalog()
     {
         EnsureDir(ResourcesDir);
@@ -73,20 +72,30 @@ public static class ItemSystemTools
             equipIcons,
             null,
             new ItemFlagDefaults(true, true, false, true, false));
+        SetClassification(
+            equipCat,
+            ItemUseType.Equip,
+            ItemClass.None,
+            "arona_a_chipao",
+            "arona_a_idolfrontribbon",
+            "arona_a_pareo",
+            "hairpin_placeholder");
         ItemBasicCatalog poseCat = CreateCategoryCatalog<ItemBasicCatalog>(
             PosePath,
             new[] { "pose_greeting", "pose_dance", "pose_sit" },
             new[] { "포즈: 인사", "포즈: 댄스", "포즈: 앉기" },
             new Sprite[] { null, null, null },
             null,
-            new ItemFlagDefaults(true, true, false, false, false));
+            new ItemFlagDefaults(true, true, false, false, false),
+            ItemIconType.Runtime);
         ItemBasicCatalog fxCat = CreateCategoryCatalog<ItemBasicCatalog>(
             EffectPath,
             new[] { "fx_pat_heart", "fx_pat_star", "fx_click_sparkle" },
             new[] { "쓰다듬기: 하트", "쓰다듬기: 별", "클릭: 반짝임" },
             new Sprite[] { null, null, null },
             null,
-            new ItemFlagDefaults(true, true, false, false, false));
+            new ItemFlagDefaults(true, true, false, false, false),
+            ItemIconType.Runtime);
         ItemGiftCatalog giftCat = CreateCategoryCatalog<ItemGiftCatalog>(
             GiftPath,
             new[] { "gift_s", "gift_m", "gift_l" },
@@ -96,11 +105,12 @@ public static class ItemSystemTools
             new ItemFlagDefaults(true, true, true, false, true));
         ItemBasicCatalog miscCat = CreateCategoryCatalog<ItemBasicCatalog>(
             MiscPath,
-            new[] { "snack_banana", "potion_energy", "ticket_random" },
-            new[] { "바나나", "에너지 드링크", "랜덤 티켓" },
-            new Sprite[] { null, null, null },
+            new[] { "snack_banana", "potion_energy", "ticket_random", "arona_nui" },
+            new[] { "바나나", "에너지 드링크", "랜덤 티켓", "아로나 누이" },
+            new Sprite[] { null, null, null, null },
             null,
             new ItemFlagDefaults(true, true, true, false, true));
+        SetClassification(miscCat, ItemUseType.Anchor, ItemClass.Doll, "arona_nui");
 
         // (a2) 재화 카탈로그 — 재화의 "정의"만 등록한다 (잔액·증감은 CurrencyManager 소유). 일단 골드 1종.
         ItemCurrencyCatalog currencyCat = CreateCurrencyCatalog(
@@ -166,6 +176,11 @@ public static class ItemSystemTools
             e.FindPropertyRelative("catalog").objectReferenceValue = categoryCatalogs[i];
             addedCategories = addedCategories + 1;
         }
+
+        ConnectUniqueAssetIfMissing<AnchorCatalog>(so, "anchorCatalog");
+        ConnectUniqueAssetIfMissing<EquipCatalog>(so, "equipCatalog");
+        ConnectUniqueAssetIfMissing<ItemRuntimeSpritePoseCatalog>(so, "runtimeSpritePoseCatalog");
+        ConnectUniqueAssetIfMissing<ItemRuntimeSpriteEffectCatalog>(so, "runtimeSpriteEffectCatalog");
         so.ApplyModifiedProperties();
 
         EditorUtility.SetDirty(cat);
@@ -176,12 +191,29 @@ public static class ItemSystemTools
         return cat;
     }
 
+    private static void ConnectUniqueAssetIfMissing<T>(SerializedObject owner, string propertyName)
+        where T : Object
+    {
+        SerializedProperty property = owner.FindProperty(propertyName);
+        if (property == null || property.objectReferenceValue != null)
+        {
+            return;
+        }
+
+        string[] guids = AssetDatabase.FindAssets($"t:{typeof(T).Name}");
+        if (guids.Length == 1)
+        {
+            property.objectReferenceValue = AssetDatabase.LoadAssetAtPath<T>(
+                AssetDatabase.GUIDToAssetPath(guids[0]));
+        }
+    }
+
     // 카테고리 카탈로그 Load-or-Create 후 "누락 키만" 기본 엔트리로 추가한다 (공용 additive 헬퍼).
     // 기존 엔트리 필드는 사용자 소유라 절대 덮어쓰지 않되, 기본 키와 일치하는 행의 icon이 비어 있고
     // 기본 icon이 있으면 보충만 한다. affinityPoints는 선택 배열 — null이면 기본 엔트리(ItemEntry),
     // non-null이면 선물 엔트리(ItemGiftEntry)로 간주해 신규 행에만 기록한다.
     // flags는 카테고리 공통 기본값 — 신규 행에 명시 기록 + 기존 행 1회 스키마 마이그레이션(아래 블록)에 사용.
-    private static T CreateCategoryCatalog<T>(string path, string[] keys, string[] names, Sprite[] icons, int[] affinityPoints, ItemFlagDefaults flags) where T : ItemCategoryCatalog
+    private static T CreateCategoryCatalog<T>(string path, string[] keys, string[] names, Sprite[] icons, int[] affinityPoints, ItemFlagDefaults flags, ItemIconType defaultIconType = ItemIconType.File) where T : ItemCategoryCatalog
     {
         T cat = AssetDatabase.LoadAssetAtPath<T>(path);
         if (cat == null)
@@ -193,7 +225,7 @@ public static class ItemSystemTools
         SerializedObject so = new SerializedObject(cat);
         SerializedProperty list = so.FindProperty("entries");
 
-        // ── 1회 스키마 마이그레이션: bool 신필드(플래그 5종)는 구 데이터에서 전부 false로 로드 —
+        // ── 1회 스키마 마이그레이션: bool 신필드는 구 데이터에서 전부 false로 로드 —
         //    기존 행에도 카테고리 기본값을 기록해 스키마를 도입한다. 다음 라운드부터 기존 행 불변
         //    원칙 복귀 시 이 블록 제거. ──
         for (int i = 0; i < list.arraySize; i++)
@@ -245,8 +277,12 @@ public static class ItemSystemTools
             e.FindPropertyRelative("displayName").stringValue = names[i];
             e.FindPropertyRelative("icon").objectReferenceValue = icons[i];
             e.FindPropertyRelative("description").stringValue = "";
-            e.FindPropertyRelative("maxStack").intValue = 99;
+            e.FindPropertyRelative("basePrice").intValue = 1000;
+            e.FindPropertyRelative("iconType").enumValueIndex = (int)defaultIconType;
+            e.FindPropertyRelative("prefab").objectReferenceValue = null;
+            e.FindPropertyRelative("maxStack").intValue = flags.isCountable ? 99 : 1;
             WriteFlags(e, flags);
+            e.FindPropertyRelative("isMainOnly").boolValue = false;
             if (affinityPoints != null)
             {
                 e.FindPropertyRelative("affinityPoints").intValue = affinityPoints[i];
@@ -278,7 +314,7 @@ public static class ItemSystemTools
         // 보수적 값으로 고정한다: buyable/sellable/equipable/spendable=false, countable=true(잔액은 수량 개념).
         ItemFlagDefaults currencyFlags = new ItemFlagDefaults(false, false, true, false, false);
 
-        // ── 1회 스키마 마이그레이션: bool 신필드(플래그 5종)는 구 데이터에서 전부 false로 로드 —
+        // ── 1회 스키마 마이그레이션: bool 신필드는 구 데이터에서 전부 false로 로드 —
         //    기존 행에도 위 기본값을 기록해 스키마를 도입한다. 다음 라운드부터 기존 행 불변
         //    원칙 복귀 시 이 블록 제거. ──
         for (int i = 0; i < list.arraySize; i++)
@@ -307,8 +343,12 @@ public static class ItemSystemTools
             e.FindPropertyRelative("displayName").stringValue = names[i];
             e.FindPropertyRelative("icon").objectReferenceValue = null;
             e.FindPropertyRelative("description").stringValue = descriptions[i];
+            e.FindPropertyRelative("basePrice").intValue = 0;
+            e.FindPropertyRelative("iconType").enumValueIndex = (int)ItemIconType.File;
+            e.FindPropertyRelative("prefab").objectReferenceValue = null;
             e.FindPropertyRelative("maxStack").intValue = 99;  // 재화에서는 미사용 (ItemCurrencyEntry 주석 참조)
             WriteFlags(e, currencyFlags);
+            e.FindPropertyRelative("isMainOnly").boolValue = false;
             e.FindPropertyRelative("premium").boolValue = premiums[i];
             added = added + 1;
         }
@@ -319,7 +359,7 @@ public static class ItemSystemTools
         return cat;
     }
 
-    // 엔트리 행에 ItemEntry 플래그 5종을 명시 기록한다 (신규 행 기록 + 1회 스키마 마이그레이션 공용)
+    // 엔트리 행에 ItemEntry 플래그를 명시 기록한다 (신규 행 기록 + 1회 스키마 마이그레이션 공용)
     private static void WriteFlags(SerializedProperty row, ItemFlagDefaults flags)
     {
         row.FindPropertyRelative("isBuyable").boolValue = flags.isBuyable;
@@ -327,6 +367,46 @@ public static class ItemSystemTools
         row.FindPropertyRelative("isCountable").boolValue = flags.isCountable;
         row.FindPropertyRelative("isEquipable").boolValue = flags.isEquipable;
         row.FindPropertyRelative("isSpendable").boolValue = flags.isSpendable;
+        if (flags.isCountable == false)
+        {
+            row.FindPropertyRelative("maxStack").intValue = 1;
+        }
+    }
+
+    private static void SetClassification(
+        ItemCategoryCatalog catalog,
+        ItemUseType useType,
+        ItemClass itemClass,
+        params string[] keys)
+    {
+        if (catalog == null || keys == null)
+        {
+            return;
+        }
+
+        HashSet<string> targets = new HashSet<string>(keys);
+        SerializedObject so = new SerializedObject(catalog);
+        SerializedProperty list = so.FindProperty("entries");
+        for (int i = 0; i < list.arraySize; i++)
+        {
+            SerializedProperty row = list.GetArrayElementAtIndex(i);
+            if (targets.Contains(row.FindPropertyRelative("key").stringValue) == false)
+            {
+                continue;
+            }
+
+            row.FindPropertyRelative("useType").enumValueIndex = (int)useType;
+            row.FindPropertyRelative("itemClass").enumValueIndex = (int)itemClass;
+
+            if (useType == ItemUseType.Anchor)
+            {
+                row.FindPropertyRelative("isEquipable").boolValue = false;
+                row.FindPropertyRelative("isSpendable").boolValue = false;
+            }
+        }
+
+        so.ApplyModifiedProperties();
+        EditorUtility.SetDirty(catalog);
     }
 
     // guid → 아이콘 스프라이트 로드 (텍스처의 Sprite 서브에셋 — Store/InventorySystemTools와 같은 원본 PNG, Assets/Model/Sprite).

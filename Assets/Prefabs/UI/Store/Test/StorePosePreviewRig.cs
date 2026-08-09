@@ -15,6 +15,14 @@ using UnityEngine.Playables;
 // 모든 실패 경로에서 onDone(entry, null) 호출을 보장한다 (매니저의 pending 해제 조건).
 public class StorePosePreviewRig : MonoBehaviour
 {
+    [SerializeField, Min(0f)] private float previewLightIntensity = 0.8f;
+
+    private static readonly Vector3 RigIsolationOffset = new Vector3(0f, -10000f, 0f);
+
+    private GameObject rigRoot;
+    private GameObject holder;
+    private Light rigLight;
+
     public static StorePosePreviewRig Instance { get; private set; }  // Awake에서 설정, OnDestroy에서 해제 (자동 생성 없음)
 
     [SerializeField] private GameObject characterPrefab;    // 휴머노이드 캐릭터 프리팹 (에디터 빌더가 주입, 예: arona POC)
@@ -43,10 +51,16 @@ public class StorePosePreviewRig : MonoBehaviour
     // 포즈/이펙트 공용 요청 — poseEntry/effectEntry 중 한쪽만 채워진다
     private struct CaptureRequest
     {
-        public StoreDetailPoseEntry poseEntry;
-        public StoreDetailEffectEntry effectEntry;
-        public System.Action<StoreDetailPoseEntry, Sprite> onPoseDone;
-        public System.Action<StoreDetailEffectEntry, Sprite> onEffectDone;
+        public ItemRuntimeSpritePoseEntry poseEntry;
+        public ItemRuntimeSpriteEffectEntry effectEntry;
+        public System.Action<ItemRuntimeSpritePoseEntry, Sprite> onPoseDone;
+        public System.Action<ItemRuntimeSpriteEffectEntry, Sprite> onEffectDone;
+    }
+
+    private sealed class CaptureOperation
+    {
+        public Sprite sprite;
+        public System.Exception error;
     }
 
     // 영구 캡처 불가 확정 시 true. 리그 준비 전(Start 이전)은 false — 요청은 내부 큐에 보존된다.
@@ -104,6 +118,7 @@ public class StorePosePreviewRig : MonoBehaviour
     private void SetPermanentlyDisabled()
     {
         disabled = true;
+        SetCaptureSessionActive(false);
         DrainRequestsWithFailure();
     }
 
@@ -126,27 +141,45 @@ public class StorePosePreviewRig : MonoBehaviour
 
     private void NotifyFailure(CaptureRequest req)
     {
-        if (req.onPoseDone != null)
+        InvokeCompletion(req, null);
+    }
+
+    private void InvokeCompletion(CaptureRequest req, Sprite sprite)
+    {
+        bool hasReceiver = req.onPoseDone != null || req.onEffectDone != null;
+        try
         {
-            req.onPoseDone(req.poseEntry, null);
+            if (req.onPoseDone != null)
+            {
+                req.onPoseDone(req.poseEntry, sprite);
+            }
+            else if (req.onEffectDone != null)
+            {
+                req.onEffectDone(req.effectEntry, sprite);
+            }
         }
-        if (req.onEffectDone != null)
+        catch (System.Exception exception)
         {
-            req.onEffectDone(req.effectEntry, null);
+            // 콜백 호출이 시작되는 순간 결과 소유권은 수신자에게 넘어간다. 수신자가 캐시에
+            // 저장한 뒤 이벤트 처리에서 예외가 난 경우까지 여기서 파괴하면 캐시가 깨진다.
+            Debug.LogException(exception, this);
+            return;
+        }
+
+        if (hasReceiver == false)
+        {
+            ReleaseCapturedSprite(sprite);
         }
     }
 
     // ── 공개 API ──
 
     // 포즈 캡처 요청: 큐에 넣고 순차 캡처 후 콜백. 실패 시에도 반드시 onDone(entry, null) 호출.
-    public void RequestPoseCapture(StoreDetailPoseEntry entry, System.Action<StoreDetailPoseEntry, Sprite> onDone)
+    public void RequestPoseCapture(ItemRuntimeSpritePoseEntry entry, System.Action<ItemRuntimeSpritePoseEntry, Sprite> onDone)
     {
         if (entry == null || disabled)
         {
-            if (onDone != null)
-            {
-                onDone(entry, null);
-            }
+            InvokeCompletion(new CaptureRequest { poseEntry = entry, onPoseDone = onDone }, null);
             return;
         }
 
@@ -160,14 +193,11 @@ public class StorePosePreviewRig : MonoBehaviour
     }
 
     // 이펙트 캡처 요청: 파티클을 Simulate로 정지시켜 캡처. 실패 시에도 반드시 onDone(entry, null) 호출.
-    public void RequestEffectCapture(StoreDetailEffectEntry entry, System.Action<StoreDetailEffectEntry, Sprite> onDone)
+    public void RequestEffectCapture(ItemRuntimeSpriteEffectEntry entry, System.Action<ItemRuntimeSpriteEffectEntry, Sprite> onDone)
     {
         if (entry == null || disabled)
         {
-            if (onDone != null)
-            {
-                onDone(entry, null);
-            }
+            InvokeCompletion(new CaptureRequest { effectEntry = entry, onEffectDone = onDone }, null);
             return;
         }
 
@@ -200,16 +230,20 @@ public class StorePosePreviewRig : MonoBehaviour
 
         // 비활성 홀더 아래 인스턴스화 → 앱 스크립트의 Awake/OnEnable이 한 프레임도 실행되지 않게 차단
         // (animationplayermanager.cs 오프스크린 프로브 주석이 문서화한 사고 패턴 대비)
-        GameObject holder = new GameObject("Holder");
-        holder.transform.SetParent(transform, false);
+        rigRoot = new GameObject("PreviewRigRoot");
+        rigRoot.transform.SetParent(transform, false);
+        rigRoot.transform.localPosition = RigIsolationOffset;
+
+        holder = new GameObject("Holder");
+        holder.transform.SetParent(rigRoot.transform, false);
         holder.SetActive(false);
 
         charInst = Instantiate(characterPrefab, holder.transform);
         charInst.transform.localPosition = Vector3.zero;
-        charInst.transform.localRotation = Quaternion.identity;
+        charInst.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
 
-        // 앱 종속 MonoBehaviour 전부 제거 (Animator/렌더러는 MonoBehaviour가 아니라 살아남음)
-        StripMonoBehaviours(charInst);
+        // 앱 동작/물리만 비활성화하고 렌더러·본·Animator·머티리얼 구조는 원형 보존
+        PrepareVisualClone(charInst);
 
         if (portraitLayer >= 0)
         {
@@ -229,13 +263,16 @@ public class StorePosePreviewRig : MonoBehaviour
         animator.applyRootMotion = false;                       // 클립 루트 이동으로 프레임 이탈 방지
         animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;  // 오프스크린에서도 평가 보장
 
-        // 리그 전용 카메라 (켜진 상태로 RT에 매 프레임 렌더 — PortraitCamera.cs 방식, Camera.Render() 호출 금지)
+        // 리그 전용 카메라 (캡처 세션 중에만 RT로 렌더 — SRP에서 Camera.Render() 호출 금지)
         GameObject camGo = new GameObject("RigCamera");
-        camGo.transform.SetParent(transform, false);
+        camGo.transform.SetParent(rigRoot.transform, false);
         rigCam = camGo.AddComponent<Camera>();
         rigCam.clearFlags = CameraClearFlags.SolidColor;
         rigCam.backgroundColor = new Color(0.11f, 0.12f, 0.15f, 1f);  // 불투명 어두운 배경 (툰셰이더 알파 비의존)
         rigCam.fieldOfView = 40f;
+        rigCam.allowHDR = false;
+        rigCam.allowMSAA = false;
+        rigCam.enabled = false;
         if (portraitLayer >= 0)
         {
             rigCam.cullingMask = 1 << portraitLayer;
@@ -245,11 +282,12 @@ public class StorePosePreviewRig : MonoBehaviour
 
         // 리그 전용 디렉셔널 라이트 (데모씬에는 라이트가 없어 리그가 자체 광원을 가져야 한다)
         GameObject lightGo = new GameObject("RigLight");
-        lightGo.transform.SetParent(transform, false);
+        lightGo.transform.SetParent(rigRoot.transform, false);
         lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
-        Light rigLight = lightGo.AddComponent<Light>();
+        rigLight = lightGo.AddComponent<Light>();
         rigLight.type = LightType.Directional;
-        rigLight.intensity = 1.1f;
+        rigLight.intensity = previewLightIntensity;
+        rigLight.shadows = LightShadows.None;
         if (portraitLayer >= 0)
         {
             rigLight.cullingMask = 1 << portraitLayer;  // 본편 씬을 이중 조명하지 않도록 리그 레이어만 비춘다
@@ -259,45 +297,81 @@ public class StorePosePreviewRig : MonoBehaviour
         FrameCamera(rigCam, charInst);
 
         isReady = true;
+        SetCaptureSessionActive(false);
         Debug.Log("[Store][StorePosePreviewRig] 리그 구성 완료.");
     }
 
-    // 인스턴스의 MonoBehaviour를 전부 제거 (다중 패스).
-    // 원본: InventorySystemTools.StripAppComponents — 화이트리스트 없이 전부 제거하는 런타임 개작
-    private void StripMonoBehaviours(GameObject target)
+    // 시각 계층은 그대로 두고 앱 동작과 물리 상호작용만 안전하게 비활성화한다.
+    private void PrepareVisualClone(GameObject target)
     {
-        for (int pass = 0; pass < 4; pass++)
+        // 비활성 부모 아래에서 앱 동작만 멈춘다. 컴포넌트를 파괴하지 않아 RequireComponent 체인과
+        // SkinnedMeshRenderer의 본/머티리얼 구성을 원본 그대로 보존한다.
+        foreach (MonoBehaviour comp in target.GetComponentsInChildren<MonoBehaviour>(true))
         {
-            MonoBehaviour[] comps = target.GetComponentsInChildren<MonoBehaviour>(true);
-            int removed = 0;
-
-            foreach (MonoBehaviour comp in comps)
+            if (comp != null)
             {
-                if (comp == null)
-                {
-                    continue;
-                }
-
-                // RequireComponent 의존으로 거부되면 예외 없이 에러 로그만 남고 컴포넌트가 잔존
-                // → 파괴 후 null 확인으로 실제 제거만 집계, 잔존분은 다음 패스에서 재시도
-                MonoBehaviour target2 = comp;
-                Object.DestroyImmediate(target2);
-                if (target2 == null)
-                {
-                    removed = removed + 1;
-                }
-            }
-
-            if (removed == 0)
-            {
-                break;
+                comp.enabled = false;
             }
         }
 
-        MonoBehaviour[] leftover = target.GetComponentsInChildren<MonoBehaviour>(true);
-        if (leftover.Length > 0)
+        foreach (Collider collider in target.GetComponentsInChildren<Collider>(true))
         {
-            Debug.LogWarning($"[Store][StorePosePreviewRig] 스트립 후 잔존 MonoBehaviour {leftover.Length}개 (의존 체인 감시용 로그).");
+            if (collider != null)
+            {
+                collider.enabled = false;
+            }
+        }
+
+        foreach (Collider2D collider in target.GetComponentsInChildren<Collider2D>(true))
+        {
+            if (collider != null)
+            {
+                collider.enabled = false;
+            }
+        }
+
+        foreach (Rigidbody body in target.GetComponentsInChildren<Rigidbody>(true))
+        {
+            if (body != null)
+            {
+                body.detectCollisions = false;
+                body.isKinematic = true;
+            }
+        }
+
+        foreach (Rigidbody2D body in target.GetComponentsInChildren<Rigidbody2D>(true))
+        {
+            if (body != null)
+            {
+                body.simulated = false;
+            }
+        }
+
+        foreach (AudioSource source in target.GetComponentsInChildren<AudioSource>(true))
+        {
+            if (source != null)
+            {
+                source.enabled = false;
+            }
+        }
+
+        foreach (Camera cloneCamera in target.GetComponentsInChildren<Camera>(true))
+        {
+            if (cloneCamera != null)
+            {
+                cloneCamera.enabled = false;
+            }
+        }
+
+        if (portraitLayer >= 0)
+        {
+            foreach (Light cloneLight in target.GetComponentsInChildren<Light>(true))
+            {
+                if (cloneLight != null)
+                {
+                    cloneLight.cullingMask = 1 << portraitLayer;
+                }
+            }
         }
     }
 
@@ -308,6 +382,34 @@ public class StorePosePreviewRig : MonoBehaviour
         for (int i = 0; i < t.childCount; i++)
         {
             SetLayerRecursively(t.GetChild(i), layer);
+        }
+    }
+
+    private void SetCaptureSessionActive(bool active)
+    {
+        if (holder != null)
+        {
+            holder.SetActive(active);
+        }
+        if (rigCam != null)
+        {
+            rigCam.enabled = active;
+        }
+        if (rigLight != null)
+        {
+            rigLight.enabled = active;
+        }
+
+        if (isGraphCreated && graph.IsValid())
+        {
+            if (active)
+            {
+                graph.Play();
+            }
+            else
+            {
+                graph.Stop();
+            }
         }
     }
 
@@ -337,7 +439,7 @@ public class StorePosePreviewRig : MonoBehaviour
     }
 
     // 클립을 freezeMin~freezeMax 사이 랜덤 정규화 시점에서 정지시키고 카메라를 재프레이밍
-    private bool FreezePose(StoreDetailPoseEntry entry)
+    private bool FreezePose(ItemRuntimeSpritePoseEntry entry)
     {
         if (entry.clip == null)
         {
@@ -414,7 +516,7 @@ public class StorePosePreviewRig : MonoBehaviour
         cam.farClipPlane = dist + radius * 4f;
     }
 
-    // ── 캡처 펌프 (RT 읽기: FaceTextureChanger.cs / 프레임 끝 대기: ApiAgentFunctionScreenshotAction.cs 패턴) ──
+    // ── 캡처 펌프 (RT 읽기: FaceTextureChanger.cs / 프레임 끝 대기: ApiAgentFunctionScreenshotActionManager.cs 패턴) ──
 
     private IEnumerator CapturePump()
     {
@@ -424,39 +526,93 @@ public class StorePosePreviewRig : MonoBehaviour
         // 양보해 대입이 항상 본문보다 먼저 완료되게 한다.
         yield return null;
 
-        while (requests.Count > 0)
+        SetCaptureSessionActive(true);
+        bool completedNormally = false;
+        try
         {
-            CaptureRequest req = requests.Dequeue();
-            // Dequeue 이후 파괴/비활성되면 큐 드레인만으로는 이 요청이 유실된다 — 진행 중 표시로 보호
-            currentRequest = req;
-            hasCurrentRequest = true;
-
-            if (req.poseEntry != null)
+            while (requests.Count > 0)
             {
-                yield return CapturePose(req.poseEntry, req.onPoseDone);
-            }
-            else if (req.effectEntry != null)
-            {
-                yield return CaptureEffect(req.effectEntry, req.onEffectDone);
+                CaptureRequest req = requests.Dequeue();
+                // Dequeue 이후 파괴/비활성되면 큐 드레인만으로는 이 요청이 유실된다 — 진행 중 표시로 보호
+                currentRequest = req;
+                hasCurrentRequest = true;
+
+                CaptureOperation result = new CaptureOperation();
+                IEnumerator operation = req.poseEntry != null
+                    ? CapturePose(req.poseEntry, result)
+                    : CaptureEffect(req.effectEntry, result);
+
+                yield return ExecuteCaptureSafely(operation, result);
+
+                if (result.error != null)
+                {
+                    Debug.LogError("[Store][StorePosePreviewRig] 캡처 요청 처리 중 예외가 발생했습니다. 다음 요청을 계속 처리합니다.", this);
+                    Debug.LogException(result.error, this);
+                    ReleaseCapturedSprite(result.sprite);
+                    result.sprite = null;
+
+                    if (activeFxHolder != null)
+                    {
+                        CleanupEffectCapture(activeFxHolder);
+                    }
+                }
+
+                hasCurrentRequest = false;
+                InvokeCompletion(req, result.sprite);
             }
 
-            hasCurrentRequest = false;
+            completedNormally = true;
         }
-
-        pump = null;
+        finally
+        {
+            if (completedNormally)
+            {
+                hasCurrentRequest = false;
+            }
+            SetCaptureSessionActive(false);
+            pump = null;
+        }
     }
 
-    private IEnumerator CapturePose(StoreDetailPoseEntry entry, System.Action<StoreDetailPoseEntry, Sprite> onDone)
+    private IEnumerator ExecuteCaptureSafely(IEnumerator operation, CaptureOperation result)
+    {
+        bool finished = false;
+        while (finished == false)
+        {
+            bool hasNext = false;
+            object yielded = null;
+            try
+            {
+                hasNext = operation != null && operation.MoveNext();
+                if (hasNext)
+                {
+                    yielded = operation.Current;
+                }
+                else
+                {
+                    finished = true;
+                }
+            }
+            catch (System.Exception exception)
+            {
+                result.error = exception;
+                finished = true;
+            }
+
+            if (hasNext)
+            {
+                yield return yielded;
+            }
+        }
+    }
+
+    private IEnumerator CapturePose(ItemRuntimeSpritePoseEntry entry, CaptureOperation result)
     {
         // 직전 이펙트 캡처가 캐릭터 렌더러를 꺼놨을 수 있음 — 캡처 전 복원 보장
         SetCharRenderersEnabled(true);
 
         if (FreezePose(entry) == false)
         {
-            if (onDone != null)
-            {
-                onDone(entry, null);
-            }
             yield break;
         }
 
@@ -464,23 +620,14 @@ public class StorePosePreviewRig : MonoBehaviour
         yield return null;
         yield return new WaitForEndOfFrame();
 
-        Sprite sprite = ReadBackSprite();
-
-        if (onDone != null)
-        {
-            onDone(entry, sprite);
-        }
+        result.sprite = ReadBackSprite();
     }
 
-    private IEnumerator CaptureEffect(StoreDetailEffectEntry entry, System.Action<StoreDetailEffectEntry, Sprite> onDone)
+    private IEnumerator CaptureEffect(ItemRuntimeSpriteEffectEntry entry, CaptureOperation result)
     {
         if (entry.effectPrefab == null)
         {
             Debug.LogWarning($"[Store][StorePosePreviewRig] 이펙트 '{entry.key}'의 프리팹이 null — 캡처를 건너뜁니다.");
-            if (onDone != null)
-            {
-                onDone(entry, null);
-            }
             yield break;
         }
 
@@ -490,7 +637,7 @@ public class StorePosePreviewRig : MonoBehaviour
         // 비활성 서브홀더 아래 인스턴스화 → 스트립 완료 전까지 이펙트 스크립트의 Awake/OnEnable 차단
         // (Fx_LoveAura는 MonoBehaviour가 없지만 CFXR 계열 대체 프리팹은 CFXR_Effect가 있을 수 있어 스트립 필수)
         GameObject fxHolder = new GameObject("FxHolder");
-        fxHolder.transform.SetParent(transform, false);
+        fxHolder.transform.SetParent(rigRoot.transform, false);
         fxHolder.SetActive(false);
         activeFxHolder = fxHolder;  // 캡처 도중 리그가 비활성화되면 OnDisable이 대신 정리한다
 
@@ -498,7 +645,7 @@ public class StorePosePreviewRig : MonoBehaviour
         fxInst.transform.localPosition = Vector3.zero;
         fxInst.transform.localRotation = Quaternion.identity;
 
-        StripMonoBehaviours(fxInst);
+        PrepareVisualClone(fxInst);
 
         if (portraitLayer >= 0)
         {
@@ -512,10 +659,6 @@ public class StorePosePreviewRig : MonoBehaviour
         {
             Debug.LogWarning($"[Store][StorePosePreviewRig] 이펙트 '{entry.key}'에 ParticleSystem이 없어 캡처를 건너뜁니다.");
             CleanupEffectCapture(fxHolder);
-            if (onDone != null)
-            {
-                onDone(entry, null);
-            }
             yield break;
         }
 
@@ -539,17 +682,12 @@ public class StorePosePreviewRig : MonoBehaviour
         yield return null;
         yield return new WaitForEndOfFrame();
 
-        Sprite sprite = ReadBackSprite();
+        result.sprite = ReadBackSprite();
 
         CleanupEffectCapture(fxHolder);
-
-        if (onDone != null)
-        {
-            onDone(entry, sprite);
-        }
     }
 
-    // 이펙트 캡처의 모든 종료 경로에서 호출 — 코루틴은 try/finally에 yield를 못 넣어 별도 메서드로 강제한다
+    // 이펙트 캡처의 모든 종료 경로에서 호출한다.
     private void CleanupEffectCapture(GameObject fxHolder)
     {
         if (fxHolder != null)
@@ -584,13 +722,42 @@ public class StorePosePreviewRig : MonoBehaviour
     private Sprite ReadBackSprite()
     {
         RenderTexture prev = RenderTexture.active;
-        RenderTexture.active = rt;
-        Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
-        tex.ReadPixels(new Rect(0f, 0f, rt.width, rt.height), 0, 0);
-        tex.Apply();
-        RenderTexture.active = prev;
+        Texture2D tex = null;
+        try
+        {
+            RenderTexture.active = rt;
+            tex = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
+            tex.ReadPixels(new Rect(0f, 0f, rt.width, rt.height), 0, 0);
+            tex.Apply();
 
-        return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+            Sprite sprite = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+            tex = null; // 성공 시 소유권은 Sprite/StoreManager로 이전
+            return sprite;
+        }
+        finally
+        {
+            RenderTexture.active = prev;
+            if (tex != null)
+            {
+                Destroy(tex);
+            }
+        }
+    }
+
+    // 캡처 결과는 Sprite와 런타임 생성 Texture2D를 한 쌍으로 해제해야 한다.
+    public static void ReleaseCapturedSprite(Sprite sprite)
+    {
+        if (sprite == null)
+        {
+            return;
+        }
+
+        Texture texture = sprite.texture;
+        if (texture != null)
+        {
+            Destroy(texture);
+        }
+        Destroy(sprite);
     }
 
     // ── 정리 (원본: animationplayermanager.cs ReleasePlayer) ──
@@ -613,6 +780,7 @@ public class StorePosePreviewRig : MonoBehaviour
             activeFxHolder = null;
         }
         SetCharRenderersEnabled(true);
+        SetCaptureSessionActive(false);
     }
 
     private void OnDestroy()
@@ -624,6 +792,13 @@ public class StorePosePreviewRig : MonoBehaviour
         }
 
         DrainRequestsWithFailure();
+
+        if (activeFxHolder != null)
+        {
+            Destroy(activeFxHolder);
+            activeFxHolder = null;
+        }
+        SetCaptureSessionActive(false);
 
         if (isGraphCreated && graph.IsValid())
         {

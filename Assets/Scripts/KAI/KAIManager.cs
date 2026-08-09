@@ -26,6 +26,12 @@ public class KAIManager : MonoBehaviour
     private const string AicoCharcode = "aico";      // Assets/Char/Aico/Aico.prefab의 CharAttributes.charcode
     private const string AicoPrefabKey = "naost";    // PrefabDataLocal 프리팹 키 (character_database.json AICO 항목)
 
+    // Store는 UIManager 통합이 없어 KAI 씬에서만 여기서 연다.
+    // 프리팹 참조는 KAISceneBuilder가 씬 생성 시 SerializedObject로 할당한다.
+    [SerializeField] private GameObject storePanelPrefab;
+    private GameObject storePanelInstance;
+    private StoreView storeView;
+
     // 스윕은 씬 전체(비활성 포함)를 훑기 때문에 비싸다. Quest 실측에서 오브젝트 2588개 기준 약 3.9ms.
     // 그래서 평시에는 느린 안전망 주기로만 돌리고, 실제로 필요한 순간(초기화·캐릭터 교체)에는 즉시 스윕한다.
     private const float SweepIntervalFast = 0.25f;   // 초기 구동 중 스윕 주기 (캐릭터 스폰 대기)
@@ -68,6 +74,52 @@ public class KAIManager : MonoBehaviour
             // 초기 10초 동안은 캐릭터 스폰을 놓치지 않도록 촘촘히, 그 이후에는 안전망으로만 돈다.
             sweepTimer = (elapsed < FastPhaseSeconds) ? SweepIntervalFast : SweepIntervalIdle;
             SweepMenuTriggers();
+        }
+    }
+
+    // Store 패널 열기/닫기 — MenuTriggerKAI(런타임 AddComponent라 직렬화 필드가 없음)가 호출한다.
+    public static void ToggleStore()
+    {
+        if (instance == null)
+        {
+            instance = FindAnyObjectByType<KAIManager>();
+        }
+        if (instance == null)
+        {
+            Debug.LogWarning("[KAIManager] KAIManager가 없어 Store를 열 수 없습니다.");
+            return;
+        }
+        instance.ToggleStoreInternal();
+    }
+
+    private void ToggleStoreInternal()
+    {
+        if (storePanelInstance == null)
+        {
+            if (storePanelPrefab == null)
+            {
+                Debug.LogWarning("[KAIManager] storePanelPrefab이 비어 있어 Store를 열 수 없습니다. (KAISceneBuilder 재실행 필요)");
+                return;
+            }
+
+            Transform parent = null;
+            if (CanvasManager.Instance != null && CanvasManager.Instance.canvasUI != null)
+            {
+                parent = CanvasManager.Instance.canvasUI.transform;
+            }
+            storePanelInstance = Instantiate(storePanelPrefab, parent);
+            storePanelInstance.name = "StorePanel";
+            storeView = storePanelInstance.GetComponentInChildren<StoreView>(true);
+            if (storeView != null)
+            {
+                storeView.Show();   // 첫 오픈은 표시 확정 (Toggle이면 베이크된 alpha에 따라 곧바로 닫힐 수 있다)
+            }
+            return;
+        }
+
+        if (storeView != null)
+        {
+            storeView.Toggle();
         }
     }
 

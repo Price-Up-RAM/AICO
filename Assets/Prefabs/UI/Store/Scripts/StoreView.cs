@@ -35,6 +35,7 @@ public class StoreView : MonoBehaviour
     private static readonly Color TextMuted = new Color(0.6f, 0.62f, 0.66f, 1f);
     private static readonly Color GoldYellow = new Color(0.95f, 0.78f, 0.30f, 1f);
     private static readonly Color GoldFlashRed = new Color(0.95f, 0.35f, 0.35f, 1f);
+    private static readonly Color SoldOutRed = new Color(0.85f, 0.27f, 0.27f, 1f);
 
     // ── 탭 (카탈로그의 태그 목록이 곧 탭 — 아래 상수는 리롤/미션 판정용 이름 겸 폴백 구성) ──
     private const string TabEquip = "장착물";
@@ -194,10 +195,23 @@ public class StoreView : MonoBehaviour
             return;
         }
 
+        TranslateBakedLabels();
+        TranslateSellZoneLabel();
         canvasGroup.alpha = 1f;
         canvasGroup.interactable = true;
         canvasGroup.blocksRaycasts = true;
         Refresh();
+    }
+
+    public bool IsVisible
+    {
+        get
+        {
+            return canvasGroup != null
+                && canvasGroup.alpha > 0f
+                && canvasGroup.interactable
+                && canvasGroup.blocksRaycasts;
+        }
     }
 
     public void Hide()
@@ -281,23 +295,33 @@ public class StoreView : MonoBehaviour
 
     // ── 판매가 튜닝 노브 — 판매가 밸런스 조정은 아래 두 상수만 만지면 된다 ──────
     private const int SellPricePercent = 50;   // 카탈로그 아이템: 구매가 대비 판매가 비율(%)
-    private const int DefaultSellPrice = 10;   // 카탈로그에 없는 아이템의 기본 판매가(G)
+    private const int DefaultSellPrice = 0;    // 카탈로그에 없는 아이템의 기본 판매가(G)
 
-    // 판매가 규칙: 카탈로그에 있으면 구매가의 SellPricePercent%(최소 1G), 없으면 DefaultSellPrice
+    // 단품 판매가. 실제 복수 판매는 개별 단가가 아니라 구매 총액에 비율을 적용한 뒤 버린다.
     public int GetSellPrice(string key)
     {
-        if (catalog != null && catalog.Contains(key))
+        return GetSellTotal(key, 1);
+    }
+
+    // 판매 총액: (구매 단가 x 판매 수량) x SellPricePercent / 100, 정수 나눗셈으로 내림.
+    public int GetSellTotal(string key, int quantity)
+    {
+        int purchasePrice = DefaultSellPrice;
+        ItemEntry meta = ResolveMeta(key);
+        if (meta != null)
         {
-            return Mathf.Max(1, catalog.Get(key).price * SellPricePercent / 100);
+            purchasePrice = Mathf.Max(0, meta.basePrice);
         }
 
-        return DefaultSellPrice;
+        long purchaseTotal = (long)purchasePrice * Mathf.Max(0, quantity);
+        long sellTotal = purchaseTotal * SellPricePercent / 100;
+        return sellTotal > int.MaxValue ? int.MaxValue : (int)sellTotal;
     }
 
     // SellZone이 판매 완료 시 호출 → 토스트 + 골드 갱신
     public void NotifySold(string displayName, int count, int gold)
     {
-        ShowToast($"{displayName} x{count} 판매 +{gold:N0} G");
+        ShowToast(string.Format(TranslateUi("{0} x{1} 판매 +{2:N0} G"), TranslateUi(displayName), count, gold));
         RefreshGold();
     }
 
@@ -309,7 +333,7 @@ public class StoreView : MonoBehaviour
             return;
         }
 
-        toastText.text = message ?? string.Empty;
+        toastText.text = TranslateUi(message ?? string.Empty);
         CancelInvoke(nameof(ClearToast));
         Invoke(nameof(ClearToast), 2f);
     }
@@ -330,7 +354,18 @@ public class StoreView : MonoBehaviour
             return;
         }
 
-        InventoryEntry meta = ResolveMeta(entry.key);
+        if (entry.isSalePreparing)
+        {
+            return;
+        }
+
+        ItemEntry meta = ResolveMeta(entry.key);
+        if (meta == null || meta.isBuyable == false)
+        {
+            ShowToast("구매할 수 없는 아이템입니다");
+            return;
+        }
+
         string displayName = ResolveDisplayName(entry, meta);
 
         // 모달용 아이콘: 실아이콘(카탈로그 → 프리뷰 캐시) → NoImage 폴백
@@ -345,7 +380,7 @@ public class StoreView : MonoBehaviour
         }
 
         // 보유 한도 여유분이 없으면 팝업을 열지 않는다
-        int maxStack = meta != null ? meta.maxStack : 99;
+        int maxStack = meta != null ? meta.EffectiveMaxStack : 99;
         int room = maxStack - OwnedCount(entry.key);
         if (room <= 0)
         {
@@ -362,13 +397,19 @@ public class StoreView : MonoBehaviour
         }
 
         StoreEntry captured = entry;
-        confirmView.Open(StoreConfirmMode.Buy, entry.key, displayName, icon, entry.price, Mathf.Min(99, room), qty => ExecutePurchase(captured, qty));
+        confirmView.Open(StoreConfirmMode.Buy, entry.key, displayName, icon, entry.ResolvePrice(meta), Mathf.Min(99, room), qty => ExecutePurchase(captured, qty));
     }
 
     // 결제 실행: Spend(골드 총액) → AddToMain(key, 수량). 지급 실패 시 전액 환불.
     private void ExecutePurchase(StoreEntry entry, int quantity)
     {
         if (entry == null || quantity < 1 || Application.isPlaying == false)
+        {
+            return;
+        }
+
+        // 확인 팝업이 열린 뒤 데이터가 바뀌어도 준비중 상품은 결제하지 않는다.
+        if (entry.isSalePreparing)
         {
             return;
         }
@@ -380,16 +421,22 @@ public class StoreView : MonoBehaviour
         }
 
         // AddToMain은 최대 스택 초과분을 조용히 버리고도 true를 반환한다 — 결제 전에 수용량을 선검증
-        InventoryEntry meta = ResolveMeta(entry.key);
-        int maxStack = meta != null ? meta.maxStack : 99;
-        int room = maxStack - OwnedCount(entry.key);
-        if (quantity > room)
+        ItemEntry meta = ResolveMeta(entry.key);
+        if (meta == null || meta.isBuyable == false)
         {
-            ShowToast($"보유 한도 초과 (추가 가능 {Mathf.Max(0, room)}개)");
+            ShowToast("구매할 수 없는 아이템입니다");
             return;
         }
 
-        int total = entry.price * quantity;
+        int maxStack = meta != null ? meta.EffectiveMaxStack : 99;
+        int room = maxStack - OwnedCount(entry.key);
+        if (quantity > room)
+        {
+            ShowToast(string.Format(TranslateUi("보유 한도 초과 (추가 가능 {0}개)"), Mathf.Max(0, room)));
+            return;
+        }
+
+        int total = entry.ResolvePrice(meta) * quantity;
         if (wallet.Spend(CurrencyManager.GoldKey, total) == false)
         {
             ShowToast("골드가 부족합니다");
@@ -408,7 +455,8 @@ public class StoreView : MonoBehaviour
             return;
         }
 
-        ShowToast($"{ResolveDisplayName(entry, ResolveMeta(entry.key))} x{quantity} 구매 -{total:N0} G");
+        ShowToast(string.Format(TranslateUi("{0} x{1} 구매 -{2:N0} G"),
+            ResolveDisplayName(entry, ResolveMeta(entry.key)), quantity, total));
 
         // 장착물(액세서리) 구매 미션 (CH0007 골드 소비는 Spend만으로 자동 진행).
         // StoreEntry는 태그를 갖지 않으므로 레지스트리에서 키의 소속 태그를 역조회한다.
@@ -422,6 +470,13 @@ public class StoreView : MonoBehaviour
     // StoreSellZone이 드롭 검증을 마친 뒤 호출한다.
     public void RequestSell(string key, int slotIndex, int stackCount)
     {
+        ItemEntry meta = ResolveMeta(key);
+        if (meta == null || meta.isSellable == false)
+        {
+            ShowToast("판매할 수 없는 아이템입니다");
+            return;
+        }
+
         string displayName = ResolveSellDisplayName(key);
 
         // 모달용 아이콘: 구매 경로와 같은 체인(실아이콘 → NoImage 폴백). 판매 대상은 카드가 만들어진 적
@@ -449,7 +504,15 @@ public class StoreView : MonoBehaviour
             return;
         }
 
-        confirmView.Open(StoreConfirmMode.Sell, key, displayName, icon, GetSellPrice(key), stackCount, qty => ExecuteSale(key, slotIndex, qty));
+        confirmView.Open(
+            StoreConfirmMode.Sell,
+            key,
+            displayName,
+            icon,
+            GetSellPrice(key),
+            stackCount,
+            qty => ExecuteSale(key, slotIndex, qty),
+            qty => GetSellTotal(key, qty));
     }
 
     // 판매 실행: 스택에서 수량만큼 차감(전량이면 스택 제거) → 저장 + 이벤트 + 골드 지급.
@@ -459,6 +522,13 @@ public class StoreView : MonoBehaviour
     {
         if (Application.isPlaying == false)
         {
+            return;
+        }
+
+        ItemEntry meta = ResolveMeta(key);
+        if (meta == null || meta.isSellable == false)
+        {
+            ShowToast("판매할 수 없는 아이템입니다");
             return;
         }
 
@@ -492,8 +562,11 @@ public class StoreView : MonoBehaviour
         manager.SaveStore(store);
         InventoryEvents.OnStoreChanged?.Invoke(InventorySystemManager.MainOwnerId);
 
-        int total = GetSellPrice(key) * quantity;
-        wallet.Earn(CurrencyManager.GoldKey, total);
+        int total = GetSellTotal(key, quantity);
+        if (total > 0)
+        {
+            wallet.Earn(CurrencyManager.GoldKey, total);
+        }
         NotifySold(ResolveSellDisplayName(key), quantity, total);
         Debug.Log($"[Store][StoreView] 판매: {key} x{quantity} → +{total}G");
     }
@@ -501,7 +574,7 @@ public class StoreView : MonoBehaviour
     // 판매 표시 이름: 인벤토리 카탈로그 메타 → 상점 카탈로그 엔트리 → 키 순서로 폴백
     private string ResolveSellDisplayName(string key)
     {
-        InventoryEntry meta = ResolveMeta(key);
+        ItemEntry meta = ResolveMeta(key);
         if (meta != null && string.IsNullOrEmpty(meta.displayName) == false)
         {
             return meta.displayName;
@@ -598,7 +671,7 @@ public class StoreView : MonoBehaviour
             }
 
             // 카탈로그 태그가 리베이크 없이 바뀌어도 라벨이 따라가도록 재동기화
-            SetText(tabLabels[i], tabName);
+            SetText(tabLabels[i], TranslateUi(tabName));
 
             bool selected = tabName == currentTab;
             tabImages[i].color = selected ? PanelBg : HeaderBg;
@@ -732,6 +805,11 @@ public class StoreView : MonoBehaviour
         }
 
         List<StoreEntry> list = catalog.EntriesForTab(currentTab);
+        list.RemoveAll(entry =>
+        {
+            ItemEntry item = entry != null ? ResolveMeta(entry.key) : null;
+            return item == null || item.isBuyable == false;
+        });
         int pageCount = Mathf.Max(1, Mathf.CeilToInt(list.Count / (float)CardsPerPage));
         currentPage = Mathf.Clamp(currentPage, 0, pageCount - 1);
 
@@ -780,14 +858,18 @@ public class StoreView : MonoBehaviour
     }
 
     // 카드 1장 생성: 아이콘은 상점 카탈로그 소유(StoreManager.ResolveIcon — Inventory와 별개),
-    // 이름/maxStack만 InventoryCatalog 메타 우선에 StoreEntry 폴백
+    // 이름/maxStack은 ItemCatalog 메타 우선, 없으면 StoreEntry 폴백
     private void CreateCard(StoreEntry entry)
     {
         GameObject card = Instantiate(cardTemplate, goodsGrid);
         card.name = "Card_" + entry.key;
         card.SetActive(true);
 
-        InventoryEntry meta = ResolveMeta(entry.key);
+        ItemEntry meta = ResolveMeta(entry.key);
+        bool salePreparing = entry.isSalePreparing;
+        bool soldOut = salePreparing == false &&
+            meta != null && OwnedCount(entry.key) >= meta.EffectiveMaxStack;
+        bool unavailable = salePreparing || soldOut;
 
         Image icon = FindChildComponent<Image>(card.transform, "CardIcon");
         if (icon != null)
@@ -829,15 +911,35 @@ public class StoreView : MonoBehaviour
         }
 
         SetText(FindChildComponent<TextMeshProUGUI>(card.transform, "CardName"), ResolveDisplayName(entry, meta));
-        SetText(FindChildComponent<TextMeshProUGUI>(card.transform, "CardPrice"), $"{entry.price:N0} G");
-        SetText(FindChildComponent<TextMeshProUGUI>(card.transform, "CardSub"), string.IsNullOrEmpty(entry.detailText) ? string.Empty : entry.detailText);
-        SetText(FindChildComponent<TextMeshProUGUI>(card.transform, "CardOwned"), "보유 " + OwnedCount(entry.key));
+        SetText(FindChildComponent<TextMeshProUGUI>(card.transform, "CardPrice"), $"{entry.ResolvePrice(meta):N0} G");
+        string detailText = entry.ResolveDetailText(meta);
+        SetText(FindChildComponent<TextMeshProUGUI>(card.transform, "CardSub"),
+            string.IsNullOrEmpty(detailText) ? string.Empty : TranslateUi(detailText));
+        SetText(FindChildComponent<TextMeshProUGUI>(card.transform, "CardOwned"),
+            string.Format(TranslateUi("보유 {0}"), OwnedCount(entry.key)));
 
         Button button = card.GetComponent<Button>();
         if (button != null)
         {
             StoreEntry captured = entry;
-            button.onClick.AddListener(() => OnCardClicked(captured));
+            button.interactable = unavailable == false;
+            if (unavailable == false)
+            {
+                button.onClick.AddListener(() => OnCardClicked(captured));
+            }
+        }
+
+        if (salePreparing)
+        {
+            ApplyUnavailableVisual(
+                card,
+                "SalePreparingStamp",
+                $"[ {TranslateUi("준비중")} ]",
+                140f);
+        }
+        else if (soldOut)
+        {
+            ApplyUnavailableVisual(card, "SoldOutStamp", TranslateUi("품절"), 120f);
         }
     }
 
@@ -858,7 +960,10 @@ public class StoreView : MonoBehaviour
             if (icon != null)
             {
                 icon.sprite = sprite;
-                icon.color = Color.white;
+                Button cardButton = card.GetComponent<Button>();
+                icon.color = cardButton != null && cardButton.interactable == false
+                    ? new Color(0.55f, 0.55f, 0.55f, 1f)
+                    : Color.white;
                 icon.enabled = true;
             }
         }
@@ -870,27 +975,31 @@ public class StoreView : MonoBehaviour
         }
     }
 
-    private static InventoryEntry ResolveMeta(string key)
+    private ItemEntry ResolveMeta(string key)
     {
         InventorySystemManager manager = InventorySystemManager.Instance;
-        if (manager == null || manager.Catalog == null)
+        if (manager != null && manager.Catalog != null)
         {
-            return null;
+            ItemEntry item = manager.Catalog.Get(key);
+            if (item != null)
+            {
+                return item;
+            }
         }
 
-        return manager.Catalog.Get(key);
+        return catalog != null ? catalog.GetItem(key) : null;
     }
 
-    private static string ResolveDisplayName(StoreEntry entry, InventoryEntry meta)
+    private static string ResolveDisplayName(StoreEntry entry, ItemEntry meta)
     {
         if (meta != null && string.IsNullOrEmpty(meta.displayName) == false)
         {
-            return meta.displayName;
+            return TranslateUi(meta.displayName);
         }
 
         if (string.IsNullOrEmpty(entry.displayName) == false)
         {
-            return entry.displayName;
+            return TranslateUi(entry.displayName);
         }
 
         return entry.key;
@@ -907,6 +1016,79 @@ public class StoreView : MonoBehaviour
 
         InvStore store = manager.GetMainStore();
         return store != null ? store.CountOf(key) : 0;
+    }
+
+    private void ApplyUnavailableVisual(GameObject card, string stampName, string stampText, float stampWidth)
+    {
+        if (card == null)
+        {
+            return;
+        }
+
+        Image cardImage = card.GetComponent<Image>();
+        if (cardImage != null)
+        {
+            cardImage.color = new Color(ButtonBg.r * 0.55f, ButtonBg.g * 0.55f, ButtonBg.b * 0.55f, ButtonBg.a);
+        }
+
+        foreach (Graphic graphic in card.GetComponentsInChildren<Graphic>(true))
+        {
+            if (graphic == null || graphic == cardImage)
+            {
+                continue;
+            }
+
+            Color color = graphic.color;
+            graphic.color = new Color(color.r * 0.55f, color.g * 0.55f, color.b * 0.55f, color.a);
+        }
+
+        GameObject stamp = new GameObject(
+            stampName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        stamp.layer = card.layer;
+        stamp.transform.SetParent(card.transform, false);
+        RectTransform stampRect = stamp.GetComponent<RectTransform>();
+        stampRect.anchorMin = new Vector2(0.5f, 0.5f);
+        stampRect.anchorMax = new Vector2(0.5f, 0.5f);
+        stampRect.pivot = new Vector2(0.5f, 0.5f);
+        stampRect.anchoredPosition = Vector2.zero;
+        stampRect.sizeDelta = new Vector2(stampWidth, 42f);
+        stampRect.localRotation = Quaternion.Euler(0f, 0f, -12f);
+
+        Image stampImage = stamp.GetComponent<Image>();
+        stampImage.sprite = panelSprite != null
+            ? panelSprite
+            : Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+        stampImage.type = Image.Type.Sliced;
+        stampImage.color = SoldOutRed;
+        stampImage.raycastTarget = false;
+
+        GameObject textObject = new GameObject(
+            stampName + "Text",
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(TextMeshProUGUI));
+        textObject.layer = card.layer;
+        textObject.transform.SetParent(stamp.transform, false);
+        RectTransform textRect = textObject.GetComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = Vector2.zero;
+        textRect.offsetMax = Vector2.zero;
+
+        TextMeshProUGUI label = textObject.GetComponent<TextMeshProUGUI>();
+        label.text = stampText;
+        label.fontSize = 18f;
+        label.fontStyle = FontStyles.Bold;
+        label.alignment = TextAlignmentOptions.Center;
+        label.color = TextWhite;
+        label.raycastTarget = false;
+        if (font != null)
+        {
+            label.font = font;
+        }
     }
 
     // ── 베이크된 프리팹 연결 ─────────────────────────────────────────────────────
@@ -935,7 +1117,9 @@ public class StoreView : MonoBehaviour
         TextMeshProUGUI zoneLabel = FindComponent<TextMeshProUGUI>("SellZoneText");
         if (zoneLabel != null)
         {
-            zoneLabel.text = $"판매: 인벤토리 아이템을 여기로 드래그 (구매가의 {SellPricePercent}%)";
+            zoneLabel.text = string.Format(
+                TranslateUi("판매: 인벤토리 아이템을 여기로 드래그 (구매가의 {0}%)"),
+                SellPricePercent);
         }
         pagePrevButton = FindComponent<Button>("PagePrevButton");
         pageNextButton = FindComponent<Button>("PageNextButton");
@@ -1471,6 +1655,40 @@ public class StoreView : MonoBehaviour
         return component;
     }
 #endif
+
+    private void TranslateBakedLabels()
+    {
+        foreach (TMP_Text target in GetComponentsInChildren<TMP_Text>(true))
+        {
+            if (target != null && !string.IsNullOrEmpty(target.text))
+            {
+                target.text = TranslateUi(target.text);
+            }
+        }
+    }
+
+    private void TranslateSellZoneLabel()
+    {
+        TextMeshProUGUI zoneLabel = FindComponent<TextMeshProUGUI>("SellZoneText");
+        if (zoneLabel != null)
+        {
+            zoneLabel.text = string.Format(
+                TranslateUi("판매: 인벤토리 아이템을 여기로 드래그 (구매가의 {0}%)"),
+                SellPricePercent);
+        }
+    }
+
+    private static string TranslateUi(string text)
+    {
+        if (string.IsNullOrEmpty(text) || SettingManager.Instance == null ||
+            SettingManager.Instance.settings == null ||
+            string.IsNullOrEmpty(SettingManager.Instance.settings.ui_language))
+        {
+            return text;
+        }
+
+        return LanguageData.Translate(text, SettingManager.Instance.settings.ui_language);
+    }
 
     private static void SetText(TextMeshProUGUI t, string v)
     {

@@ -17,6 +17,7 @@ public class StoreTagEntry
 [CreateAssetMenu(fileName = "StoreCatalog", menuName = "Store/Store Catalog (Tag Registry)")]
 public class StoreCatalog : ScriptableObject
 {
+    [SerializeField] private ItemCatalog itemCatalog;
     [SerializeField] private List<StoreTagEntry> tags = new List<StoreTagEntry>();  // 등록된 태그 목록
 
     [NonSerialized] private bool duplicateTagWarned;  // Tabs()가 리프레시마다 여러 번 불려 경고는 1회만 남긴다
@@ -27,6 +28,15 @@ public class StoreCatalog : ScriptableObject
         {
             return tags;
         }
+    }
+
+    // StoreEntry는 key/override만 보유하고, 실제 상품 데이터는 이 단일 참조에서 해석한다.
+    // 직접 참조가 있으므로 ItemCatalog 하위 에셋과 함께 폴더를 옮겨도 GUID 참조가 유지된다.
+    public ItemCatalog Items => itemCatalog != null ? itemCatalog : ItemCatalog.Default;
+
+    public ItemEntry GetItem(string key)
+    {
+        return Items != null ? Items.Get(key) : null;
     }
 
     // 유효 태그 이름 목록 (빈 문자열/중복 스킵, 등록 순서 유지)

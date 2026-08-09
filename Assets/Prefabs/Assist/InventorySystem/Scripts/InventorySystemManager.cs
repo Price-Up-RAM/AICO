@@ -26,11 +26,11 @@ public class InventorySystemManager : MonoBehaviour
         }
     }
 
-    [SerializeField] private InventoryCatalog catalog;      // 아이템 메타 카탈로그. 인스펙터 지정 우선.
+    [SerializeField] private ItemCatalog catalog;           // 아이템 메타 카탈로그. 인스펙터 지정 우선.
     [SerializeField] private EquipCatalog equipCatalog;     // 장착 가능 여부/슬롯 판정용 EquipSystem 카탈로그.
 
     // 뷰의 메타 조회용 getter
-    public InventoryCatalog Catalog
+    public ItemCatalog Catalog
     {
         get
         {
@@ -40,6 +40,16 @@ public class InventorySystemManager : MonoBehaviour
 
     public string ActiveCharcode { get; private set; }      // 현재 활성 캐릭터 charcode
     public GameObject ActiveTarget { get; private set; }    // 현재 활성 캐릭터 GameObject (장착 대상)
+
+    // 장착 허용 판정 — 외부(앱 배선)에서 주입 (예: 캐릭터 기능 태그 판정). null이면 전부 허용.
+    // 독립성 원칙: 이 패키지는 프로젝트 매니저를 직접 참조하지 않는다.
+    public System.Func<GameObject, bool> equipPermissionResolver;
+
+    // 활성 캐릭터의 장착 허용 여부 (뷰의 사전 차단용 — 판정은 주입된 resolver 경유)
+    public bool CanEquipOnActive()
+    {
+        return ActiveTarget != null && (equipPermissionResolver == null || equipPermissionResolver(ActiveTarget));
+    }
 
     private InvStore mainStore;                                             // MAIN 스토어 (지연 로드)
     private Dictionary<string, InvStore> charStores = new Dictionary<string, InvStore>();  // charcode→스토어 캐시
@@ -52,13 +62,14 @@ public class InventorySystemManager : MonoBehaviour
     {
         if (catalog == null)
         {
-            catalog = Resources.Load<InventoryCatalog>("InventoryCatalog_Demo");
+            catalog = Resources.Load<ItemCatalog>("ItemCatalog");
         }
 
         if (equipCatalog == null)
         {
-            // EquipSystem 카탈로그 (구명 EquipCatalog_Demo에서 리네임됨)
-            equipCatalog = Resources.Load<EquipCatalog>("EquipCatalog");
+            equipCatalog = catalog != null && catalog.EquipCatalog != null
+                ? catalog.EquipCatalog
+                : Resources.Load<EquipCatalog>("EquipCatalog");
         }
     }
 
@@ -225,6 +236,13 @@ public class InventorySystemManager : MonoBehaviour
             return;
         }
 
+        // 장착 불가 캐릭터는 복원 전체 스킵 — 기록은 유지 (전환마다 반복되는 경로라 안내 없이 무음 처리)
+        if (equipPermissionResolver != null && equipPermissionResolver(target) == false)
+        {
+            Debug.Log($"[InventorySystemManager] 착용 복원 스킵(장착 불가 캐릭터): {charcode} — 기록 유지");
+            return;
+        }
+
         InvStore store = GetCharStore(charcode);
         if (store == null || store.equippedKeys == null || store.equippedKeys.Count == 0)
         {
@@ -261,6 +279,9 @@ public class InventorySystemManager : MonoBehaviour
             int priority;
             if (entry != null && EquipSlotResolver.Resolve(target, entry, out slotId, out priority) != null)
             {
+                // 카테고리 배타로 다른 슬롯에서 밀려난 키의 기록도 제거 (방금 Equip이 물리 해제함)
+                EvictSameCategoryMirror(charcode, slots, entry, key);
+
                 // 두 기록 키가 같은 슬롯으로 재해석되면(소켓 재저작으로 폴백 충돌) 앞서 입힌 키는
                 // 방금 Equip이 교체·파괴했다 — 밀려난 키의 기록도 제거 (EquipKey의 교체 처리와 동일 불변식)
                 if (slots.TryGetValue(slotId, out string prevKey) && prevKey != key)
@@ -291,7 +312,11 @@ public class InventorySystemManager : MonoBehaviour
     // 장착 가능한 키인지 (EquipCatalog에 존재하는지)
     public bool IsEquippable(string key)
     {
-        return equipCatalog != null && equipCatalog.Contains(key);
+        ItemEntry meta = catalog != null ? catalog.Get(key) : null;
+        return meta != null &&
+               meta.useType == ItemUseType.Equip &&
+               equipCatalog != null &&
+               equipCatalog.Contains(key);
     }
 
     // 스토어에 아이템 추가 공통 처리 (카탈로그 검증 + maxStack 클램프 + 저장 + 이벤트)
@@ -313,9 +338,15 @@ public class InventorySystemManager : MonoBehaviour
             return false;
         }
 
-        // maxStack 클램프: 초과분은 버림
-        InventoryEntry meta = catalog.Get(key);
-        int maxStack = meta != null ? meta.maxStack : 99;
+        ItemEntry meta = catalog.Get(key);
+        if (meta != null && meta.isMainOnly && store.ownerId != MainOwnerId)
+        {
+            Debug.LogWarning($"[InventorySystemManager] MAIN 전용 아이템은 CHAR 스토어에 추가할 수 없습니다: {key}");
+            return false;
+        }
+
+        // isCountable=false는 데이터의 maxStack 값과 무관하게 항상 1개 한정이다.
+        int maxStack = meta != null ? meta.EffectiveMaxStack : 99;
         int current = store.CountOf(key);
         int addable = Mathf.Min(amount, maxStack - current);
         if (addable <= 0)
@@ -356,6 +387,13 @@ public class InventorySystemManager : MonoBehaviour
         if (charStore == null)
         {
             Debug.LogWarning("[InventorySystemManager] MoveMainToChar: charcode가 비어 있습니다.");
+            return false;
+        }
+
+        ItemEntry meta = catalog != null ? catalog.Get(key) : null;
+        if (meta != null && meta.isMainOnly)
+        {
+            Debug.LogWarning($"[InventorySystemManager] MAIN 전용 아이템은 CHAR로 이동할 수 없습니다: {key}");
             return false;
         }
 
@@ -436,8 +474,8 @@ public class InventorySystemManager : MonoBehaviour
     // 키의 최대 스택 수 (카탈로그 메타 없으면 99)
     private int GetMaxStack(string key)
     {
-        InventoryEntry meta = catalog != null ? catalog.Get(key) : null;
-        return meta != null ? meta.maxStack : 99;
+        ItemEntry meta = catalog != null ? catalog.Get(key) : null;
+        return meta != null ? meta.EffectiveMaxStack : 99;
     }
 
     // 스택 칸 이동 (드래그 앤 드롭용). 같은 스토어 = 자리 이동/스왑/병합, 다른 스토어 = 통째 이동.
@@ -462,6 +500,12 @@ public class InventorySystemManager : MonoBehaviour
         InvItemStack moving = fromStore.FindBySlot(fromSlot);
         if (moving == null)
         {
+            return false;
+        }
+
+        if (toOwnerId != MainOwnerId && fromOwnerId != toOwnerId && IsMainOnly(moving.key))
+        {
+            Debug.LogWarning($"[InventorySystemManager] MAIN 전용 아이템 이동 거부: {moving.key} → {toOwnerId}");
             return false;
         }
 
@@ -528,6 +572,12 @@ public class InventorySystemManager : MonoBehaviour
         InvItemStack moving = fromStore.FindBySlot(fromSlot);
         if (moving == null)
         {
+            return false;
+        }
+
+        if (toOwnerId != MainOwnerId && fromOwnerId != toOwnerId && IsMainOnly(moving.key))
+        {
+            Debug.LogWarning($"[InventorySystemManager] MAIN 전용 아이템 이동 거부: {moving.key} → {toOwnerId}");
             return false;
         }
 
@@ -633,8 +683,8 @@ public class InventorySystemManager : MonoBehaviour
             return false;
         }
 
-        InventoryEntry meta = catalog != null ? catalog.Get(key) : null;
-        int maxStack = meta != null ? meta.maxStack : 99;
+        ItemEntry meta = catalog != null ? catalog.Get(key) : null;
+        int maxStack = meta != null ? meta.EffectiveMaxStack : 99;
         int current = store.CountOf(key);
         if (current + amount > maxStack)
         {
@@ -643,6 +693,12 @@ public class InventorySystemManager : MonoBehaviour
         }
 
         return true;
+    }
+
+    private bool IsMainOnly(string key)
+    {
+        ItemEntry meta = catalog != null ? catalog.Get(key) : null;
+        return meta != null && meta.isMainOnly;
     }
 
     // 착용 기록(스토어 equippedKeys) 갱신 + 즉시 저장 — 착용이 바뀌는 3지점(EquipKey/ToggleEquip 해제/UnequipIfMirrored) 공용.
@@ -722,6 +778,13 @@ public class InventorySystemManager : MonoBehaviour
             return false;
         }
 
+        // 장착 게이트 — 장착 불가 캐릭터 차단 (안내 대사는 호출부 UI 몫, 해제는 ToggleEquip에서 계속 허용)
+        if (CanEquipOnActive() == false)
+        {
+            Debug.Log($"[InventorySystemManager] EquipKey: 장착 불가 캐릭터 — '{key}' 차단 ({ActiveCharcode})");
+            return false;
+        }
+
         if (equipCatalog == null)
         {
             Debug.LogWarning("[InventorySystemManager] EquipKey: EquipCatalog가 지정되지 않았습니다.");
@@ -775,6 +838,9 @@ public class InventorySystemManager : MonoBehaviour
             Debug.LogWarning($"[InventorySystemManager] EquipKey: 장착 실패 — {reason}");
             return false;
         }
+
+        // 카테고리 배타로 다른 슬롯에서 밀려난 장착 기록 정리 (물리 해제는 EquipManager.Equip이 이미 수행)
+        EvictSameCategoryMirror(ActiveCharcode, slots, entry, key);
 
         // 착용 기록: 같은 슬롯에서 교체된 이전 아이템 기록 제거 + 새 아이템 기록 (즉시 저장)
         if (string.IsNullOrEmpty(equippedKey) == false && equippedKey != key)
@@ -834,6 +900,38 @@ public class InventorySystemManager : MonoBehaviour
         }
 
         return EquipKey(key);
+    }
+
+    // 카테고리 배타로 밀려난 기록 정리 — 새 키와 같은 카테고리(대소문자 무시)의 다른 키를
+    // 미러에서 제거하고 착용 영속 기록도 삭제 (물리 해제는 EquipManager.Equip의 카테고리 배타가 수행)
+    private void EvictSameCategoryMirror(string charcode, Dictionary<string, string> slots, EquipEntry entry, string newKey)
+    {
+        if (equipCatalog == null || entry == null || EquipCategory.HasValue(entry.category) == false)
+        {
+            return;
+        }
+
+        // 열거 중 수정 방지 — 제거 대상 슬롯 먼저 수집
+        List<string> evictSlotIds = new List<string>();
+        foreach (KeyValuePair<string, string> pair in slots)
+        {
+            if (pair.Value == newKey)
+            {
+                continue;
+            }
+
+            EquipEntry other = equipCatalog.Get(pair.Value);
+            if (other != null && EquipCategory.IsSame(other.category, entry.category))
+            {
+                evictSlotIds.Add(pair.Key);
+            }
+        }
+
+        foreach (string slotId in evictSlotIds)
+        {
+            PersistEquipped(charcode, slots[slotId], false);
+            slots.Remove(slotId);
+        }
     }
 
     // 활성 캐릭터의 장착 미러 확보
@@ -896,11 +994,11 @@ public class InventorySystemManager : MonoBehaviour
             return -1;
         }
 
-        InventoryEntry metaA = catalog != null ? catalog.Get(a.key) : null;
-        InventoryEntry metaB = catalog != null ? catalog.Get(b.key) : null;
+        ItemEntry metaA = catalog != null ? catalog.Get(a.key) : null;
+        ItemEntry metaB = catalog != null ? catalog.Get(b.key) : null;
 
-        string categoryA = metaA != null && string.IsNullOrEmpty(metaA.category) == false ? metaA.category : "";
-        string categoryB = metaB != null && string.IsNullOrEmpty(metaB.category) == false ? metaB.category : "";
+        string categoryA = catalog != null ? catalog.CategoryForKey(a.key) ?? "" : "";
+        string categoryB = catalog != null ? catalog.CategoryForKey(b.key) ?? "" : "";
         int compare = string.Compare(categoryA, categoryB, System.StringComparison.Ordinal);
         if (compare != 0)
         {
