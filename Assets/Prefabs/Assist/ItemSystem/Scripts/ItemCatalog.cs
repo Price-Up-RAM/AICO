@@ -18,6 +18,13 @@ public class ItemCategoryEntry
 public class ItemCatalog : ScriptableObject
 {
     [SerializeField] private List<ItemCategoryEntry> categories = new List<ItemCategoryEntry>();  // 등록된 카테고리 목록 (필드명 "categories" 고정 — 도구가 SerializedObject로 기록)
+    [Header("Related Catalogs")]
+    [SerializeField] private AnchorCatalog anchorCatalog;
+    [SerializeField] private EquipCatalog equipCatalog;
+    [SerializeField] private ItemRuntimeSpritePoseCatalog runtimeSpritePoseCatalog;
+    [SerializeField] private ItemRuntimeSpriteEffectCatalog runtimeSpriteEffectCatalog;
+
+    private static ItemCatalog cachedDefault;
 
     [NonSerialized] private bool duplicateCategoryWarned;  // Categories()가 여러 번 불려도 경고는 1회만 남긴다
 
@@ -26,6 +33,41 @@ public class ItemCatalog : ScriptableObject
         get
         {
             return categories;
+        }
+    }
+
+    public AnchorCatalog AnchorCatalog => anchorCatalog;
+    public EquipCatalog EquipCatalog => equipCatalog;
+    public ItemRuntimeSpritePoseCatalog RuntimeSpritePoseCatalog => runtimeSpritePoseCatalog;
+    public ItemRuntimeSpriteEffectCatalog RuntimeSpriteEffectCatalog => runtimeSpriteEffectCatalog;
+
+    public static ItemCatalog Default
+    {
+        get
+        {
+            if (cachedDefault == null)
+            {
+                cachedDefault = Resources.Load<ItemCatalog>("ItemCatalog");
+            }
+
+            return cachedDefault;
+        }
+    }
+
+    // Resources 경로 밖으로 이동해도 씬/다른 카탈로그의 직렬화 참조로 로드되면 기본 카탈로그가 된다.
+    private void OnEnable()
+    {
+        if (cachedDefault == null)
+        {
+            cachedDefault = this;
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (cachedDefault == this)
+        {
+            cachedDefault = null;
         }
     }
 

@@ -4,10 +4,11 @@ using UnityEngine;
 
 // 상점 아이콘 소스. File이 기본 — icon이 비어 있으면 NoImage.
 // Runtime은 프리뷰 리그 캡처(포즈/이펙트처럼 Detail 카탈로그에 등재된 키에서만 유효 — 미등재면 NoImage).
-public enum StoreIconType
+public enum StoreIconTypeOverride
 {
-    File,
-    Runtime,
+    Inherit = 0,
+    File = 1,
+    Runtime = 2,
 }
 
 // 상점 카탈로그 엔트리: 상품 키 ↔ 가격/아이콘 메타데이터.
@@ -16,11 +17,56 @@ public enum StoreIconType
 public class StoreEntry
 {
     public string key;              // 아이템 식별 키 (InventoryCatalog/EquipCatalog와 같은 키 공간)
-    public string displayName;      // InventoryCatalog에 없을 때 폴백 표기
-    public int price = 100;         // 구매가(G)
-    public StoreIconType iconType = StoreIconType.File;  // 아이콘 소스 (상점 소유 — Inventory 아이콘과 별개)
-    public Sprite icon;             // File 모드 아이콘 (비면 NoImage)
-    public string detailText;       // 카드 보조 표기 자유 텍스트 (예: "호감도 +100") — 성능 수치가 아니라 표시 전용
+    public Sprite overrideIcon;
+    public StoreIconTypeOverride overrideIconType = StoreIconTypeOverride.Inherit;
+    [TextArea] public string overrideStoreText;
+    public bool isSalePreparing;
+
+    public ItemEntry Item => ItemCatalog.Default != null ? ItemCatalog.Default.Get(key) : null;
+    public string displayName => Item != null ? Item.displayName : key;
+    public int price => Item != null ? Mathf.Max(0, Item.basePrice) : 0;
+
+    public int ResolvePrice(ItemEntry item)
+    {
+        return item != null ? Mathf.Max(0, item.basePrice) : 0;
+    }
+
+    public ItemIconType ResolveIconType(ItemEntry item)
+    {
+        if (overrideIconType == StoreIconTypeOverride.File)
+        {
+            return ItemIconType.File;
+        }
+
+        if (overrideIconType == StoreIconTypeOverride.Runtime)
+        {
+            return ItemIconType.Runtime;
+        }
+
+        return item != null ? item.iconType : ItemIconType.File;
+    }
+
+    public Sprite ResolveIcon(ItemEntry item)
+    {
+        return overrideIcon != null ? overrideIcon : (item != null ? item.icon : null);
+    }
+
+    public string ResolveDetailText(ItemEntry item)
+    {
+        return string.IsNullOrEmpty(overrideStoreText) == false
+            ? overrideStoreText
+            : (item != null ? item.description : string.Empty);
+    }
+
+    public ItemIconType iconType
+    {
+        get
+        {
+            return ResolveIconType(Item);
+        }
+    }
+    public Sprite icon => ResolveIcon(Item);
+    public string detailText => ResolveDetailText(Item);
 }
 
 // 한 태그(탭)의 상품 카탈로그 (에셋). 카탈로그 3계층 중 2계층:

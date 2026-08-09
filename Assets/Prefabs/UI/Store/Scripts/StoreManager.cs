@@ -120,7 +120,7 @@ public class StoreManager : MonoBehaviour
         }
 
         // File 모드는 등록 스프라이트가 곧 실아이콘 — 비어 있으면 null(호출측이 NoImage를 씌움)
-        if (entry.iconType == StoreIconType.File)
+        if (entry.iconType == ItemIconType.File)
         {
             return entry.icon;
         }
@@ -149,7 +149,7 @@ public class StoreManager : MonoBehaviour
         }
 
         StoreEntry entry = storeCatalog.Get(key);
-        if (entry == null || entry.iconType != StoreIconType.Runtime)
+        if (entry == null || entry.iconType != ItemIconType.Runtime)
         {
             return false;
         }
@@ -254,7 +254,7 @@ public class StoreManager : MonoBehaviour
 
             // 상점 엔트리가 Runtime 모드인 키만 재캡처 — 미등재/File 모드는 리롤 대상이 아니다
             StoreEntry storeEntry = storeCatalog.Get(entry.key);
-            if (storeEntry == null || storeEntry.iconType != StoreIconType.Runtime)
+            if (storeEntry == null || storeEntry.iconType != ItemIconType.Runtime)
             {
                 continue;
             }
