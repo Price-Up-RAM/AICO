@@ -15,9 +15,6 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
     private static readonly Color SlotEmptyBg = new Color(0.12f, 0.12f, 0.15f, 1f);   // 빈 칸 배경
     private static readonly Color EquippedCyan = new Color(0.25f, 0.85f, 0.90f, 1f);  // 장착 표시(시안)
 
-    private static Sprite noImageSprite;
-    private static bool noImageLoadTried;
-
     // ── 직렬화 참조 (베이크 프리팹에서 연결됨) ───────────────────
     [SerializeField] private Image background;    // "Background" 칸 배경 (레이캐스트 수신)
     [SerializeField] private Image iconImage;     // "Icon" 아이콘 (없으면 비활성)
@@ -68,7 +65,7 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
     public static bool DropConsumed;
 
     // 셀 데이터 주입. key가 null/빈 문자열이면 빈 칸 (meta null 허용 — 그때는 key를 이름으로 표시)
-    public void Setup(InventoryView owner, int slotIndex, string key, int count, ItemEntry meta, bool equipped)
+    public void Setup(InventoryView owner, int slotIndex, string key, int count, InventoryEntry meta, bool equipped)
     {
         this.owner = owner;
         this.slotIndex = slotIndex;
@@ -82,12 +79,8 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
         }
 
         Sprite icon = hasItem && meta != null ? meta.icon : null;
-        if (hasItem && icon == null)
-        {
-            icon = ResolveNoImageSprite();
-        }
 
-        // 아이콘: 실제 아이콘이 없으면 상점과 같은 NO IMAGE 스프라이트, 그것도 없으면 이름 텍스트로 대체
+        // 아이콘: 있으면 표시, 없으면(아이템은 있는데 아이콘만 없으면) 이름 텍스트로 대체
         if (iconImage != null)
         {
             iconImage.sprite = icon;
@@ -110,7 +103,7 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
         if (countText != null)
         {
             countText.text = count.ToString();
-            countText.enabled = hasItem && count > 1 && (meta == null || meta.isCountable);
+            countText.enabled = hasItem && count > 1;
         }
 
         // 장착 표시 (캐릭터 섹션에서만 owner가 true를 넘긴다)
@@ -120,15 +113,13 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
         }
     }
 
-    private static Sprite ResolveNoImageSprite()
+    // 드래그 중에는 고스트를 매 프레임 커서에 고정 (OnDrag 이벤트 단위 갱신은 간격/끊김이 생긴다)
+    private void Update()
     {
-        if (noImageLoadTried == false)
+        if (dragGhost != null)
         {
-            noImageLoadTried = true;
-            noImageSprite = Resources.Load<Sprite>("StoreNoImage");
+            dragGhost.position = Input.mousePosition;
         }
-
-        return noImageSprite;
     }
 
     // hover 진입: 미니 툴팁 표시 (드래그 중에는 표시하지 않음)
@@ -186,7 +177,7 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
     {
         if (dragGhost != null)
         {
-            SetGhostScreenPosition(eventData.position);
+            dragGhost.position = eventData.position;  // ScreenSpaceOverlay 기준
         }
     }
 
@@ -257,33 +248,6 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
         dragGhost = (RectTransform)go.transform;
         dragGhost.sizeDelta = new Vector2(56f, 56f);
         dragGhost.SetAsLastSibling();
-        SetGhostScreenPosition(eventData.position);
-    }
-
-    private void SetGhostScreenPosition(Vector2 screenPosition)
-    {
-        if (dragGhost == null)
-        {
-            return;
-        }
-
-        Canvas rootCanvas = dragGhost.GetComponentInParent<Canvas>();
-        RectTransform canvasRect = rootCanvas != null
-            ? rootCanvas.transform as RectTransform
-            : null;
-        Camera uiCamera = rootCanvas != null &&
-                          rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay
-            ? rootCanvas.worldCamera
-            : null;
-
-        if (canvasRect != null &&
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                canvasRect,
-                screenPosition,
-                uiCamera,
-                out Vector2 localPosition))
-        {
-            dragGhost.anchoredPosition = localPosition;
-        }
+        dragGhost.position = eventData.position;
     }
 }

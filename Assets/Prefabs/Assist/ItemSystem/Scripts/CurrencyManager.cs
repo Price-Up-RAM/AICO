@@ -88,6 +88,7 @@ public class CurrencyManager : MonoBehaviour
     [SerializeField] private ItemCurrencyCatalog catalog;  // 재화 정의 카탈로그 — 인스펙터 지정 우선, 없으면 Resources 폴백
 
     private bool warnedNoCatalog;  // 카탈로그 부재 경고 1회 래치
+
     private string SavePath
     {
         get
@@ -159,18 +160,8 @@ public class CurrencyManager : MonoBehaviour
         }
 
         CurrencyState state = FindOrCreate(currencyKey);
-        int credited = amount;
-        if (currencyKey == GoldKey)
-        {
-            credited = Mathf.Min(amount, Mathf.Max(0, 999999 - state.balance));
-        }
-        if (credited <= 0)
-        {
-            return false;
-        }
-
-        state.balance = state.balance + credited;
-        state.earnedTotal = state.earnedTotal + credited;
+        state.balance = state.balance + amount;
+        state.earnedTotal = state.earnedTotal + amount;
         Persist(currencyKey);
         return true;
     }
@@ -185,18 +176,8 @@ public class CurrencyManager : MonoBehaviour
         }
 
         CurrencyState state = FindOrCreate(currencyKey);
-        int credited = amount;
-        if (currencyKey == GoldKey)
-        {
-            credited = Mathf.Min(amount, Mathf.Max(0, 999999 - state.balance));
-        }
-        if (credited <= 0)
-        {
-            return false;
-        }
-
-        state.balance = state.balance + credited;
-        state.spentTotal = Mathf.Max(0, state.spentTotal - credited);
+        state.balance = state.balance + amount;
+        state.spentTotal = Mathf.Max(0, state.spentTotal - amount);
         Persist(currencyKey);
         return true;
     }
@@ -211,21 +192,7 @@ public class CurrencyManager : MonoBehaviour
         }
 
         CurrencyState state = FindOrCreate(currencyKey);
-        int previousBalance = state.balance;
-        if (currencyKey == GoldKey)
-        {
-            long adjusted = (long)state.balance + amount;
-            state.balance = (int)Math.Max(0L, Math.Min(999999L, adjusted));
-        }
-        else
-        {
-            long adjusted = (long)state.balance + amount;
-            state.balance = (int)Math.Max(0L, Math.Min(int.MaxValue, adjusted));
-        }
-        if (state.balance == previousBalance)
-        {
-            return false;
-        }
+        state.balance = Mathf.Max(0, state.balance + amount);
         Persist(currencyKey);
         return true;
     }
@@ -325,7 +292,7 @@ public class CurrencyManager : MonoBehaviour
             if (warnedNoCatalog == false)
             {
                 warnedNoCatalog = true;
-                Debug.LogWarning("[ItemSystem][CurrencyManager] Resources/ItemCurrencyCatalog 이 없습니다 — ItemSystemTools.BatchBuildAll로 베이크하세요. 재화 증감이 전부 거부됩니다.");
+                Debug.LogWarning("[ItemSystem][CurrencyManager] Resources/ItemCurrencyCatalog 이 없습니다 — 'Tools/ItemSystem/1. Create Catalog'로 베이크하세요. 재화 증감이 전부 거부됩니다.");
             }
             return false;
         }

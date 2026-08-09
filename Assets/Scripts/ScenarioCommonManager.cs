@@ -157,20 +157,6 @@ public class ScenarioCommonManager : MonoBehaviour
         yield return new WaitForSeconds(d1);
     }
 
-    // C90 - 장착 미지원 캐릭터 안내 (기능 태그 "악세서리 장착" 미보유 캐릭터에 장착 시도 시)
-    public IEnumerator Run_C90_equip_unsupported()
-    {
-        // 드래그/클릭 연타의 중복 발화를 기존 게이트로 차단
-        if (StatusManager.Instance.isScenario) yield break;
-        StatusManager.Instance.isScenario = true;
-
-        float d1 = ScenarioUtil.Narration("C90_equip_unsupported", "죄송해요 선생님, 저는 장착을 할 수 없어요.");
-        ScenarioUtil.ShowEmotion("confused");
-        yield return new WaitForSeconds(d1);
-
-        StatusManager.Instance.isScenario = false;
-    }
-
     public IEnumerator Run_C90_recommend_full()
     {
         float d1 = ScenarioUtil.Narration("C90_recommend_full", "Full 이상의 Edition을 설치하시면 이용하실 수 있어요, 선생님.");
@@ -185,17 +171,14 @@ public class ScenarioCommonManager : MonoBehaviour
         yield return new WaitForSeconds(d1);
     }
 
-    private static readonly bool LegacyEditionUpdateSuggestionEnabled = false;
-
     // 통합 : Run_C90_unavailable_edition + Run_C90_recommend_lite
-    // 260804 lite 전면 폐지. 진입되면 안 됨.
     public IEnumerator Run_C90_unavailable_edition_recommend_lite()
     {
         yield return Run_C90_unavailable_edition();
         yield return Run_C90_recommend_lite();
 
         // edition update suggestion 설정 확인 후 > 설치 manager 호출
-        if (LegacyEditionUpdateSuggestionEnabled)
+        if (SettingManager.Instance.settings.enableEditionUpdateSuggestion)
         {
             ScenarioInstallerManager.Instance.StartInstaller();
         }
@@ -208,7 +191,7 @@ public class ScenarioCommonManager : MonoBehaviour
         yield return Run_C90_recommend_full();
 
         // edition update suggestion 설정 확인 후 > 설치 manager 호출
-        if (LegacyEditionUpdateSuggestionEnabled)
+        if (SettingManager.Instance.settings.enableEditionUpdateSuggestion)
         {
             ScenarioInstallerManager.Instance.StartInstaller();
         }

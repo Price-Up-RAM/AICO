@@ -9,32 +9,20 @@ SampleScene을 완전 복제한 제출용 씬. 완성된 기능만 노출하며,
 |---|---|
 | `MenuTriggerKAI.cs` | `Assets/Scripts/MenuTrigger.cs` 사본. 메뉴를 제출용으로 정리 |
 | `KAIManager.cs` | 씬 전용 매니저. ① 캐릭터를 AICO로 고정 ② 씬 내 모든 MenuTrigger를 MenuTriggerKAI로 in-place 교체 (SubCharManager의 교체 패턴 준용) |
-| `Editor/KAISceneBuilder.cs` | `Tools → KAI → Build SampleSceneKAI`. SampleScene 복제 + KAIManager 루트 오브젝트 추가 + KAI 전용 직렬화 오버라이드(VL Router·UIManager.skill·KAIManager.storePanelPrefab) (멱등: 재실행 시 최신 SampleScene 기준 재생성) |
+| `Editor/KAISceneBuilder.cs` | `Tools → KAI → Build SampleSceneKAI`. SampleScene 복제 + KAIManager 루트 오브젝트 추가 (멱등: 재실행 시 최신 SampleScene 기준 재생성) |
 
 ## MenuTriggerKAI 메뉴 구조
 
 ```
 Settings / Character Detail / Action
-Function ▸ Inventory · Store · Skill
 Chat    ▸ New Chat · Chat History · Idle Talk
 Mode    ▸ Chat · Pomodoro · Operator (현재 모드 회색)
 Control ▸ Show Voice Panel · Show/Hide TalkInfo · Set Screenshot Area
 Exit
 ```
 
-원본 대비 제외: Character(변경/소환/의상/코스튬), Guideline, Situation, OCR,
-Experiment/Dev/Debug, Version. Function은 Inventory/Store/Skill 구성으로 복원.
-
-### Function 메뉴 배선 (2026-08-09)
-
-- **Inventory**: `UIManager.ToggleInventory()` — 본편에 이미 완전 배선돼 있어 그대로 사용.
-- **Skill**: `UIManager.ToggleSkill()` — Root260616.prefab의 UIManager 직렬화에 `skill` 필드가 비어 있어,
-  빌더의 `ApplySkillPrefabOverride()`가 씬 인스턴스에 SkillView.prefab을 할당한다(프리팹 원본 무수정).
-- **Store**: UIManager 통합이 없어 KAI 전용 경로 — `KAIManager.ToggleStore()`가 빌더가 할당한
-  `storePanelPrefab`을 canvasUI 아래에 지연 인스턴스화하고 `StoreView.Show()/Toggle()`을 호출한다.
-  "상점" 라벨은 LanguageData 미등록이라 파일 내 `GetStoreMenuLabel()` 헬퍼로 처리(LanguageData 무수정).
-- 데이터: 카탈로그 신버전(MY-Little-Jarvis-3D 8월판)과 인형 7종·장비 아이콘은 별도 커밋으로 동기화됨.
-  장비 착용 소켓은 `Aico.prefab`에 Naost판 소켓 4종(hairpin1/back1/arona_a_chipao/hat1)을 접목.
+원본 대비 제외: Character(변경/소환/의상/코스튬), Guideline, Situation, OCR, 기능(Function) 전체,
+Experiment/Dev/Debug, Version.
 
 ## 동작 방식 (기존 코드 무수정 근거)
 

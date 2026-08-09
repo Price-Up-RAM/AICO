@@ -8,7 +8,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-// Store(상점) 셋업 도구: 카탈로그 생성(태그 레지스트리 + 태그별 상품 카탈로그 5종
+// Store(상점) 셋업 도구: 카탈로그 생성(태그 레지스트리 + 태그별 상품 카탈로그 5종 + InventoryCatalog additive 등록
 // + 포즈/이펙트 프리뷰 상세(Detail) 카탈로그 + NoImage 스프라이트),
 // UI 프리팹 베이크(확인 팝업 → 상점 패널 순), SUIT-Bold 폰트 적용, 데모씬 빌드. InventorySystemTools 패턴을 따른다.
 public static class StoreTools
@@ -23,9 +23,8 @@ public static class StoreTools
     private const string TagFxCatalogPath = ResourcesDir + "/StoreEffectCatalog.asset";
     private const string TagGiftCatalogPath = ResourcesDir + "/StoreGiftCatalog.asset";
     private const string TagMiscCatalogPath = ResourcesDir + "/StoreMiscCatalog.asset";
-    private const string RuntimeSpriteResourcesDir = "Assets/Prefabs/Assist/ItemSystem/Resources/RuntimeSpriteCatalog";
-    private const string DetailPoseCatalogPath = RuntimeSpriteResourcesDir + "/ItemRuntimeSpritePoseCatalog.asset";
-    private const string DetailEffectCatalogPath = RuntimeSpriteResourcesDir + "/ItemRuntimeSpriteEffectCatalog.asset";
+    private const string DetailPoseCatalogPath = ResourcesDir + "/StoreDetailPoseCatalog.asset";
+    private const string DetailEffectCatalogPath = ResourcesDir + "/StoreDetailEffectCatalog.asset";
     private const string NoImagePath = ResourcesDir + "/StoreNoImage.png";
     private const string SpritesDir = Root + "/Sprites";
     private const string RerollIconPath = SpritesDir + "/RerollDieIcon.png";
@@ -35,10 +34,11 @@ public static class StoreTools
     private const string FontPath = "Assets/FontAssets/SUIT-Bold.asset";
 
     // 약결합 대상 (InventorySystem — 데이터/프리팹만 참조, 코드는 수정하지 않음)
+    private const string InventoryCatalogPath = "Assets/Prefabs/Assist/InventorySystem/Resources/InventoryCatalog_Demo.asset";
     private const string InventoryPanelPath = "Assets/Prefabs/Assist/InventorySystem/InventoryPanel.prefab";
 
     // 포즈 프리뷰 리그 참조 대상 (모두 읽기 전용 — 절대 수정하지 않음)
-    private const string AronaPreviewPath = "Assets/Prefabs/Char_toon/arona_6_clean.prefab";
+    private const string AronaPocPath = "Assets/Prefabs/Char_toon/arona_6_clean_POC.prefab";
     private const string PoseGreetingClipPath = "Assets/Animation/AIGen/WaveLeftHand.anim";
     private const string PoseDanceClipPath = "Assets/Animation/mixamo/Dance_loop/Gangnam Style.anim";
     private const string PoseSitFbxPath = "Assets/Char/diana/sitting in a chair in front of the desk looking around.fbx";
@@ -50,6 +50,7 @@ public static class StoreTools
     private const string FxClickSparklePath = "Assets/JMO Assets/Cartoon FX Remaster/CFXR Prefabs/Misc/CFXR2 Shiny Item (Loop).prefab";  // Stars/Circles 반짝임 루프 — '클릭: 반짝임'과 매치
 
     // 전체 셋업 (카탈로그 + UI 프리팹 + 폰트 + 데모씬)
+    [MenuItem("Tools/Store/Setup All (catalog + UI prefab + font + demo scene)")]
     public static void SetupAll()
     {
         CreateCatalog();
@@ -71,7 +72,8 @@ public static class StoreTools
     }
 
     // ── 1) 카탈로그 생성/갱신: 레거시 프리뷰 에셋 정리 → 태그별 상품 카탈로그 5종 → 태그 레지스트리(StoreCatalog)
-    //      → 포즈/이펙트 프리뷰 상세 카탈로그 2종 → NoImage 스프라이트 ──
+    //      → InventoryCatalog additive 등록 → 포즈/이펙트 프리뷰 상세 카탈로그 2종 → NoImage 스프라이트 ──
+    [MenuItem("Tools/Store/1. Create Catalog")]
     public static StoreCatalog CreateCatalog()
     {
         EnsureDir(ResourcesDir);
@@ -79,6 +81,9 @@ public static class StoreTools
         // (a) 레거시 정리: 클래스 리네임으로 구 프리뷰 에셋(StorePoseCatalog.asset/StoreEffectCatalog.asset)이
         //     Detail 타입으로 재해석된다 — 태그 카탈로그가 같은 경로를 쓰므로 먼저 삭제해 자리를 비운다
         //     (신형 StoreTagCatalog 타입이면 타입 불일치로 로드가 null을 반환해 삭제되지 않는다)
+        DeleteLegacyPreviewAsset<StoreDetailPoseCatalog>(TagPoseCatalogPath);
+        DeleteLegacyPreviewAsset<StoreDetailEffectCatalog>(TagFxCatalogPath);
+
         // (b) 태그별 상품 카탈로그 5종 — key는 InventoryCatalog/EquipCatalog와 같은 키 공간 (장착물 4종은 공유 키,
         //     나머지 12종은 상점 전용 키). 아이콘은 상점 카탈로그 소유(iconType File/Runtime — Inventory 아이콘과 별개),
         //     detailText는 카드 보조 표기 전용 자유 텍스트(성능 수치 아님 — 아이템 성능은 아이템 시스템 소유)
@@ -92,40 +97,40 @@ public static class StoreTools
             TagEquipCatalogPath,
             new[] { "arona_a_chipao", "arona_a_idolfrontribbon", "arona_a_pareo", "hairpin_placeholder" },
             new[] { "치파오", "아이돌 프론트리본", "파레오", "헤어핀" },
-            new[] { 1000, 1000, 1000, 1000 },
-            new[] { ItemIconType.File, ItemIconType.File, ItemIconType.File, ItemIconType.File },
+            new[] { 300, 200, 250, 150 },
+            new[] { StoreIconType.File, StoreIconType.File, StoreIconType.File, StoreIconType.File },
             equipIcons,
             new[] { "", "", "", "" });
         StoreTagCatalog poseCat = CreateTagCatalog(
             TagPoseCatalogPath,
             new[] { "pose_greeting", "pose_dance", "pose_sit" },
             new[] { "포즈: 인사", "포즈: 댄스", "포즈: 앉기" },
-            new[] { 1000, 1000, 1000 },
-            new[] { ItemIconType.Runtime, ItemIconType.Runtime, ItemIconType.Runtime },
+            new[] { 150, 300, 200 },
+            new[] { StoreIconType.Runtime, StoreIconType.Runtime, StoreIconType.Runtime },
             new Sprite[] { null, null, null },
             new[] { "", "", "" });
         StoreTagCatalog fxCat = CreateTagCatalog(
             TagFxCatalogPath,
             new[] { "fx_pat_heart", "fx_pat_star", "fx_click_sparkle" },
             new[] { "쓰다듬기: 하트", "쓰다듬기: 별", "클릭: 반짝임" },
-            new[] { 1000, 1000, 1000 },
-            new[] { ItemIconType.Runtime, ItemIconType.Runtime, ItemIconType.Runtime },
+            new[] { 250, 250, 200 },
+            new[] { StoreIconType.Runtime, StoreIconType.Runtime, StoreIconType.Runtime },
             new Sprite[] { null, null, null },
             new[] { "", "", "" });
         StoreTagCatalog giftCat = CreateTagCatalog(
             TagGiftCatalogPath,
             new[] { "gift_s", "gift_m", "gift_l" },
             new[] { "선물(소)", "선물(중)", "선물(대)" },
-            new[] { 1000, 1000, 1000 },
-            new[] { ItemIconType.File, ItemIconType.File, ItemIconType.File },
+            new[] { 50, 120, 300 },
+            new[] { StoreIconType.File, StoreIconType.File, StoreIconType.File },
             new Sprite[] { null, null, null },
             new[] { "친밀도 +10", "친밀도 +30", "친밀도 +100" });
         StoreTagCatalog miscCat = CreateTagCatalog(
             TagMiscCatalogPath,
             new[] { "snack_banana", "potion_energy", "ticket_random" },
             new[] { "바나나", "에너지 드링크", "랜덤 티켓" },
-            new[] { 1000, 1000, 1000 },
-            new[] { ItemIconType.File, ItemIconType.File, ItemIconType.File },
+            new[] { 10, 30, 80 },
+            new[] { StoreIconType.File, StoreIconType.File, StoreIconType.File },
             new Sprite[] { null, null, null },
             new[] { "", "", "" });
 
@@ -143,17 +148,6 @@ public static class StoreTools
         StoreTagCatalog[] tagCatalogs = { equipCat, poseCat, fxCat, giftCat, miscCat };
 
         SerializedObject so = new SerializedObject(cat);
-        SerializedProperty itemCatalogProperty = so.FindProperty("itemCatalog");
-        if (itemCatalogProperty != null && itemCatalogProperty.objectReferenceValue == null)
-        {
-            string[] itemCatalogGuids = AssetDatabase.FindAssets("t:ItemCatalog");
-            if (itemCatalogGuids.Length == 1)
-            {
-                itemCatalogProperty.objectReferenceValue = AssetDatabase.LoadAssetAtPath<ItemCatalog>(
-                    AssetDatabase.GUIDToAssetPath(itemCatalogGuids[0]));
-            }
-        }
-
         SerializedProperty list = so.FindProperty("tags");
 
         HashSet<string> existingTags = new HashSet<string>();
@@ -193,10 +187,12 @@ public static class StoreTools
 
         EditorUtility.SetDirty(cat);
 
-        // (d) 포즈/이펙트 프리뷰 상세 카탈로그 + NoImage 플레이스홀더 생성/갱신 (프리뷰 캡처 리그와 StoreManager가 사용)
-        ItemRuntimeSpritePoseCatalog poseRuntimeCatalog = CreateDetailPoseCatalog();
-        ItemRuntimeSpriteEffectCatalog effectRuntimeCatalog = CreateDetailEffectCatalog();
-        ConnectRuntimeSpriteCatalogs(cat.Items, poseRuntimeCatalog, effectRuntimeCatalog);
+        // (d) 상점 전용 키를 InventoryCatalog에 등록 (AddToMain이 카탈로그 검증을 하므로 필수)
+        RegisterStoreKeysToInventoryCatalog();
+
+        // (e) 포즈/이펙트 프리뷰 상세 카탈로그 + NoImage 플레이스홀더 생성/갱신 (프리뷰 캡처 리그와 StoreManager가 사용)
+        CreateDetailPoseCatalog();
+        CreateDetailEffectCatalog();
         EnsureNoImageSprite();
 
         AssetDatabase.SaveAssets();
@@ -218,8 +214,10 @@ public static class StoreTools
         Debug.Log($"[Store][StoreTools] 레거시 프리뷰 에셋 삭제(태그 카탈로그 경로 확보): {path}");
     }
 
-    // Store는 상품 포함 여부와 선택적 표시 override만 소유한다. 이름/가격/기본 아이콘/타입은 ItemCatalog가 소유한다.
-    private static StoreTagCatalog CreateTagCatalog(string path, string[] keys, string[] names, int[] prices, ItemIconType[] iconTypes, Sprite[] icons, string[] detailTexts)
+    // 태그별 상품 카탈로그(StoreTagCatalog) Load-or-Create 후 "누락 키만" 기본 엔트리로 추가한다.
+    // 기존 엔트리 필드는 사용자 소유라 절대 덮어쓰지 않되, 기본 키와 일치하는 행의 "빈 값"만 기본값으로 보충한다
+    // (구 스키마(giftPoints 시절) 에셋은 iconType/icon/detailText가 File(0)/null/""로 로드되므로 이 보충이 유일한 이행 경로).
+    private static StoreTagCatalog CreateTagCatalog(string path, string[] keys, string[] names, int[] prices, StoreIconType[] iconTypes, Sprite[] icons, string[] detailTexts)
     {
         StoreTagCatalog cat = AssetDatabase.LoadAssetAtPath<StoreTagCatalog>(path);
         if (cat == null)
@@ -245,8 +243,35 @@ public static class StoreTools
         int added = 0;
         for (int i = 0; i < keys.Length; i++)
         {
-            if (existing.ContainsKey(keys[i]))
+            if (existing.TryGetValue(keys[i], out SerializedProperty row))
             {
+                SerializedProperty iconTypeProp = row.FindPropertyRelative("iconType");
+                SerializedProperty iconProp = row.FindPropertyRelative("icon");
+                SerializedProperty detailTextProp = row.FindPropertyRelative("detailText");
+
+                // 스키마 이행 규칙: File(0) + 빈 icon은 NoImage 상태라 사용자 의도로 볼 수 없다 —
+                // 기본이 Runtime인 키(포즈/이펙트)는 Runtime으로 승격한다 (구 스키마 에셋을 캡처 대상으로 복귀)
+                if (iconTypeProp.enumValueIndex == (int)StoreIconType.File
+                    && iconProp.objectReferenceValue == null
+                    && iconTypes[i] == StoreIconType.Runtime)
+                {
+                    iconTypeProp.enumValueIndex = (int)StoreIconType.Runtime;
+                }
+
+                // 빈 값 보충: File 모드 행의 icon이 비어 있고 기본 icon이 있으면 채움 (사용자가 지정한 icon은 불변).
+                // 사용자가 Runtime으로 바꿔둔 행은 icon을 쓰지 않으므로 건드리지 않는다.
+                if (iconTypeProp.enumValueIndex == (int)StoreIconType.File
+                    && iconProp.objectReferenceValue == null && icons[i] != null)
+                {
+                    iconProp.objectReferenceValue = icons[i];
+                }
+
+                // 빈 값 보충: detailText가 비어 있고 기본이 있으면 채움
+                if (string.IsNullOrEmpty(detailTextProp.stringValue) == true && string.IsNullOrEmpty(detailTexts[i]) == false)
+                {
+                    detailTextProp.stringValue = detailTexts[i];
+                }
+
                 continue;
             }
 
@@ -254,10 +279,11 @@ public static class StoreTools
             list.arraySize = list.arraySize + 1;
             SerializedProperty e = list.GetArrayElementAtIndex(list.arraySize - 1);
             e.FindPropertyRelative("key").stringValue = keys[i];
-            e.FindPropertyRelative("overrideIcon").objectReferenceValue = null;
-            e.FindPropertyRelative("overrideIconType").enumValueIndex = (int)StoreIconTypeOverride.Inherit;
-            e.FindPropertyRelative("overrideStoreText").stringValue = string.Empty;
-            e.FindPropertyRelative("isSalePreparing").boolValue = false;
+            e.FindPropertyRelative("displayName").stringValue = names[i];
+            e.FindPropertyRelative("price").intValue = prices[i];
+            e.FindPropertyRelative("iconType").enumValueIndex = (int)iconTypes[i];
+            e.FindPropertyRelative("icon").objectReferenceValue = icons[i];
+            e.FindPropertyRelative("detailText").stringValue = detailTexts[i];
             added = added + 1;
         }
         so.ApplyModifiedProperties();
@@ -280,15 +306,82 @@ public static class StoreTools
         return icon;
     }
 
-    // 포즈 프리뷰 상세 카탈로그 생성/갱신: 포즈 키 3종에 프로젝트 실물 클립을 바인딩 (클립은 읽기 전용 참조)
-    private static ItemRuntimeSpritePoseCatalog CreateDetailPoseCatalog()
+    // 상점 전용 키(포즈/이펙트/선물/잡화 12종)를 InventoryCatalog_Demo에 additive 등록 (이미 있으면 스킵, 코드 수정 없음)
+    private static void RegisterStoreKeysToInventoryCatalog()
     {
-        EnsureDir(RuntimeSpriteResourcesDir);
+        InventoryCatalog invCat = AssetDatabase.LoadAssetAtPath<InventoryCatalog>(InventoryCatalogPath);
+        if (invCat == null)
+        {
+            Debug.LogError($"[Store][StoreTools] InventoryCatalog을 찾을 수 없습니다: {InventoryCatalogPath} " +
+                           "(이 에셋은 커밋된 베이크 산출물입니다 — 생성 도구 Tools/InventorySystem은 삭제되었으니 리포지토리에서 복원하세요. 상점 카탈로그만 생성하고 계속합니다)");
+            return;
+        }
 
-        ItemRuntimeSpritePoseCatalog poseCat = AssetDatabase.LoadAssetAtPath<ItemRuntimeSpritePoseCatalog>(DetailPoseCatalogPath);
+        string[] keys = {
+            "pose_greeting", "pose_dance", "pose_sit",
+            "fx_pat_heart", "fx_pat_star", "fx_click_sparkle",
+            "gift_s", "gift_m", "gift_l",
+            "snack_banana", "potion_energy", "ticket_random"
+        };
+        string[] names = {
+            "포즈: 인사", "포즈: 댄스", "포즈: 앉기",
+            "쓰다듬기: 하트", "쓰다듬기: 별", "클릭: 반짝임",
+            "선물(소)", "선물(중)", "선물(대)",
+            "바나나", "에너지 드링크", "랜덤 티켓"
+        };
+
+        SerializedObject so = new SerializedObject(invCat);
+        SerializedProperty list = so.FindProperty("entries");
+        if (list == null)
+        {
+            Debug.LogError("[Store][StoreTools] InventoryCatalog에 'entries' 직렬화 필드가 없어 상점 키를 등록하지 못했습니다.");
+            return;
+        }
+
+        // 기존 키 수집 (additive — 기존 엔트리는 절대 건드리지 않는다)
+        HashSet<string> existing = new HashSet<string>();
+        for (int i = 0; i < list.arraySize; i++)
+        {
+            SerializedProperty keyProp = list.GetArrayElementAtIndex(i).FindPropertyRelative("key");
+            if (keyProp != null)
+            {
+                existing.Add(keyProp.stringValue);
+            }
+        }
+
+        int added = 0;
+        for (int i = 0; i < keys.Length; i++)
+        {
+            if (existing.Contains(keys[i]))
+            {
+                continue;
+            }
+
+            list.arraySize = list.arraySize + 1;
+            SerializedProperty e = list.GetArrayElementAtIndex(list.arraySize - 1);
+            e.FindPropertyRelative("key").stringValue = keys[i];
+            e.FindPropertyRelative("displayName").stringValue = names[i];
+            e.FindPropertyRelative("icon").objectReferenceValue = null;  // 아이콘 없음 → UI가 이름 텍스트로 폴백
+            e.FindPropertyRelative("description").stringValue = "";
+            e.FindPropertyRelative("maxStack").intValue = 99;
+            e.FindPropertyRelative("category").stringValue = "store";
+            added = added + 1;
+        }
+        so.ApplyModifiedProperties();
+
+        EditorUtility.SetDirty(invCat);
+        Debug.Log($"[Store][StoreTools] InventoryCatalog 상점 키 등록: 신규 {added}개 / 스킵 {keys.Length - added}개.");
+    }
+
+    // 포즈 프리뷰 상세 카탈로그 생성/갱신: 포즈 키 3종에 프로젝트 실물 클립을 바인딩 (클립은 읽기 전용 참조)
+    private static void CreateDetailPoseCatalog()
+    {
+        EnsureDir(ResourcesDir);
+
+        StoreDetailPoseCatalog poseCat = AssetDatabase.LoadAssetAtPath<StoreDetailPoseCatalog>(DetailPoseCatalogPath);
         if (poseCat == null)
         {
-            poseCat = ScriptableObject.CreateInstance<ItemRuntimeSpritePoseCatalog>();
+            poseCat = ScriptableObject.CreateInstance<StoreDetailPoseCatalog>();
             AssetDatabase.CreateAsset(poseCat, DetailPoseCatalogPath);
         }
 
@@ -344,18 +437,17 @@ public static class StoreTools
         EditorUtility.SetDirty(poseCat);
         AssetDatabase.SaveAssets();
         Debug.Log($"[Store][StoreTools] 포즈 상세 카탈로그 준비: {DetailPoseCatalogPath} (신규 {added} / 유지 {list.arraySize - added}).");
-        return poseCat;
     }
 
     // 이펙트 프리뷰 상세 카탈로그 생성/갱신: fx 키 3종에 프로젝트 실물 파티클 프리팹을 바인딩 (프리팹은 읽기 전용 참조)
-    private static ItemRuntimeSpriteEffectCatalog CreateDetailEffectCatalog()
+    private static void CreateDetailEffectCatalog()
     {
-        EnsureDir(RuntimeSpriteResourcesDir);
+        EnsureDir(ResourcesDir);
 
-        ItemRuntimeSpriteEffectCatalog fxCat = AssetDatabase.LoadAssetAtPath<ItemRuntimeSpriteEffectCatalog>(DetailEffectCatalogPath);
+        StoreDetailEffectCatalog fxCat = AssetDatabase.LoadAssetAtPath<StoreDetailEffectCatalog>(DetailEffectCatalogPath);
         if (fxCat == null)
         {
-            fxCat = ScriptableObject.CreateInstance<ItemRuntimeSpriteEffectCatalog>();
+            fxCat = ScriptableObject.CreateInstance<StoreDetailEffectCatalog>();
             AssetDatabase.CreateAsset(fxCat, DetailEffectCatalogPath);
         }
 
@@ -407,39 +499,6 @@ public static class StoreTools
         EditorUtility.SetDirty(fxCat);
         AssetDatabase.SaveAssets();
         Debug.Log($"[Store][StoreTools] 이펙트 상세 카탈로그 준비: {DetailEffectCatalogPath} (신규 {added} / 유지 {list.arraySize - added}).");
-        return fxCat;
-    }
-
-    private static void ConnectRuntimeSpriteCatalogs(
-        ItemCatalog items,
-        ItemRuntimeSpritePoseCatalog poseCatalog,
-        ItemRuntimeSpriteEffectCatalog effectCatalog)
-    {
-        if (items == null)
-        {
-            return;
-        }
-
-        SerializedObject so = new SerializedObject(items);
-        SerializedProperty pose = so.FindProperty("runtimeSpritePoseCatalog");
-        SerializedProperty effect = so.FindProperty("runtimeSpriteEffectCatalog");
-        bool changed = false;
-        if (pose != null && pose.objectReferenceValue == null && poseCatalog != null)
-        {
-            pose.objectReferenceValue = poseCatalog;
-            changed = true;
-        }
-        if (effect != null && effect.objectReferenceValue == null && effectCatalog != null)
-        {
-            effect.objectReferenceValue = effectCatalog;
-            changed = true;
-        }
-
-        if (changed)
-        {
-            so.ApplyModifiedProperties();
-            EditorUtility.SetDirty(items);
-        }
     }
 
     // 파티클 프리팹 로드 (실패 시 에러 로그 + null)
@@ -639,6 +698,7 @@ public static class StoreTools
     }
 
     // ── 2) UI 프리팹 베이크: 확인 팝업 프리팹을 먼저 굽고 상점 패널에 주입 (Jukebox 의존 프리팹 패턴) ──
+    [MenuItem("Tools/Store/2. Build UI Prefab")]
     public static void BuildUiPrefab()
     {
         EnsureDir(PrefabsDir);
@@ -705,6 +765,7 @@ public static class StoreTools
     }
 
     // ── 3) 두 프리팹의 모든 TMP_Text 폰트를 SUIT-Bold로 교체 (베이크 후 필수 마지막 단계) ──
+    [MenuItem("Tools/Store/3. Apply SUIT-Bold Font")]
     public static void ApplyFont()
     {
         TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
@@ -753,6 +814,7 @@ public static class StoreTools
     }
 
     // ── 4) 데모씬 빌드 (카메라 + 매니저 + Canvas + 인벤토리/상점 패널 + 데모 컨트롤러 + 안내) ──
+    [MenuItem("Tools/Store/4. Build Demo Scene")]
     public static void BuildDemoScene()
     {
         // 카탈로그/프리팹 선행 보장. 존재만 검사하면 안 된다 — 재편 이전 구 스키마 에셋은
@@ -812,10 +874,7 @@ public static class StoreTools
         // 캔버스 (InventoryPanel과 크기 호환 세팅)
         GameObject canvasGo = new GameObject("Canvas");
         Canvas canvas = canvasGo.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceCamera;
-        canvas.worldCamera = cam;
-        canvas.planeDistance = 100f;
-        canvas.sortingOrder = 10;
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(2560f, 1440f);
@@ -869,25 +928,25 @@ public static class StoreTools
         // 포즈/이펙트 프리뷰 리그 (오프스크린 + PortraitModel 레이어 격리 — 카드 아이콘 캡처용).
         // 리그는 참조가 없으면 무동작이므로 프리팹/카탈로그가 없어도 씬 빌드는 계속된다.
         // 상세 카탈로그는 리그에 직접 넘기지 않는다 — StoreManager가 Resources에서 로드하므로 존재만 보장.
-        if (AssetDatabase.LoadAssetAtPath<ItemRuntimeSpritePoseCatalog>(DetailPoseCatalogPath) == null)
+        if (AssetDatabase.LoadAssetAtPath<StoreDetailPoseCatalog>(DetailPoseCatalogPath) == null)
         {
             CreateDetailPoseCatalog();
         }
-        if (AssetDatabase.LoadAssetAtPath<ItemRuntimeSpriteEffectCatalog>(DetailEffectCatalogPath) == null)
+        if (AssetDatabase.LoadAssetAtPath<StoreDetailEffectCatalog>(DetailEffectCatalogPath) == null)
         {
             CreateDetailEffectCatalog();
         }
 
-        GameObject previewCharacterPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(AronaPreviewPath);
-        if (previewCharacterPrefab == null)
+        GameObject pocPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(AronaPocPath);
+        if (pocPrefab == null)
         {
-            Debug.LogError($"[Store][StoreTools] 포즈 미리보기 캐릭터 프리팹 없음: {AronaPreviewPath} (포즈 카드 아이콘은 텍스트 폴백으로 표시. 씬 빌드는 계속합니다)");
+            Debug.LogError($"[Store][StoreTools] arona POC 프리팹 없음: {AronaPocPath} (포즈 카드 아이콘은 텍스트 폴백으로 표시. 씬 빌드는 계속합니다)");
         }
 
         GameObject rigGo = new GameObject("StorePosePreviewRig");
         rigGo.transform.position = new Vector3(0f, -1000f, 0f);
         StorePosePreviewRig rig = rigGo.AddComponent<StorePosePreviewRig>();
-        rig.EditorSet(previewCharacterPrefab);
+        rig.EditorSet(pocPrefab);
 
         // 데모 컨트롤러 (참조는 에디터 전용 세터, grants는 SerializedObject로 직렬화 기록)
         GameObject demoGo = new GameObject("StoreDemoController");
@@ -896,12 +955,12 @@ public static class StoreTools
         WriteDemoGrants(demo);
 
         // 안내 UI (legacy Text — SUIT-Bold 교체 대상 아님, GraphicRaycaster 없음)
-        BuildInfoCanvas(cam);
+        BuildInfoCanvas();
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene, DemoScenePath);
         Debug.Log($"[Store][StoreTools] 데모씬 저장: {DemoScenePath}. Play → S 상점 토글, I 인벤토리 토글, G +500G, 1~4 지급, 5 포즈 리롤, " +
-                  "카드 클릭 → 수량 선택 → 구매, 슬롯→판매존 드래그 판매.");
+                  "카드 클릭 → 수량 선택 → 계산하기, 슬롯→판매존 드래그 판매.");
     }
 
     // StoreDemoController.grants(직렬화 리스트)에 데모 지급 바인딩 기록 (필드가 private이라 SerializedObject 사용)
@@ -936,15 +995,12 @@ public static class StoreTools
         so.ApplyModifiedProperties();
     }
 
-    // 안내 텍스트용 카메라 캔버스 (legacy UI Text — 클릭을 받을 필요가 없어 GraphicRaycaster를 붙이지 않는다)
-    private static void BuildInfoCanvas(Camera uiCamera)
+    // 안내 텍스트용 오버레이 캔버스 (legacy UI Text — 클릭을 받을 필요가 없어 GraphicRaycaster를 붙이지 않는다)
+    private static void BuildInfoCanvas()
     {
         GameObject canvasGo = new GameObject("InfoCanvas");
         Canvas canvas = canvasGo.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceCamera;
-        canvas.worldCamera = uiCamera;
-        canvas.planeDistance = 100f;
-        canvas.sortingOrder = 11;
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         CanvasScaler infoScaler = canvasGo.AddComponent<CanvasScaler>();
         infoScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         infoScaler.referenceResolution = new Vector2(2560f, 1440f);
@@ -957,7 +1013,7 @@ public static class StoreTools
         text.raycastTarget = false;  // 상점/인벤토리 클릭을 가로채지 않도록
         text.font = (Font)Resources.GetBuiltinResource(typeof(Font), "LegacyRuntime.ttf");
         text.text = "Store Demo\nS: 상점 / I: 인벤토리 / G: +500G / 1~4: 아이템 지급 / 5: 포즈 리롤\n" +
-                    "구매: 카드 클릭 → 수량 선택 → 구매 / 판매: 슬롯→판매존 드래그";
+                    "구매: 카드 클릭 → 수량 선택 → 계산하기 / 판매: 슬롯→판매존 드래그";
         text.fontSize = 22;
         text.color = Color.white;
         RectTransform rt = textGo.GetComponent<RectTransform>();

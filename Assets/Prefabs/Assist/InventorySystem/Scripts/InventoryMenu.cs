@@ -182,21 +182,7 @@ public class InventoryMenu : MonoBehaviour
         float scale = rootCanvas.scaleFactor;
         float x = Mathf.Min(screenPos.x, Screen.width - width * scale);
         float y = Mathf.Max(screenPos.y, estimatedHeight * scale);
-        Vector2 clampedScreenPosition = new Vector2(x, y);
-        RectTransform canvasRect = rootCanvas.transform as RectTransform;
-        Camera uiCamera = rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay
-            ? null
-            : rootCanvas.worldCamera;
-
-        if (canvasRect != null &&
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                canvasRect,
-                clampedScreenPosition,
-                uiCamera,
-                out Vector2 localPosition))
-        {
-            panel.anchoredPosition = localPosition;
-        }
+        panel.position = new Vector3(x, y, 0f);
     }
 
     // TMP 텍스트 생성

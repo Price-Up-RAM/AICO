@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 // 상점 상시 서비스 싱글톤 — 프리뷰 아이콘 캐시/리롤/NoImage 폴백을 창(StoreView) 수명과 분리해 관리한다.
 // 아이콘 해석은 상점 카탈로그(StoreEntry.iconType) 소유: File이면 등록 스프라이트, Runtime이면 프리뷰 캡처 캐시.
@@ -33,10 +32,8 @@ public class StoreManager : MonoBehaviour
     public event System.Action<string, Sprite> IconReady;  // (key, sprite) — 프리뷰 캡처 완료/리롤 갱신 브로드캐스트
 
     [SerializeField] private StoreCatalog storeCatalog;                     // 태그 레지스트리 — 인스펙터 지정 우선, 없으면 Resources 폴백. 아이콘 소유 카탈로그
-    [FormerlySerializedAs("detailPoseCatalog")]
-    [SerializeField] private ItemRuntimeSpritePoseCatalog runtimeSpritePoseCatalog;
-    [FormerlySerializedAs("detailEffectCatalog")]
-    [SerializeField] private ItemRuntimeSpriteEffectCatalog runtimeSpriteEffectCatalog;
+    [SerializeField] private StoreDetailPoseCatalog detailPoseCatalog;      // 포즈 키→클립 상세 카탈로그 — 인스펙터 지정 우선, 없으면 Resources 폴백
+    [SerializeField] private StoreDetailEffectCatalog detailEffectCatalog;  // 이펙트 키→프리팹 상세 카탈로그 — 인스펙터 지정 우선, 없으면 Resources 폴백
 
     private readonly Dictionary<string, Sprite> previewCache = new Dictionary<string, Sprite>();  // key→캡처 스프라이트
     private readonly HashSet<string> pendingKeys = new HashSet<string>();  // 캡처 요청 중 (중복 요청 방지)
@@ -88,19 +85,14 @@ public class StoreManager : MonoBehaviour
             storeCatalog = Resources.Load<StoreCatalog>("StoreCatalog");
         }
 
-        ItemCatalog itemCatalog = storeCatalog != null ? storeCatalog.Items : ItemCatalog.Default;
-        if (runtimeSpritePoseCatalog == null)
+        if (detailPoseCatalog == null)
         {
-            runtimeSpritePoseCatalog = itemCatalog != null
-                ? itemCatalog.RuntimeSpritePoseCatalog
-                : null;
+            detailPoseCatalog = Resources.Load<StoreDetailPoseCatalog>("StoreDetailPoseCatalog");
         }
 
-        if (runtimeSpriteEffectCatalog == null)
+        if (detailEffectCatalog == null)
         {
-            runtimeSpriteEffectCatalog = itemCatalog != null
-                ? itemCatalog.RuntimeSpriteEffectCatalog
-                : null;
+            detailEffectCatalog = Resources.Load<StoreDetailEffectCatalog>("StoreDetailEffectCatalog");
         }
     }
 
@@ -127,12 +119,10 @@ public class StoreManager : MonoBehaviour
             return null;
         }
 
-        ItemEntry item = storeCatalog.GetItem(key);
-
         // File 모드는 등록 스프라이트가 곧 실아이콘 — 비어 있으면 null(호출측이 NoImage를 씌움)
-        if (entry.ResolveIconType(item) == ItemIconType.File)
+        if (entry.iconType == StoreIconType.File)
         {
-            return entry.ResolveIcon(item);
+            return entry.icon;
         }
 
         // Runtime 모드는 프리뷰 캡처 캐시만 본다
@@ -159,18 +149,17 @@ public class StoreManager : MonoBehaviour
         }
 
         StoreEntry entry = storeCatalog.Get(key);
-        ItemEntry item = storeCatalog.GetItem(key);
-        if (entry == null || entry.ResolveIconType(item) != ItemIconType.Runtime)
+        if (entry == null || entry.iconType != StoreIconType.Runtime)
         {
             return false;
         }
 
-        if (runtimeSpritePoseCatalog != null && runtimeSpritePoseCatalog.Contains(key))
+        if (detailPoseCatalog != null && detailPoseCatalog.Contains(key))
         {
             return true;
         }
 
-        if (runtimeSpriteEffectCatalog != null && runtimeSpriteEffectCatalog.Contains(key))
+        if (detailEffectCatalog != null && detailEffectCatalog.Contains(key))
         {
             return true;
         }
@@ -213,9 +202,9 @@ public class StoreManager : MonoBehaviour
             return;
         }
 
-        if (runtimeSpritePoseCatalog != null)
+        if (detailPoseCatalog != null)
         {
-            ItemRuntimeSpritePoseEntry poseEntry = runtimeSpritePoseCatalog.Get(key);
+            StoreDetailPoseEntry poseEntry = detailPoseCatalog.Get(key);
             if (poseEntry != null)
             {
                 // 리그가 실패를 동기 콜백할 수 있어 pending 등록이 요청보다 먼저여야 한다
@@ -225,9 +214,9 @@ public class StoreManager : MonoBehaviour
             }
         }
 
-        if (runtimeSpriteEffectCatalog != null)
+        if (detailEffectCatalog != null)
         {
-            ItemRuntimeSpriteEffectEntry effectEntry = runtimeSpriteEffectCatalog.Get(key);
+            StoreDetailEffectEntry effectEntry = detailEffectCatalog.Get(key);
             if (effectEntry != null)
             {
                 pendingKeys.Add(key);
@@ -239,7 +228,7 @@ public class StoreManager : MonoBehaviour
     // 포즈 전 엔트리 강제 재캡처 (정지 시점이 랜덤이라 리롤마다 다른 프리뷰가 나온다)
     public void RerollPoses()
     {
-        if (runtimeSpritePoseCatalog == null)
+        if (detailPoseCatalog == null)
         {
             return;
         }
@@ -256,7 +245,7 @@ public class StoreManager : MonoBehaviour
             return;
         }
 
-        foreach (ItemRuntimeSpritePoseEntry entry in runtimeSpritePoseCatalog.Entries)
+        foreach (StoreDetailPoseEntry entry in detailPoseCatalog.Entries)
         {
             if (entry == null || string.IsNullOrWhiteSpace(entry.key))
             {
@@ -265,8 +254,7 @@ public class StoreManager : MonoBehaviour
 
             // 상점 엔트리가 Runtime 모드인 키만 재캡처 — 미등재/File 모드는 리롤 대상이 아니다
             StoreEntry storeEntry = storeCatalog.Get(entry.key);
-            ItemEntry item = storeCatalog.GetItem(entry.key);
-            if (storeEntry == null || storeEntry.ResolveIconType(item) != ItemIconType.Runtime)
+            if (storeEntry == null || storeEntry.iconType != StoreIconType.Runtime)
             {
                 continue;
             }
@@ -281,22 +269,20 @@ public class StoreManager : MonoBehaviour
 
     // ── 캡처 완료 콜백 ──
 
-    private void OnPoseCaptured(ItemRuntimeSpritePoseEntry entry, Sprite sprite)
+    private void OnPoseCaptured(StoreDetailPoseEntry entry, Sprite sprite)
     {
         if (entry == null)
         {
-            StorePosePreviewRig.ReleaseCapturedSprite(sprite);
             return;
         }
 
         HandleCaptureResult(entry.key, sprite);
     }
 
-    private void OnEffectCaptured(ItemRuntimeSpriteEffectEntry entry, Sprite sprite)
+    private void OnEffectCaptured(StoreDetailEffectEntry entry, Sprite sprite)
     {
         if (entry == null)
         {
-            StorePosePreviewRig.ReleaseCapturedSprite(sprite);
             return;
         }
 
@@ -308,7 +294,6 @@ public class StoreManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(key))
         {
-            StorePosePreviewRig.ReleaseCapturedSprite(sprite);
             return;
         }
 
@@ -328,22 +313,16 @@ public class StoreManager : MonoBehaviour
         System.Action<string, Sprite> handler = IconReady;
         if (handler != null)
         {
-            foreach (System.Delegate subscriber in handler.GetInvocationList())
-            {
-                try
-                {
-                    ((System.Action<string, Sprite>)subscriber)(key, sprite);
-                }
-                catch (System.Exception exception)
-                {
-                    Debug.LogException(exception, this);
-                }
-            }
+            handler(key, sprite);
         }
 
         if (old != null && old != sprite)
         {
-            StorePosePreviewRig.ReleaseCapturedSprite(old);
+            if (old.texture != null)
+            {
+                Destroy(old.texture);
+            }
+            Destroy(old);
         }
     }
 
@@ -358,7 +337,11 @@ public class StoreManager : MonoBehaviour
             {
                 continue;
             }
-            StorePosePreviewRig.ReleaseCapturedSprite(sprite);
+            if (sprite.texture != null)
+            {
+                Destroy(sprite.texture);
+            }
+            Destroy(sprite);
         }
         previewCache.Clear();
         pendingKeys.Clear();

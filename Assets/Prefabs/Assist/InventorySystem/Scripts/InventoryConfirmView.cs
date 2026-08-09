@@ -137,11 +137,11 @@ public class InventoryConfirmView : MonoBehaviour
         plusBtn.onClick.AddListener(() => SetQuantity(quantity + 1));
 
         // 하단 버튼 행: [취소] [이동]
-        Button cancelBtn = MakeButton("Cancel", box, TranslateUi("취소"), 20f, font, new Vector2(150f, 42f));
+        Button cancelBtn = MakeButton("Cancel", box, "취소", 20f, font, new Vector2(150f, 42f));
         Place((RectTransform)cancelBtn.transform, new Vector2(-82f, -62f), new Vector2(150f, 42f));
         cancelBtn.onClick.AddListener(() => Close());
 
-        Button okBtn = MakeButton("Ok", box, TranslateUi("이동"), 20f, font, new Vector2(150f, 42f));
+        Button okBtn = MakeButton("Ok", box, "이동", 20f, font, new Vector2(150f, 42f));
         Place((RectTransform)okBtn.transform, new Vector2(82f, -62f), new Vector2(150f, 42f));
         okBtn.onClick.AddListener(() => Confirm());
 
@@ -198,17 +198,5 @@ public class InventoryConfirmView : MonoBehaviour
         txtRt.offsetMin = Vector2.zero;
         txtRt.offsetMax = Vector2.zero;
         return btn;
-    }
-
-    private static string TranslateUi(string text)
-    {
-        if (string.IsNullOrEmpty(text) || SettingManager.Instance == null ||
-            SettingManager.Instance.settings == null ||
-            string.IsNullOrEmpty(SettingManager.Instance.settings.ui_language))
-        {
-            return text;
-        }
-
-        return LanguageDataInventory.Translate(text, SettingManager.Instance.settings.ui_language);
     }
 }

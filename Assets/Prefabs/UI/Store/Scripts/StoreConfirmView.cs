@@ -22,7 +22,6 @@ public class StoreConfirmView : MonoBehaviour
     private static readonly Color PanelBg = new Color(0.137f, 0.157f, 0.196f, 1f);
     private static readonly Color ButtonBg = new Color(0.22f, 0.25f, 0.31f, 1f);
     private static readonly Color AccentBlueHi = new Color(0.306f, 0.404f, 0.608f, 1f);
-    private static readonly Color CancelRed = new Color(0.62f, 0.20f, 0.24f, 1f);
     private static readonly Color TextWhite = new Color(0.92f, 0.93f, 0.95f, 1f);
     private static readonly Color TextMuted = new Color(0.6f, 0.62f, 0.66f, 1f);
     private static readonly Color GoldYellow = new Color(0.95f, 0.78f, 0.30f, 1f);
@@ -57,7 +56,6 @@ public class StoreConfirmView : MonoBehaviour
     private int maxQty = MinQty;
     private int quantity = MinQty;
     private System.Action<int> onConfirm;
-    private System.Func<int, int> totalCalculator;
 
     private void Awake()
     {
@@ -77,44 +75,34 @@ public class StoreConfirmView : MonoBehaviour
     // 팝업 열기: 수량 1로 초기화하고 아이템 정보 표시. confirm 시 콜백으로 수량 전달.
     // maxQty = 이번 거래에서 허용되는 최대 수량 (구매: 보유 한도 여유분, 판매: 스택 수량).
     // itemKey = 카탈로그 키 — 프리뷰 캡처가 팝업 오픈 뒤에 완료되는 경우 UpdateIcon 대상 판별에 쓴다.
-    public void Open(
-        StoreConfirmMode mode,
-        string itemKey,
-        string displayName,
-        Sprite icon,
-        int unitPrice,
-        int maxQty,
-        System.Action<int> confirmCallback,
-        System.Func<int, int> customTotalCalculator = null)
+    public void Open(StoreConfirmMode mode, string itemKey, string displayName, Sprite icon, int unitPrice, int maxQty, System.Action<int> confirmCallback)
     {
-        TranslateBakedLabels();
         this.mode = mode;
         currentKey = itemKey;
         this.unitPrice = Mathf.Max(0, unitPrice);
         this.maxQty = Mathf.Max(1, maxQty);
         quantity = MinQty;
         onConfirm = confirmCallback;
-        totalCalculator = customTotalCalculator;
 
         bool sell = mode == StoreConfirmMode.Sell;
         if (titleText != null)
         {
-            titleText.text = TranslateUi(sell ? "판매 확인" : "구매 확인");
+            titleText.text = sell ? "판매 확인" : "구매 확인";
         }
 
         if (messageText != null)
         {
-            messageText.text = TranslateUi(sell ? "정말 판매하시겠습니까?" : "정말 구매하시겠습니까?");
+            messageText.text = sell ? "정말 판매하시겠습니까?" : "정말 계산하시겠습니까?";
         }
 
         if (confirmButtonLabel != null)
         {
-            confirmButtonLabel.text = TranslateUi(sell ? "판매" : "구매");
+            confirmButtonLabel.text = sell ? "판매하기" : "계산하기";
         }
 
         if (itemNameText != null)
         {
-            itemNameText.text = TranslateUi(displayName ?? string.Empty);
+            itemNameText.text = displayName ?? string.Empty;
         }
 
         if (itemIcon != null)
@@ -136,7 +124,6 @@ public class StoreConfirmView : MonoBehaviour
     public void Close()
     {
         onConfirm = null;
-        totalCalculator = null;
         HideInternal();
     }
 
@@ -211,8 +198,8 @@ public class StoreConfirmView : MonoBehaviour
 
         if (totalText != null)
         {
-            int total = CalculateTotal();
-            totalText.text = string.Format(TranslateUi("합계 {0:N0} G"), total);
+            int total = unitPrice * quantity;
+            totalText.text = $"합계 {total:N0} G";
 
             // Buy: 보유 골드로 감당 불가하면 빨강 (결제 시도는 StoreView가 최종 판정)
             // Sell: 수입이므로 항상 노랑
@@ -224,17 +211,6 @@ public class StoreConfirmView : MonoBehaviour
 
             totalText.color = affordable ? GoldYellow : TotalRed;
         }
-    }
-
-    private int CalculateTotal()
-    {
-        if (totalCalculator != null)
-        {
-            return Mathf.Max(0, totalCalculator(quantity));
-        }
-
-        long total = (long)unitPrice * quantity;
-        return total > int.MaxValue ? int.MaxValue : (int)total;
     }
 
     // ── 베이크된 프리팹 연결 ─────────────────────────────────────────────────────
@@ -290,29 +266,6 @@ public class StoreConfirmView : MonoBehaviour
             button.onClick.RemoveListener(action);
             button.onClick.AddListener(action);
         }
-    }
-
-    private void TranslateBakedLabels()
-    {
-        foreach (TMP_Text target in GetComponentsInChildren<TMP_Text>(true))
-        {
-            if (target != null && !string.IsNullOrEmpty(target.text))
-            {
-                target.text = TranslateUi(target.text);
-            }
-        }
-    }
-
-    private static string TranslateUi(string text)
-    {
-        if (string.IsNullOrEmpty(text) || SettingManager.Instance == null ||
-            SettingManager.Instance.settings == null ||
-            string.IsNullOrEmpty(SettingManager.Instance.settings.ui_language))
-        {
-            return text;
-        }
-
-        return LanguageData.Translate(text, SettingManager.Instance.settings.ui_language);
     }
 
 #if UNITY_EDITOR
@@ -404,16 +357,16 @@ public class StoreConfirmView : MonoBehaviour
         totalText = CreateText("TotalText", panel.transform, "합계 0 G", 15, GoldYellow, TextAlignmentOptions.Center);
         TopStretch(totalText.gameObject, 12f, 12f, 178f, 22f);
 
-        messageText = CreateText("ConfirmMessageText", panel.transform, "정말 구매하시겠습니까?", 13, TextMuted, TextAlignmentOptions.Center);
+        messageText = CreateText("ConfirmMessageText", panel.transform, "정말 계산하시겠습니까?", 13, TextMuted, TextAlignmentOptions.Center);
         TopStretch(messageText.gameObject, 12f, 12f, 202f, 20f);
 
-        // 하단 버튼 행: [구매/판매] [취소]
-        Button cancel = CreateButton("CancelButton", panel.transform, "취소", CancelRed, 14);
-        AnchorBottom(cancel.gameObject, 78f, 12f, 140f, 34f);
+        // 하단 버튼 행: [취소] [계산하기/판매하기]
+        Button cancel = CreateButton("CancelButton", panel.transform, "취소", ButtonBg, 14);
+        AnchorBottom(cancel.gameObject, -78f, 12f, 140f, 34f);
         cancel.onClick.AddListener(Close);
 
-        Button confirm = CreateButton("ConfirmButton", panel.transform, "구매", AccentBlueHi, 14);
-        AnchorBottom(confirm.gameObject, -78f, 12f, 140f, 34f);
+        Button confirm = CreateButton("ConfirmButton", panel.transform, "계산하기", AccentBlueHi, 14);
+        AnchorBottom(confirm.gameObject, 78f, 12f, 140f, 34f);
         confirm.onClick.AddListener(OnConfirmClicked);
 
         Transform confirmLabel = FindDeepChild(confirm.transform, "Text");

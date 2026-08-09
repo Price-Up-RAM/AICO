@@ -139,10 +139,6 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     ├ Settings (세팅 창 열기)
     ├ Character Detail (현재 캐릭터(AICO) 상세 패널)
     ├ Action (원형 메뉴: 이동/행동 등)
-    ├ Function
-    │   ├ Inventory (인벤토리 — UIManager.ToggleInventory)
-    │   ├ Store (상점 — KAIManager.ToggleStore, KAI 씬 전용 배선)
-    │   └ Skill (스킬 목록 — UIManager.ToggleSkill, skill 프리팹은 KAISceneBuilder가 할당)
     ├ Chat
     │   ├ New Chat (대화 메모리 초기화)
     │   ├ Chat History (채팅 이력 보기)
@@ -155,9 +151,8 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     │   └ Set Screenshot Area (스크린샷 범위 설정)
     └ Exit (프로그램 종료)
 
-    원본 대비 제외: Character(변경/소환/의상), Guideline, Situation, OCR,
-    Experiment/Dev/Debug, Version. Function은 Inventory/Store/Skill 구성으로 복원
-    (원본의 Pomodoro/Alarm/Calendar/TODOList는 Mode·별도 경로가 있어 제외 유지).
+    원본 대비 제외: Character(변경/소환/의상), Guideline, Situation, OCR, 기능(Function),
+    Experiment/Dev/Debug, Version
     */
     private void TriggerMenu()
     {
@@ -190,26 +185,6 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         // Action — 원형 액션 메뉴
         m_ContextMenu.AddMenuItem(LanguageData.Translate("Action", targetLang), delegate {
             OnPointerDownRadialMenuAction();
-        });
-
-        // Function — 기능 (Inventory / Store / Skill)
-        m_ContextMenu.AddSubMenuItem(LanguageData.Translate("Function", targetLang), new List<(string, UnityAction)>
-        {
-            (LanguageData.Translate("Inventory", targetLang), delegate {
-                if (UIManager.Instance != null)
-                {
-                    UIManager.Instance.ToggleInventory();
-                }
-            }),
-            (GetStoreMenuLabel(targetLang), delegate {
-                KAIManager.ToggleStore();
-            }),
-            (LanguageData.Translate("Skill", targetLang), delegate {
-                if (UIManager.Instance != null)
-                {
-                    UIManager.Instance.ToggleSkill();
-                }
-            }),
         });
 
         // Chat - 채팅
@@ -304,17 +279,6 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             case "ko": return "로컬 AI 설치";
             case "jp": return "ローカルAIをインストール";
             default: return "Install Local AI";
-        }
-    }
-
-    // "Store"는 LanguageData 미등록 라벨 — LanguageData 무수정 원칙에 따라 파일 내 헬퍼로 처리
-    private static string GetStoreMenuLabel(string language)
-    {
-        switch (language)
-        {
-            case "ko": return "상점";
-            case "jp": return "ストア";
-            default: return "Store";
         }
     }
 
