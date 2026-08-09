@@ -1,6 +1,6 @@
 // KAI 제출용 프로토타입 전용 씬 매니저 — SampleSceneKAI에만 배치한다 (Tools/KAI/Build SampleSceneKAI가 생성).
 // 기존 스크립트는 수정하지 않고 씬 쪽에서만 동작을 바꾼다:
-//   1) 소환(스폰) 캐릭터를 AICO(charcode "aico")로 고정 — 다른 캐릭터가 뜨면 즉시 교체
+//   1) 필요할 때만 소환(스폰) 캐릭터를 AICO(charcode "aico")로 고정
 //   2) 씬 내 모든 MenuTrigger를 MenuTriggerKAI로 in-place 교체
 //      (SubCharManager가 서브 캐릭터에 쓰는 "MenuTrigger 제거 → 대체 트리거 부착" 패턴과 동일)
 using UnityEngine;
@@ -25,6 +25,10 @@ public class KAIManager : MonoBehaviour
 
     private const string AicoCharcode = "aico";      // Assets/Char/Aico/Aico.prefab의 CharAttributes.charcode
     private const string AicoPrefabKey = "naost";    // PrefabDataLocal 프리팹 키 (character_database.json AICO 항목)
+
+    // ChangeChar를 사용하는 현재 KAI 씬에서는 꺼 둔다. 이전 제출용 고정 동작이
+    // 다시 필요할 때만 인스펙터에서 명시적으로 활성화한다.
+    [SerializeField] private bool forceAicoCharacter;
 
     // Store는 UIManager 통합이 없어 KAI 씬에서만 여기서 연다.
     // 프리팹 참조는 KAISceneBuilder가 씬 생성 시 SerializedObject로 할당한다.
@@ -58,7 +62,8 @@ public class KAIManager : MonoBehaviour
 
     private void Start()
     {
-        Debug.Log("[KAIManager] KAI 프로토타입 씬 활성 — 캐릭터 AICO 고정 + MenuTriggerKAI 적용");
+        Debug.Log($"[KAIManager] KAI 프로토타입 씬 활성 — " +
+                  $"캐릭터 {(forceAicoCharacter ? "AICO 고정" : "교체 허용")} + MenuTriggerKAI 적용");
         SweepMenuTriggers();   // 초기 1회는 즉시 처리
     }
 
@@ -66,7 +71,10 @@ public class KAIManager : MonoBehaviour
     {
         elapsed += Time.deltaTime;
 
-        ForceAicoIfNeeded();
+        if (forceAicoCharacter)
+        {
+            ForceAicoIfNeeded();
+        }
 
         sweepTimer -= Time.deltaTime;
         if (sweepTimer <= 0f)

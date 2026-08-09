@@ -33,7 +33,6 @@ public static class AffinityUiTools
     private static readonly Color TextMuted = new Color(0.6f, 0.62f, 0.66f, 1f);
     private static readonly Color TrackDark = new Color(0.047f, 0.055f, 0.071f, 0.9f);
 
-    [MenuItem("Tools/CharacterDetail/Setup All (rainbow + affinity UI + font + card border + jp fallback)")]
     public static void SetupAll()
     {
         BakeRainbowSprite();
@@ -52,7 +51,6 @@ public static class AffinityUiTools
     }
 
     // ── 1) 무지개 그라데이션 스프라이트 베이크 (StoreTools EnsureNoImageSprite 레시피) ──
-    [MenuItem("Tools/CharacterDetail/1. Bake Rainbow Sprite")]
     public static void BakeRainbowSprite()
     {
         EnsureRainbowSprite();
@@ -127,7 +125,6 @@ public static class AffinityUiTools
     }
 
     // ── 2) 프리팹 변환: 호감도 블록 → 친밀도 블록 + 보상 모달 베이크 ──
-    [MenuItem("Tools/CharacterDetail/2. Convert Affinity UI (prefab)")]
     public static void ConvertAffinityUi()
     {
         Sprite rainbow = EnsureRainbowSprite();
@@ -414,7 +411,6 @@ public static class AffinityUiTools
     }
 
     // ── 3) 폰트 일괄 적용 (베이크 후 필수 마지막 단계) ──
-    [MenuItem("Tools/CharacterDetail/3. Apply SUIT-Bold Font")]
     public static void ApplyFont()
     {
         TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
@@ -446,7 +442,6 @@ public static class AffinityUiTools
     // 계약: 카드 루트 마지막 자식으로 CardBorderImage → CardBorderSubImage → CardBorderOriginalImage 순서 append,
     //       3개 전부 비활성 베이크. 활성/틴트 판정은 런타임 컨트롤러(ChangeCharCardController)가 담당.
     //       이 프리팹의 TMP 폰트는 건드리지 않는다(테두리는 Image뿐).
-    [MenuItem("Tools/CharacterDetail/4. Inject Card Border (ChangeChar)")]
     public static void InjectCardBorder()
     {
         Sprite borderSprite = AssetDatabase.LoadAssetAtPath<Sprite>(CardBorderSpritePath);
@@ -517,7 +512,6 @@ public static class AffinityUiTools
     // SUIT-Bold는 한글/라틴만 보유(일본어 글리프 0) → fallbackFontAssetTable에 NotoSansJP를 추가하면
     // SUIT-Bold를 쓰는 모든 UI가 일본어를 표시할 수 있다.
     // (NotoSansJP의 폴백에 SUIT-Bold가 이미 있어 상호 참조가 되지만, TMP는 방문 목록으로 순환을 방어한다.)
-    [MenuItem("Tools/CharacterDetail/5. Ensure JP Font Fallback (SUIT→NotoJP)")]
     public static void EnsureJpFontFallback()
     {
         TMP_FontAsset suit = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);

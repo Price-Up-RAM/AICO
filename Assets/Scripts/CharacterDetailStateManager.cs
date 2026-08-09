@@ -10,17 +10,46 @@ public class CharacterDetailState
     public int affinityLevel = 0;
     public string affinityStageName = "낯선 사이";
     public string source = "오리지널";
-    public string form = "2D";
-    public List<string> statusTags = new List<string>();
-    public List<string> featureTags = new List<string>();
     public string voiceId = "";
 }
 
 // CharAttributes(불변)  + SettingCharManager(가변) 데이터 조립 공장 + 실시간 동기화
 public class CharacterDetailStateManager : MonoBehaviour
 {
-    private static CharacterDetailStateManager instance;
-    public static CharacterDetailStateManager Instance { get { if (instance == null) { instance = FindObjectOfType<CharacterDetailStateManager>(); if (instance == null) { instance = new GameObject("CharacterDetailStateManager").AddComponent<CharacterDetailStateManager>(); } } return instance; } } // 싱글톤 인스턴스
+    public static CharacterDetailStateManager instance;
+    public static CharacterDetailStateManager Instance
+    {
+        get
+        {
+            if (instance == null)
+            {
+                instance = FindObjectOfType<CharacterDetailStateManager>();
+            }
+
+            // MainScene 원본은 이 컴포넌트를 씬 오브젝트에 배치하지만,
+            // KAI 루트에는 별도 배치가 없다. MR에서 금지하는 신규 루트
+            // GameObject 생성을 피하고 감사 대상인 기존 매니저에 결합한다.
+            if (instance == null)
+            {
+                GameObject managerHost = GameManager.Instance != null
+                    ? GameManager.Instance.gameObject
+                    : UIManager.Instance != null
+                        ? UIManager.Instance.gameObject
+                        : null;
+
+                if (managerHost != null)
+                {
+                    instance = managerHost.GetComponent<CharacterDetailStateManager>();
+                    if (instance == null)
+                    {
+                        instance = managerHost.AddComponent<CharacterDetailStateManager>();
+                    }
+                }
+            }
+
+            return instance;
+        }
+    }
 
     public event Action<string, CharacterDetailState> StateChanged; // 상태 변경 이벤트
     private bool settingEventRegistered;
@@ -62,12 +91,24 @@ public class CharacterDetailStateManager : MonoBehaviour
         StateChanged?.Invoke(characterId, GetState(characterId));
     }
 
+    // 현재 UI 언어 코드 (설정 부재 시 ko)
+    private string GetUiLanguage()
+    {
+        if (SettingManager.Instance != null && SettingManager.Instance.settings != null && !string.IsNullOrEmpty(SettingManager.Instance.settings.ui_language))
+        {
+            return SettingManager.Instance.settings.ui_language;
+        }
+        return "ko";
+    }
+
     private CharAttributes GetCharAttributes(string charCode)
     {
-        if (CharManager.Instance.charList != null)
+        CharManager charManager = CharManager.Instance;
+        if (charManager != null && charManager.charList != null)
         {
-            foreach (var obj in CharManager.Instance.charList)
+            foreach (var obj in charManager.charList)
             {
+                if (obj == null) continue;
                 var attr = obj.GetComponent<CharAttributes>();
                 if (attr != null && attr.charcode == charCode)
                     return attr;
@@ -87,31 +128,27 @@ public class CharacterDetailStateManager : MonoBehaviour
         if (attr != null)
         {
             state.source = attr.source;
-            state.form = attr.form;
-            state.statusTags = new List<string>(attr.statusTags);
-            state.featureTags = new List<string>(attr.featureTags);
         }
 
-        // 출전/기능 태그는 character_database.json(마스터)이 우선 — CharAttributes 값은 폴백
-        // (프리팹 61개 전부가 코드 기본값을 상속하고 있어, 캐릭터별 실데이터는 JSON에서 관리한다)
+        // 출전은 character_database.json(마스터)이 우선 — 다국어(ko/ja/en) 중 현재 UI 언어로 해석, CharAttributes 값은 미등재 캐릭터 폴백
+        // (기능 태그는 의상 엔트리의 bool 4종 + tagSpecials — CharacterFeatureTags가 직접 조회한다)
         if (CharManager.Instance != null)
         {
             ChangeCharInfo dbCharacter = CharManager.Instance.FindCharacterInfoByCharacterId(characterId);
-            if (dbCharacter != null)
+            if (dbCharacter != null && dbCharacter.source != null)
             {
-                if (!string.IsNullOrEmpty(dbCharacter.source))
+                string localizedSource = dbCharacter.source.Get(GetUiLanguage());
+                if (!string.IsNullOrEmpty(localizedSource))
                 {
-                    state.source = dbCharacter.source;
-                }
-
-                if (dbCharacter.featureTags != null && dbCharacter.featureTags.Count > 0)
-                {
-                    state.featureTags = new List<string>(dbCharacter.featureTags);
+                    state.source = localizedSource;
                 }
             }
         }
 
-        var setting = SettingCharManager.Instance.GetCharCodeSetting(characterId);
+        SettingCharManager settingManager = SettingCharManager.Instance;
+        var setting = settingManager != null
+            ? settingManager.GetCharCodeSetting(characterId)
+            : null;
         if (setting != null)
         {
             state.affinityPoints = setting.affinityPoints;
@@ -128,16 +165,25 @@ public class CharacterDetailStateManager : MonoBehaviour
     // 인연도 증감 — 레벨업 시 미션 AF0004(인연도 레벨업) 보고
     public void AddAffinityPoints(string characterId, int amount)
     {
-        var setting = SettingCharManager.Instance.GetCharCodeSetting(characterId);
+        SettingCharManager settingManager = SettingCharManager.Instance;
+        if (settingManager == null) return;
+
+        var setting = settingManager.GetCharCodeSetting(characterId);
         int levelBefore = setting != null ? AffinityData.LevelFor(setting.affinityPoints) : 0;
-        SettingCharManager.Instance.AddAffinityPoints(characterId, amount);
+        settingManager.AddAffinityPoints(characterId, amount);
         int levelAfter = setting != null ? AffinityData.LevelFor(setting.affinityPoints) : levelBefore;
         if (levelAfter > levelBefore && Application.isPlaying && MissionList.Instance != null)
         {
             MissionList.Instance.Report("AF0004", levelAfter - levelBefore);
         }
     }
-    public void SetVoice(string characterId, string voiceId) { SettingCharManager.Instance.SetVoice(characterId, voiceId); } // 음성 설정
+    public void SetVoice(string characterId, string voiceId)
+    {
+        if (SettingCharManager.Instance != null)
+        {
+            SettingCharManager.Instance.SetVoice(characterId, voiceId);
+        }
+    } // 음성 설정
 
     public static string BuildCharacterId(ChangeCharInfo charInfo, ChangeCharClothesInfo clothes) 
     { 

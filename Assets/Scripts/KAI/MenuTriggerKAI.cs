@@ -20,6 +20,8 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
     private float chkTimer = 0f; // 타이머 변수 추가
     private bool isLeftClickHeld = false; // 좌클릭 상태
     private float leftClickHoldTime = 0f; // 좌클릭 누른 시간
+    private Vector2 lastPointerPosition;
+    private bool hasPointerPosition;
 
     // 더블클릭 감지용 변수들
     private float lastClickTime = 0f;
@@ -102,6 +104,14 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
 
     public void OnPointerDown(PointerEventData eventData)
     {
+        if (eventData == null)
+        {
+            return;
+        }
+
+        lastPointerPosition = eventData.position;
+        hasPointerPosition = true;
+
         if (eventData.button == PointerEventData.InputButton.Right)
         {
             TriggerMenu();
@@ -127,6 +137,14 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
 
     public void OnPointerUp(PointerEventData eventData)
     {
+        if (eventData == null)
+        {
+            return;
+        }
+
+        lastPointerPosition = eventData.position;
+        hasPointerPosition = true;
+
         if (eventData.button == PointerEventData.InputButton.Left)
         {
             isLeftClickHeld = false;
@@ -182,14 +200,25 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
             });
         }
 
-        // Character Detail — 현재 캐릭터(AICO) 상세
-        m_ContextMenu.AddMenuItem(
-            LanguageData.Translate("Character", targetLang) + " " + LanguageData.Translate("Detail", targetLang),
-            delegate { ShowCurrentCharacterDetail(); });
-
-        // Action — 원형 액션 메뉴
-        m_ContextMenu.AddMenuItem(LanguageData.Translate("Action", targetLang), delegate {
-            OnPointerDownRadialMenuAction();
+        // Character — 액션, 캐릭터 교체, 현재 캐릭터 상세
+        m_ContextMenu.AddSubMenuItem(LanguageData.Translate("Character", targetLang), new List<(string, UnityAction)>
+        {
+            (LanguageData.Translate("Action", targetLang), delegate {
+                OnPointerDownRadialMenuAction();
+            }),
+            (LanguageData.Translate("Change Char", targetLang),
+                (ChatModeManager.Instance == null || !ChatModeManager.Instance.IsPomodoroMode())
+                ? (UnityAction)(() => {
+                    if (UIManager.Instance != null)
+                    {
+                        UIManager.Instance.ShowCharChange();
+                    }
+                })
+                : null
+            ),
+            // (LanguageData.Translate("Detail", targetLang), delegate {
+            //     ShowCurrentCharacterDetail();
+            // }),
         });
 
         // Function — 기능 (Inventory / Store / Skill)
@@ -286,13 +315,27 @@ public class MenuTriggerKAI : MonoBehaviour, IPointerDownHandler, IPointerUpHand
         });
 
         // 메뉴 보이기
-        this.m_ContextMenu.ShowAtScreenPosition(Input.mousePosition);
+        this.m_ContextMenu.ShowAtScreenPosition(GetMenuScreenPosition());
 
         // StatusManager 관리 (1초 후)
         StatusManager.Instance.IsOptioning = true;
 
         chkTimer = 1f;
         itemChkFlag = true;
+    }
+
+    private Vector2 GetMenuScreenPosition()
+    {
+        if (hasPointerPosition)
+        {
+            return lastPointerPosition;
+        }
+
+        Canvas canvas = GetComponentInParent<Canvas>();
+        Camera uiCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? canvas.worldCamera
+            : null;
+        return RectTransformUtility.WorldToScreenPoint(uiCamera, transform.position);
     }
 
     // 현재 캐릭터의 character_database.json 엔트리를 찾아 CharacterDetail 패널 표시

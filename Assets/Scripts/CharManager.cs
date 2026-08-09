@@ -636,6 +636,70 @@ public class CharManager : MonoBehaviour
         return null;
     }
 
+    public ChangeCharClothesInfo FindClothesInfoByCharacterId(string characterId)
+    {
+        if (string.IsNullOrEmpty(characterId) ||
+            _characterDatabaseData == null ||
+            _characterDatabaseData.characters == null)
+        {
+            return null;
+        }
+
+        // BuildCharacterId와 같은 우선순위: 의상에 주입할 charcode를 먼저 확인한다.
+        foreach (ChangeCharInfo charInfo in _characterDatabaseData.characters)
+        {
+            if (charInfo == null || charInfo.clothesList == null) continue;
+            foreach (ChangeCharClothesInfo clothes in charInfo.clothesList)
+            {
+                if (clothes != null &&
+                    !string.IsNullOrEmpty(clothes.charAttr_charcode) &&
+                    clothes.charAttr_charcode.ToLower() == characterId)
+                {
+                    return clothes;
+                }
+            }
+        }
+
+        // 일반 캐릭터는 prefabAddress가 charcode와 같은 경우가 많다.
+        foreach (ChangeCharInfo charInfo in _characterDatabaseData.characters)
+        {
+            if (charInfo == null || charInfo.clothesList == null) continue;
+            foreach (ChangeCharClothesInfo clothes in charInfo.clothesList)
+            {
+                if (clothes != null &&
+                    !string.IsNullOrEmpty(clothes.prefabAddress) &&
+                    clothes.prefabAddress != "2d_general" &&
+                    clothes.prefabAddress.ToLower() == characterId)
+                {
+                    return clothes;
+                }
+            }
+        }
+
+        // 마지막으로 캐릭터 이름이 일치하면 선택 가능한 첫 의상을 반환한다.
+        foreach (ChangeCharInfo charInfo in _characterDatabaseData.characters)
+        {
+            if (charInfo == null || charInfo.clothesList == null) continue;
+            if (!string.IsNullOrEmpty(charInfo.name) &&
+                charInfo.name.ToLower() == characterId)
+            {
+                foreach (ChangeCharClothesInfo clothes in charInfo.clothesList)
+                {
+                    if (clothes != null && clothes.isSelectable)
+                    {
+                        return clothes;
+                    }
+                }
+
+                return charInfo.clothesList.Count > 0
+                    ? charInfo.clothesList[0]
+                    : null;
+            }
+        }
+
+        return null;
+    }
+
     private ChangeCharClothesInfo FindDlcClothesByCharCode(string charCode)
     {
         if (string.IsNullOrEmpty(charCode) || _characterDatabaseData == null || _characterDatabaseData.characters == null)

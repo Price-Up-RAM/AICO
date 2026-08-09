@@ -33,11 +33,8 @@ public class AffinityRewardModalView : MonoBehaviour
     // UI 언어 번역 헬퍼 — 매니저 부재 시 원문 반환 (LanguageData.Translate는 미등록 문자열이면 원문 반환)
     private static string T(string text)
     {
-        if (string.IsNullOrEmpty(text)) return text;
-        if (LanguageManager.Instance == null || SettingManager.Instance == null || SettingManager.Instance.settings == null) return text;
-        // 레거시 settings.json에는 ui_language가 없을 수 있음 — null이면 Translate 내부 TryGetValue(null) 예외
-        if (string.IsNullOrEmpty(SettingManager.Instance.settings.ui_language)) return text;
-        return LanguageManager.Instance.Translate(text);
+        // CharacterDetail 도메인 테이블 우선, 미등록 문구는 전역 LanguageData 폴백 (가드 포함)
+        return LanguageDataCharacterDetail.Translate(text);
     }
 
     private void Awake()
@@ -273,7 +270,7 @@ public class AffinityRewardModalView : MonoBehaviour
     private void OnDebugAddClicked()
     {
         if (string.IsNullOrEmpty(currentCharacterId)) return;
-        CharacterDetailStateManager.Instance.AddAffinityPoints(currentCharacterId, 40);
+        CharacterDetailStateManager.Instance?.AddAffinityPoints(currentCharacterId, 40);
         RefreshRows();
     }
 
@@ -281,7 +278,7 @@ public class AffinityRewardModalView : MonoBehaviour
     private void OnDebugResetClicked()
     {
         if (string.IsNullOrEmpty(currentCharacterId)) return;
-        CharacterDetailStateManager.Instance.AddAffinityPoints(currentCharacterId, -AffinityData.MaxPoints);
+        CharacterDetailStateManager.Instance?.AddAffinityPoints(currentCharacterId, -AffinityData.MaxPoints);
         RefreshRows();
     }
 

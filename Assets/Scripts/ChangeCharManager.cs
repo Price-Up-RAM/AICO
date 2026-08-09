@@ -25,6 +25,14 @@ public class ChangeCharClothesInfo
 {
     public string name;           // 내부 관리용 의상 이름
     public string text;           // UI에 표시될 의상 텍스트 (예: "< 교복 >")
+
+    // 기능 태그 (의상 단위, character_database.json이 정본) — JSON 미기재 시 false
+    // 의상마다 프리팹(모델)이 달라 표정 mesh/장착 소켓 보유 여부가 갈리므로 의상 단위로 판정한다
+    public bool tagAiChat = false;             // AI 대화 가능 (false면 대화 차단)
+    public bool tagAffinity = false;           // 친밀도 시스템 보유
+    public bool tagEmotionExpression = false;  // 감정표현 가능 — EmotionFaceController 등 표정 mesh 보유 여부
+    public bool tagEquip = false;              // 악세서리 장착 가능
+    public List<string> tagSpecials = new List<string>();  // 특수 기능 태그 (예: "볼당기기") — 번역은 LanguageDataCharacterDetail
     public string spriteAddress;  // isLocal=true: PrefabDataLocal icon key, false: Addressables sprite address
     public string prefabAddress;  // isLocal=true: PrefabDataLocal prefab key, false: Addressables prefab address
                                   // "2d_general" 이면 공용 2D 프리팹 특수 로직 사용
@@ -56,10 +64,6 @@ public class ChangeCharClothesInfo
 
     // Collider/DragHandler 주입값 (0이면 프리팹 기본값 유지)
     public float  headPatThreshold;       // DragHandler.headPatThreshold
-
-    // 의상별 기능 태그 오버라이드 — 비어있지 않으면 캐릭터 공통 featureTags 대신 이걸 표시
-    // (예: 아로나 2D 의상은 감정표현 미지원이라 캐릭터 공통 태그에서 제외)
-    public List<string> featureTagsOverride = new List<string>();
 }
 
 [Serializable]
@@ -68,8 +72,7 @@ public class ChangeCharInfo
     public int id;                // 예약 — 표시 순서는 JSON 배열 순서를 따름 (id를 읽는 코드 없음)
     public string name;           // 캐릭터 이름 (예: "ARONA")
     public bool isFavorite;       // 즐겨찾기 여부 (저장 연동 예정)
-    public string source = "";    // 출전 (예: "블루아카이브") — CharacterDetail 표시용, 마스터는 character_database.json
-    public List<string> featureTags = new List<string>();  // 기능 태그 (캐릭터 공통) — CharacterDetail 칩 표시용
+    public LocalizedText source = new LocalizedText();  // 출전 다국어 ko/ja/en (예: ko "블루아카이브") — CharacterDetail 표시용, 클래스 정의는 MissionInfo.cs 공용
     public List<ChangeCharClothesInfo> clothesList = new List<ChangeCharClothesInfo>();
 }
 

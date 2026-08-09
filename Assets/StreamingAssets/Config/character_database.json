@@ -2,16 +2,16 @@
   "characters": [
     {
       "id": 0,
-      "name": "AICO",
-      "source": "오리지널",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "name": "Naost",
+      "source": { "ko": "오리지널", "ja": "オリジナル", "en": "Original" },
       "clothesList": [
         {
           "name": "AICO",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": true,
+          "tagEquip": true,
+          "tagSpecials": [],
           "text": "Vroid",
           "spriteAddress": "naost_sprite",
           "prefabAddress": "naost",
@@ -23,57 +23,67 @@
     {
       "id": 1,
       "name": "ARONA",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "감정표현",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "arona_sprite",
-          "prefabAddress": "arona",
+          "prefabAddress": "arona_basic",
           "isLocal": true,
           "isSelectable": false
         },
         {
           "name": "2D",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D",
           "spriteAddress": "arona_2d_sprite",
           "prefabAddress": "arona_2d",
           "isLocal": true,
-          "isSelectable": false,
-          "featureTagsOverride": [
-            "AI 대화",
-            "친밀도 보유"
-          ]
+          "isSelectable": false
         },
         {
           "name": "AI",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": true,
+          "tagEquip": true,
+          "tagSpecials": [],
           "text": "AI",
           "spriteAddress": "arona_sprite",
-          "prefabAddress": "arona_tripo",
+          "prefabAddress": "arona",
           "isLocal": true,
           "isSelectable": true
         },
         {
           "name": "Ball",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Ball",
           "spriteAddress": "arona_ball_sprite",
           "prefabAddress": "arona_ball",
           "isLocal": true,
-          "isSelectable": true,
-          "featureTagsOverride": [
-            "AI 대화",
-            "친밀도 보유",
-            "머리쓰다듬기"
-          ]
+          "isSelectable": true
         },
         {
           "name": "koi",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "koi",
           "spriteAddress": "arona_sprite",
           "prefabAddress": "arona_tripo",
@@ -85,16 +95,15 @@
     {
       "id": 2,
       "name": "Plana",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "감정표현",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "plana_sprite",
           "prefabAddress": "plana",
@@ -103,31 +112,31 @@
         },
         {
           "name": "Ball",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Ball",
           "spriteAddress": "plana_ball_sprite",
           "prefabAddress": "plana_ball",
           "isLocal": true,
-          "isSelectable": false,
-          "featureTagsOverride": [
-            "AI 대화",
-            "친밀도 보유",
-            "머리쓰다듬기"
-          ]
+          "isSelectable": false
         }
       ]
     },
     {
       "id": 3,
       "name": "Mari",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "mari_sprite",
           "prefabAddress": "mari",
@@ -136,6 +145,11 @@
         },
         {
           "name": "Sportswear",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Sportswear",
           "spriteAddress": "mari_sportswear_sprite",
           "prefabAddress": "mari_sportswear",
@@ -144,6 +158,11 @@
         },
         {
           "name": "Idol",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Idol",
           "spriteAddress": "mari_idol_sprite",
           "prefabAddress": "mari_idol",
@@ -152,6 +171,11 @@
         },
         {
           "name": "Pajama",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Pajama",
           "spriteAddress": "mari_sprite",
           "prefabAddress": "mari_pajama",
@@ -160,6 +184,11 @@
         },
         {
           "name": "2D(Legacy)",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D(Legacy)",
           "spriteAddress": "mari_2d_sprite",
           "prefabAddress": "2d_general",
@@ -188,15 +217,15 @@
     {
       "id": 4,
       "name": "Nagisa",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "nagisa_sprite",
           "prefabAddress": "nagisa",
@@ -205,6 +234,11 @@
         },
         {
           "name": "Swimsuit",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Swimsuit",
           "spriteAddress": "nagisa_swimsuit_sprite",
           "prefabAddress": "nagisa_swimsuit",
@@ -216,23 +250,28 @@
     {
       "id": 5,
       "name": "Mika",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "mika_sprite",
           "prefabAddress": "mika",
           "isLocal": true,
-          "isSelectable": true
+          "isSelectable": false
         },
         {
           "name": "Swimsuit",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Swimsuit",
           "spriteAddress": "mika_swimsuit_sprite",
           "prefabAddress": "mika_swimsuit",
@@ -241,32 +280,31 @@
         },
         {
           "name": "3D",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "3D",
           "spriteAddress": "mika_sprite",
           "prefabAddress": "mika_3d",
           "isLocal": true,
-          "isSelectable": false,
-          "featureTagsOverride": [
-            "AI 대화",
-            "감정표현",
-            "친밀도 보유",
-            "머리쓰다듬기"
-          ]
+          "isSelectable": false
         }
       ]
     },
     {
       "id": 6,
       "name": "Seia",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "seia_sprite",
           "prefabAddress": "seia",
@@ -275,6 +313,11 @@
         },
         {
           "name": "Swimsuit",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Swimsuit",
           "spriteAddress": "seia_swimsuit_sprite",
           "prefabAddress": "seia_swimsuit",
@@ -286,15 +329,15 @@
     {
       "id": 7,
       "name": "Aris",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "aris_sprite",
           "prefabAddress": "aris",
@@ -303,6 +346,11 @@
         },
         {
           "name": "Maid",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Maid",
           "spriteAddress": "aris_maid_sprite",
           "prefabAddress": "aris_maid",
@@ -311,6 +359,11 @@
         },
         {
           "name": "Battle",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Battle",
           "spriteAddress": "aris_battle_sprite",
           "prefabAddress": "aris_battle",
@@ -322,15 +375,15 @@
     {
       "id": 8,
       "name": "Kei",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "kei_sprite",
           "prefabAddress": "kei",
@@ -342,15 +395,15 @@
     {
       "id": 9,
       "name": "Yuzu",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "yuzu_sprite",
           "prefabAddress": "yuzu",
@@ -359,6 +412,11 @@
         },
         {
           "name": "Maid",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Maid",
           "spriteAddress": "yuzu_maid_sprite",
           "prefabAddress": "yuzu_maid",
@@ -367,6 +425,11 @@
         },
         {
           "name": "Battle",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Battle",
           "spriteAddress": "yuzu_battle_sprite",
           "prefabAddress": "yuzu_battle",
@@ -375,6 +438,11 @@
         },
         {
           "name": "Battle2",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Battle2",
           "spriteAddress": "yuzu_battle_sprite",
           "prefabAddress": "yuzu_battle2",
@@ -386,15 +454,15 @@
     {
       "id": 10,
       "name": "Momoi",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "momoi_sprite",
           "prefabAddress": "momoi",
@@ -403,6 +471,11 @@
         },
         {
           "name": "Maid",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Maid",
           "spriteAddress": "momoi_maid_sprite",
           "prefabAddress": "momoi_maid",
@@ -411,6 +484,11 @@
         },
         {
           "name": "Battle",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Battle",
           "spriteAddress": "momoi_battle_sprite",
           "prefabAddress": "momoi_battle",
@@ -422,15 +500,15 @@
     {
       "id": 11,
       "name": "Midori",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "midori_sprite",
           "prefabAddress": "midori",
@@ -439,6 +517,11 @@
         },
         {
           "name": "Maid",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Maid",
           "spriteAddress": "midori_maid_sprite",
           "prefabAddress": "midori_maid",
@@ -447,6 +530,11 @@
         },
         {
           "name": "Battle",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Battle",
           "spriteAddress": "midori_battle_sprite",
           "prefabAddress": "midori_battle",
@@ -458,15 +546,15 @@
     {
       "id": 12,
       "name": "Yuuka",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "yuuka_sprite",
           "prefabAddress": "yuuka",
@@ -475,6 +563,11 @@
         },
         {
           "name": "Sportswear",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Sportswear",
           "spriteAddress": "yuuka_sportswear_sprite",
           "prefabAddress": "yuuka_sportswear",
@@ -483,6 +576,11 @@
         },
         {
           "name": "Pajama",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Pajama",
           "spriteAddress": "yuuka_pajama_sprite",
           "prefabAddress": "yuuka_pajama",
@@ -491,6 +589,11 @@
         },
         {
           "name": "2D",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D",
           "spriteAddress": "yuuka_2d_sprite",
           "prefabAddress": "2d_general",
@@ -519,15 +622,15 @@
     {
       "id": 13,
       "name": "Noa",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "noa_sprite",
           "prefabAddress": "noa",
@@ -536,6 +639,11 @@
         },
         {
           "name": "Pajama",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Pajama",
           "spriteAddress": "noa_pajama_sprite",
           "prefabAddress": "noa_pajama",
@@ -547,15 +655,15 @@
     {
       "id": 14,
       "name": "Koyuki",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "koyuki_sprite",
           "prefabAddress": "koyuki",
@@ -564,6 +672,11 @@
         },
         {
           "name": "2D",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D",
           "spriteAddress": "koyuki_2d_sprite",
           "prefabAddress": "2d_general",
@@ -592,15 +705,15 @@
     {
       "id": 15,
       "name": "Kisaki",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "kisaki_sprite",
           "prefabAddress": "kisaki",
@@ -612,15 +725,15 @@
     {
       "id": 16,
       "name": "Kokona",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "kokona_sprite",
           "prefabAddress": "kokona",
@@ -632,15 +745,15 @@
     {
       "id": 17,
       "name": "Shun Kid",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "shun_kid_sprite",
           "prefabAddress": "shun_kid",
@@ -652,15 +765,15 @@
     {
       "id": 18,
       "name": "Miyako",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "miyako_sprite",
           "prefabAddress": "miyako",
@@ -669,6 +782,11 @@
         },
         {
           "name": "Swimsuit",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Swimsuit",
           "spriteAddress": "miyako_swimsuit_sprite",
           "prefabAddress": "miyako_swimsuit",
@@ -677,6 +795,11 @@
         },
         {
           "name": "2D(Swimsuit)",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D(Swimsuit)",
           "spriteAddress": "miyako_swimsuit_2d_sprite",
           "prefabAddress": "2d_general",
@@ -703,17 +826,17 @@
       ]
     },
     {
-      "id": 19,
+      "id": 18,
       "name": "Ui",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "Basic",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Basic",
           "spriteAddress": "ui_sprite",
           "prefabAddress": "ui",
@@ -722,6 +845,11 @@
         },
         {
           "name": "Swimsuit",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "Swimsuit",
           "spriteAddress": "ui_swimsuit_sprite",
           "prefabAddress": "ui_swimsuit",
@@ -731,17 +859,17 @@
       ]
     },
     {
-      "id": 20,
+      "id": 19,
       "name": "Hifumi",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "2D",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D",
           "spriteAddress": "hifumi_2d_sprite",
           "prefabAddress": "2d_general",
@@ -768,17 +896,17 @@
       ]
     },
     {
-      "id": 21,
+      "id": 20,
       "name": "Hina",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "2D(Dress)",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D(Dress)",
           "spriteAddress": "hina_dress_2d_sprite",
           "prefabAddress": "2d_general",
@@ -805,17 +933,17 @@
       ]
     },
     {
-      "id": 22,
+      "id": 21,
       "name": "Hoshino",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "2D",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D",
           "spriteAddress": "hoshino_2d_sprite",
           "prefabAddress": "2d_general",
@@ -842,17 +970,17 @@
       ]
     },
     {
-      "id": 23,
+      "id": 22,
       "name": "Iori",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "2D",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D",
           "spriteAddress": "iori_2d_sprite",
           "prefabAddress": "2d_general",
@@ -879,17 +1007,17 @@
       ]
     },
     {
-      "id": 24,
+      "id": 23,
       "name": "Iroha",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "2D",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D",
           "spriteAddress": "iroha_2d_sprite",
           "prefabAddress": "2d_general",
@@ -916,17 +1044,17 @@
       ]
     },
     {
-      "id": 25,
+      "id": 24,
       "name": "Nonomi",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "2D",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D",
           "spriteAddress": "nonomi_2d_sprite",
           "prefabAddress": "2d_general",
@@ -953,17 +1081,17 @@
       ]
     },
     {
-      "id": 26,
+      "id": 25,
       "name": "Shiroko",
-      "source": "블루아카이브",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "블루아카이브", "ja": "ブルーアーカイブ", "en": "Blue Archive" },
       "clothesList": [
         {
           "name": "2D",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "2D",
           "spriteAddress": "shiroko_2d_sprite",
           "prefabAddress": "2d_general",
@@ -990,18 +1118,17 @@
       ]
     },
     {
-      "id": 27,
+      "id": 26,
       "name": "Miku",
-      "source": "VOCALOID",
-      "featureTags": [
-        "감정표현",
-        "친밀도 보유",
-        "머리쓰다듬기",
-        "음악재생"
-      ],
+      "source": { "ko": "VOCALOID", "ja": "VOCALOID", "en": "VOCALOID" },
       "clothesList": [
         {
           "name": "miku",
+          "tagAiChat": false,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "miku",
           "spriteAddress": "miku_602e_sprite",
           "prefabAddress": "miku_602e",
@@ -1011,17 +1138,17 @@
       ]
     },
     {
-      "id": 28,
+      "id": 27,
       "name": "Kkum",
-      "source": "꿈씨패밀리",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "꿈씨패밀리", "ja": "クムシファミリー", "en": "Kkumssi Family" },
       "clothesList": [
         {
           "name": "꿈돌이",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": ["볼당기기"],
           "text": "3D",
           "spriteAddress": "kkum_sprite",
           "prefabAddress": "kkum",
@@ -1031,17 +1158,17 @@
       ]
     },
     {
-      "id": 29,
+      "id": 28,
       "name": "Amber",
-      "source": "원신",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "원신", "ja": "原神", "en": "Genshin Impact" },
       "clothesList": [
         {
           "name": "amber",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "chibi",
           "spriteAddress": "amber_sprite",
           "prefabAddress": "amber",
@@ -1051,18 +1178,17 @@
       ]
     },
     {
-      "id": 30,
+      "id": 29,
       "name": "Jonryo",
-      "source": "원신",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기",
-        "커피끓여주기"
-      ],
+      "source": { "ko": "원신", "ja": "原神", "en": "Genshin Impact" },
       "clothesList": [
         {
           "name": "jonryo",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "chibi",
           "spriteAddress": "jonryo_sprite",
           "prefabAddress": "jonryo",
@@ -1072,17 +1198,17 @@
       ]
     },
     {
-      "id": 31,
+      "id": 30,
       "name": "Diana",
-      "source": "오리지널",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기"
-      ],
+      "source": { "ko": "프래그마타", "ja": "PRAGMATA", "en": "PRAGMATA" },
       "clothesList": [
         {
           "name": "diana_legacy",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "diana",
           "spriteAddress": "diana_sprite",
           "prefabAddress": "diana",
@@ -1091,30 +1217,14 @@
         },
         {
           "name": "diana",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": [],
           "text": "diana",
           "spriteAddress": "diana_rigging_sprite",
           "prefabAddress": "diana_rigging",
-          "isLocal": true,
-          "isSelectable": true
-        }
-      ]
-    },
-    {
-      "id": 31,
-      "name": "Kkum2",
-      "source": "꿈씨패밀리",
-      "featureTags": [
-        "AI 대화",
-        "친밀도 보유",
-        "머리쓰다듬기",
-        "볼당기기"
-      ],
-      "clothesList": [
-        {
-          "name": "꿈돌이",
-          "text": "3D",
-          "spriteAddress": "kkum_sprite",
-          "prefabAddress": "kkum2",
           "isLocal": true,
           "isSelectable": true
         }

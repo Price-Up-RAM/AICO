@@ -28,8 +28,9 @@ public class AnswerBalloonSimpleManager : MonoBehaviour
     private float hideTimer = 0f; // 타이머 변수 추가
 
     private string textKo = "";
-    private string textJp = "";
+    private string textJa = "";
     private string textEn = "";
+    private Coroutine timedHideCoroutine;
 
     private void Awake()
     {
@@ -124,11 +125,31 @@ public class AnswerBalloonSimpleManager : MonoBehaviour
     }
 
     // 언어전환을 고려한 string setting
-    public void ModifyAnswerBalloonSimpleTextInfo(string replyKo, string replyJp, string replyEn) 
+    public void ModifyAnswerBalloonSimpleTextInfo(string replyKo, string replyJa, string replyEn)
     {
         textKo = replyKo;
-        textJp = replyJp;
+        textJa = replyJa;
         textEn = replyEn;
+    }
+
+    public void ShowAnswerBalloonSimpleForSeconds(string text, float seconds)
+    {
+        ShowAnswerBalloonSimpleInf();
+        ModifyAnswerBalloonSimpleText(text);
+
+        if (timedHideCoroutine != null)
+        {
+            StopCoroutine(timedHideCoroutine);
+        }
+
+        timedHideCoroutine = StartCoroutine(HideAfterSeconds(Mathf.Max(1f, seconds)));
+    }
+
+    private IEnumerator HideAfterSeconds(float seconds)
+    {
+        yield return new WaitForSecondsRealtime(seconds);
+        timedHideCoroutine = null;
+        HideAnswerBalloonSimple();
     }
     
     // 현재(마지막) 오디오 재생 후 AnswerBalloonSimple을 숨기는 코루틴 호출
@@ -152,6 +173,12 @@ public class AnswerBalloonSimpleManager : MonoBehaviour
     // AnswerBalloonSimple을 숨기는 함수
     public void HideAnswerBalloonSimple()
     {
+        if (timedHideCoroutine != null)
+        {
+            StopCoroutine(timedHideCoroutine);
+            timedHideCoroutine = null;
+        }
+
         // 서브 캐릭터 라우팅
         GameObject activeChar = CharManager.Instance?.GetActiveCharacter();
         if (activeChar != null && CharManager.Instance != null && CharManager.Instance.activeCharacter != null)

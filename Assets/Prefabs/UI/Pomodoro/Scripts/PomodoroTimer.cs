@@ -4,8 +4,18 @@ using UnityEngine.EventSystems;
 using System.Collections;
 using TMPro;
 
+public enum PomodoroVoiceSituation
+{
+    Anytime,
+    Ready,
+    Focus,
+    Break
+}
+
 public class PomodoroTimer : MonoBehaviour
 {
+    public static PomodoroTimer Instance { get; private set; }
+
     [Header("UI 연결")]
     public TextMeshProUGUI timerText;
     public TextMeshProUGUI stateText;
@@ -97,6 +107,8 @@ public class PomodoroTimer : MonoBehaviour
     // ───────────────────────────────────────────
     private void Awake()
     {
+        Instance = this;
+
         startButton.onClick.AddListener(OnStart);
         resetButton.onClick.AddListener(OnReset);
         if (compactStartButton != null)
@@ -139,8 +151,83 @@ public class PomodoroTimer : MonoBehaviour
         UpdateStartButtonVisual();
     }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
+    public PomodoroVoiceSituation CurrentVoiceSituation
+    {
+        get
+        {
+            if (!timerSessionActive)
+            {
+                return PomodoroVoiceSituation.Ready;
+            }
+
+            return phase == Phase.Break
+                ? PomodoroVoiceSituation.Break
+                : PomodoroVoiceSituation.Focus;
+        }
+    }
+
+    public bool IsTimerRunning =>
+        timerSessionActive && running && !phaseTransitioning;
+
+    // 에이전트 스킬(pomodoro_get_status)용 상태 읽기 전용 노출
+    public int RemainingSeconds => remaining;
+    public int TotalSeconds => totalSeconds;
+    public int CurrentCycle => currentCycle;
+    public int TotalCycleCount => TotalCycles;
+    public bool IsSessionActive => timerSessionActive;
+    public bool IsBreakPhase => phase == Phase.Break;
+
+    // 에이전트 스킬용 시작 진입점. OnStart는 버튼용 토글이라 "시작해줘"에 일시정지가 될 수 있어 분리한다.
+    // 이미 진행 중이면 아무것도 하지 않고 false를 반환한다.
+    public bool RequestStart()
+    {
+        if (phaseTransitioning || running)
+        {
+            return false;
+        }
+
+        StartTimer();
+        return true;
+    }
+
+    // 에이전트 스킬용 일시정지 진입점. 진행 중이 아니면 false를 반환한다.
+    public bool RequestPause()
+    {
+        if (!running)
+        {
+            return false;
+        }
+
+        PauseTimer();
+        return true;
+    }
+
+    // 집중/휴식 시간(분)을 입력창에 반영 — 0 이하는 기존 설정값을 유지한다.
+    // 반영값은 다음 세션 준비(OnReset/PrepareTimerFromInputs) 시 계산에 사용된다.
+    public void SetSessionMinutes(int workMinutes, int breakMinutes)
+    {
+        if (workMinutes > 0 && workInputField != null)
+        {
+            workInputField.text = workMinutes.ToString();
+        }
+
+        if (breakMinutes > 0 && breakInputField != null)
+        {
+            breakInputField.text = breakMinutes.ToString();
+        }
+    }
+
     private void Start()
     {
+        TranslateBakedLabels();
         audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.playOnAwake = false;
 
@@ -314,7 +401,7 @@ public class PomodoroTimer : MonoBehaviour
                 timerText.text = "(*^□^*)";
                 if (stateText != null)
                 {
-                    stateText.text = $"🎉 {TotalCycles}사이클 완료! 오늘 집중 끝!";
+                    stateText.text = string.Format(TranslateUi("🎉 {0}사이클 완료! 오늘 집중 끝!"), TotalCycles);
                 }
 
                 phaseTransitioning = false;
@@ -330,7 +417,7 @@ public class PomodoroTimer : MonoBehaviour
             // 집중 완료 → 휴식 전환
             if (stateText != null)
             {
-                stateText.text = $"(*^□^*) {currentCycle}/{TotalCycles} 완료! 잠깐 쉬어요";
+                stateText.text = string.Format(TranslateUi("(*^□^*) {0}/{1} 완료! 잠깐 쉬어요"), currentCycle, TotalCycles);
             }
 
             timerText.text = "(*^□^*)";
@@ -345,7 +432,7 @@ public class PomodoroTimer : MonoBehaviour
             // 휴식 완료 → 집중 전환
             if (stateText != null)
             {
-                stateText.text = $"자, 다시 시작! ({currentCycle + 1}/{TotalCycles})";
+                stateText.text = string.Format(TranslateUi("자, 다시 시작! ({0}/{1})"), currentCycle + 1, TotalCycles);
             }
 
             yield return new WaitForSeconds(2f);
@@ -689,7 +776,7 @@ public class PomodoroTimer : MonoBehaviour
             string random = workMessages[Random.Range(0, workMessages.Length)];
             if (stateText != null)
             {
-                stateText.text = $"{random}  ({currentCycle + 1}/{TotalCycles})";
+                stateText.text = string.Format("{0}  ({1}/{2})", TranslateUi(random), currentCycle + 1, TotalCycles);
             }
         }
         else
@@ -697,7 +784,7 @@ public class PomodoroTimer : MonoBehaviour
             string random = breakMessages[Random.Range(0, breakMessages.Length)];
             if (stateText != null)
             {
-                stateText.text = random;
+                stateText.text = TranslateUi(random);
             }
         }
     }
@@ -713,7 +800,7 @@ public class PomodoroTimer : MonoBehaviour
         do { index = Random.Range(0, messages.Length); }
         while (messages.Length > 1 && index == lastMessageIndex);
         lastMessageIndex = index;
-        stateText.text = messages[index];
+        stateText.text = TranslateUi(messages[index]);
     }
 
     private int GetWorkSeconds()
@@ -787,5 +874,28 @@ public class PomodoroTimer : MonoBehaviour
             return;
         }
         gameObject.SetActive(false);
+    }
+
+    private void TranslateBakedLabels()
+    {
+        foreach (TMP_Text target in GetComponentsInChildren<TMP_Text>(true))
+        {
+            if (target != null && !string.IsNullOrEmpty(target.text))
+            {
+                target.text = TranslateUi(target.text);
+            }
+        }
+    }
+
+    private static string TranslateUi(string text)
+    {
+        if (string.IsNullOrEmpty(text) || SettingManager.Instance == null ||
+            SettingManager.Instance.settings == null ||
+            string.IsNullOrEmpty(SettingManager.Instance.settings.ui_language))
+        {
+            return text;
+        }
+
+        return LanguageData.Translate(text, SettingManager.Instance.settings.ui_language);
     }
 }
