@@ -123,8 +123,8 @@ public class APIManager : MonoBehaviour
     // Small Talk 호출
     public async void CallSmallTalkStream(string purpose = "잡담", string currentSpeaker = null, string chatIdx = "-1", string aiLanguage = null)
     {
-        // Pomodoro 모드 중 선톡 차단 (자동 트리거라 피드백 풍선은 생략)
-        if (IsChatBlockedByPomodoro("SmallTalk", false))
+        // 포모도로 또는 대화 불가 캐릭터의 선톡을 차단한다.
+        if (StatusManager.Instance.isChatBlocked)
         {
             return;
         }
@@ -529,8 +529,8 @@ public class APIManager : MonoBehaviour
         string chatIdx,
         string serverType)
     {
-        // Pomodoro 모드 중 미니게임 대화 차단 (게이트 우회 경로 방지)
-        if (IsChatBlockedByPomodoro("MiniGame20Q", true))
+        // 포모도로 또는 대화 불가 캐릭터의 미니게임 대화를 차단한다.
+        if (StatusManager.Instance.isChatBlocked)
         {
             return;
         }
@@ -1062,6 +1062,12 @@ public class APIManager : MonoBehaviour
         if (resolvedTargetCharacter == null)
         {
             resolvedTargetCharacter = CharManager.Instance.GetActiveCharacter();
+        }
+
+        // 라우터 직접 경로도 차단 상태에서는 세션을 만들지 않는다.
+        if (StatusManager.Instance.isChatBlocked)
+        {
+            return null;
         }
 
         // 세션 생성
@@ -2210,8 +2216,8 @@ public class APIManager : MonoBehaviour
     // chatHandler에서 호출
     public async void CallConversationStream(string query, string chatIdx = "-1", string ai_lang_in = "")
     {
-        // Pomodoro 모드 중 대화 차단 (유저 입력 경로: 채팅창/음성/Idle Talk)
-        if (IsChatBlockedByPomodoro("Conversation", true))
+        // 포모도로 또는 대화 불가 캐릭터의 사용자 입력을 차단한다.
+        if (StatusManager.Instance.isChatBlocked)
         {
             return;
         }

@@ -1178,6 +1178,9 @@ public class CharManager : MonoBehaviour
 
         CharAttributes attrs = charObj.GetComponent<CharAttributes>();
         string charcode = (attrs != null && string.IsNullOrEmpty(attrs.charcode) == false) ? attrs.charcode : "arona";
+
+        // InventorySystem은 독립 패키지이므로 캐릭터 DB 태그 판정을 앱 계층에서 주입한다.
+        InventorySystemManager.Instance.equipPermissionResolver = CharacterFeatureTags.IsEquipAllowed;
         InventorySystemManager.Instance.SetActiveOwner(charcode, charObj);
     }
     public void setEmotionFaceController(GameObject charObj)

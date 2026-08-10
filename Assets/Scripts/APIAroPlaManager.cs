@@ -251,6 +251,12 @@ public class APIAroPlaManager : MonoBehaviour
             return;
         }
 
+        // APIManager를 거치지 않는 AroPla 대화 경로도 캐릭터 기능 태그를 따른다.
+        if (StatusManager.Instance.isChatBlocked)
+        {
+            return;
+        }
+
         AroplaLog("=== User Message Received ===");
         AroplaLog($"Message: {message}");
         AroplaLog("Target Speaker: Agent will decide");

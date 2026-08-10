@@ -233,6 +233,11 @@ public class ChatBalloonManager : MonoBehaviour
         }
         else
         {
+            // 집중 모드 또는 AI 대화 불가 캐릭터는 채팅창을 새로 열지 않는다.
+            if (StatusManager.Instance.isChatBlocked)
+            {
+                return;
+            }
             SetModeTop(true);
         }
     }
@@ -250,6 +255,11 @@ public class ChatBalloonManager : MonoBehaviour
         }
         else
         {
+            // 집중 모드 또는 AI 대화 불가 캐릭터는 채팅창을 새로 열지 않는다.
+            if (StatusManager.Instance.isChatBlocked)
+            {
+                return;
+            }
             SetModeBottom(true);
         }
     }

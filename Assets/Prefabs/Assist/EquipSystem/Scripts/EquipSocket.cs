@@ -59,7 +59,10 @@ public class EquipSocket : MonoBehaviour
     }
 }
 
-// 소켓에 장착된 악세서리 인스턴스 표식 (해제 시 이 표식이 붙은 자식만 제거)
+// 소켓에 장착된 악세서리 인스턴스 표식.
+// key/category는 카테고리 배타 처리와 장착 상태 역추적에 사용한다.
 public class EquipMarker : MonoBehaviour
 {
+    public string key;
+    public string category;
 }

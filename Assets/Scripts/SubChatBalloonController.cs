@@ -107,6 +107,14 @@ public class SubChatBalloonController : MonoBehaviour
     public void ShowChatBalloon()
     {
         if (balloonInstance == null) return;
+
+        // SubClickHandler가 이 캐릭터를 활성 캐릭터로 지정한 뒤 호출한다.
+        // 대화 불가 캐릭터라면 말풍선을 열지 않고 활성 캐릭터도 원래 메인으로 되돌린다.
+        if (StatusManager.Instance.isChatBlocked)
+        {
+            CharManager.Instance.SetActiveCharacter(null);
+            return;
+        }
         
         // 만약 Answer(서브) 말풍선이 떠있다면 닫기
         SubAnswerBalloonSimpleController ansController = GetComponent<SubAnswerBalloonSimpleController>();

@@ -24,6 +24,7 @@ isMinimize - 최소화 여부
 isAiUsing = 서버를 키거나 그렇게 하도록 명령을 내린 대화 가능 상태
 isMouthMoving -  입이 현재 움직이는 중인지 여부(Flag로 전환 관리)
 isServerConnected - 현재 서버가 연결되어 있는지 여부
+isChatBlocked = 현재 대화 차단 상태인지 (get 전용) — 포모도로 집중 모드 또는 활성 캐릭터 기능 태그("AI 대화 불가")
 
 characterTransform - 메인캐릭터 transform : 메뉴 등의 위치 설정에 사용
 */
@@ -78,6 +79,21 @@ public class StatusManager : MonoBehaviour
     [HideInInspector] public float mouthLevelSub = 0f;  // 서브 음성(SubVoiceManager, Aropla 서브 캐릭터용) 입 벌림 정도 0~1
     private float[] mouthSampleBuffer = new float[256];
     public bool isScenario = false;  // 튜토리얼 등의 시나리오는 여러가지가 동시에 진행될 수 없음
+
+    // 대화 진입점(UI 열기/전송)의 공통 게이트. 차단 시 별도 피드백 없이 조용히 무시한다.
+    public bool isChatBlocked
+    {
+        get
+        {
+            if (ChatModeManager.Instance != null && ChatModeManager.Instance.IsPomodoroMode())
+            {
+                return true;
+            }
+
+            GameObject target = CharManager.Instance != null ? CharManager.Instance.GetActiveCharacter() : null;
+            return target != null && CharacterFeatureTags.IsChatAllowed(target) == false;
+        }
+    }
     public bool isServerConnected = false; // 현재 서버가 연결되어 있는지 여부
     
     // Aropla 모드 등에서 현재 말하고 있는 캐릭터들의 GameObject (HashSet으로 O(1) 성능)

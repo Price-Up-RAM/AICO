@@ -164,7 +164,7 @@ public class ScenarioCommonManager : MonoBehaviour
         if (StatusManager.Instance.isScenario) yield break;
         StatusManager.Instance.isScenario = true;
 
-        float d1 = ScenarioUtil.Narration("C90_equip_unsupported", "죄송해요 선생님, 저는 장착을 할 수 없어요.");
+        float d1 = ScenarioUtil.Narration("C90_equip_unsupported", "장착할 수 없는 캐릭터에요.");
         ScenarioUtil.ShowEmotion("confused");
         yield return new WaitForSeconds(d1);
 

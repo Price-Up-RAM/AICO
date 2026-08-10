@@ -93,6 +93,9 @@ public class ApiMultiConversationManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(input.Trim())) return;
 
+        // APIManager를 거치지 않는 다중 대화 경로도 캐릭터 기능 태그를 따른다.
+        if (StatusManager.Instance.isChatBlocked) return;
+
         // 유저 발화 항상 우선: 진행 중이면 즉시 중단 (isProcessing식 입력 드랍 금지)
         if (isTurnRunning) InterruptCurrentTurn();
 

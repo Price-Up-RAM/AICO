@@ -26,7 +26,10 @@ public class EquipManager : MonoBehaviour
     {
         if (catalog == null)
         {
-            catalog = Resources.Load<EquipCatalog>("EquipCatalog");
+            ItemCatalog itemCatalog = ItemCatalog.Default;
+            catalog = itemCatalog != null && itemCatalog.EquipCatalog != null
+                ? itemCatalog.EquipCatalog
+                : Resources.Load<EquipCatalog>("EquipCatalog");
         }
     }
 
@@ -98,6 +101,12 @@ public class EquipManager : MonoBehaviour
             return false;
         }
 
+        // 같은 카테고리(예: head)의 장착물은 소켓이 달라도 하나만 유지한다.
+        if (EquipCategory.HasValue(entry.category))
+        {
+            ClearEquippedByCategory(target, entry.category);
+        }
+
         // placeholder 단위 교체 — 다른 소켓의 장착물은 유지 (모자+헤어핀+링 동시 장착)
         ClearEquipped(ph.transform);
 
@@ -109,7 +118,9 @@ public class EquipManager : MonoBehaviour
             reason = "배치 거부(refDist 미베이크) — 콘솔 경고 확인";
             return false;
         }
-        inst.AddComponent<EquipMarker>();
+        EquipMarker marker = inst.AddComponent<EquipMarker>();
+        marker.key = key;
+        marker.category = entry.category;
         return true;
     }
 
@@ -149,6 +160,19 @@ public class EquipManager : MonoBehaviour
         }
 
         ClearEquipped(socket.transform);
+    }
+
+    // target 전체에서 같은 카테고리 장착물을 제거한다.
+    private void ClearEquippedByCategory(GameObject target, string category)
+    {
+        EquipMarker[] marks = target.GetComponentsInChildren<EquipMarker>(true);
+        foreach (EquipMarker mark in marks)
+        {
+            if (mark != null && EquipCategory.IsSame(mark.category, category))
+            {
+                Destroy(mark.gameObject);
+            }
+        }
     }
 
     // 소켓 하위에서 장착물(표식)만 제거 (placeholder 등 다른 자식 보존)
