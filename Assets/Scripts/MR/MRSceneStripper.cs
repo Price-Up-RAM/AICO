@@ -88,6 +88,12 @@ public class MRSceneStripper : MonoBehaviour
         // --- 기타 데스크톱 전용 ---
         typeof(DebugManager),                   // Process.Start("explorer.exe" / "notepad.exe")
 
+        // BackgroundService — 폰 앱용 Android AAR 브릿지(com.example.mylittlejarvisandroid.Bridge).
+        // 앱이 백그라운드일 때도 VAD로 음성을 계속 받기 위한 포그라운드 서비스인데,
+        // Quest 빌드에는 해당 AAR이 없어 pluginClass가 null이고 StopService()가 NRE를 낸다.
+        // 헤드셋을 벗으면 앱이 멈추므로 시나리오 자체가 성립하지 않는다. (실측 예외의 주원인)
+        typeof(BackgroundService),
+
         // --- 캔버스 픽셀 좌표계에 묶인 이동 시스템 ---
         // PhysicsManager는 Win32를 쓰지 않지만 캐릭터를 RectTransform.anchoredPosition으로 걷게 한다.
         // 래퍼 없이는 moveSpeed 120(픽셀/초)이 초속 120m가 되어 캐릭터가 날아간다 (Quest 실측 확인).
@@ -98,6 +104,24 @@ public class MRSceneStripper : MonoBehaviour
         // 켤 경우 MRCharacterWorldRoot의 wanderRangeMeters로 범위를 제한할 것
         // (자체 경계가 Canvas_Char 폭이라 ±8m까지 걸어간다).
         typeof(PhysicsManager),
+
+        // --- 마우스 드래그 리사이즈 (ISDK 드래그 이벤트가 그대로 오발동시킨다) ---
+        // Image_ChatBalloon에 붙은 데스크톱 전용 창 가장자리 드래그-리사이즈 핸들러.
+        // IBeginDragHandler/IDragHandler를 표준으로 구현하고 있어서 PointableCanvasModule이
+        // 손 포크/레이 드래그를 그대로 배달해준다 — 즉 "옮기려고 잡았는데 리사이즈된다"의 원인.
+        // 실측(Quest 3S, 2026-08-10): 드래그 중 매 프레임 sizeDelta 변경 → 레이아웃 리빌드로
+        // 프레임이 30fps대로 떨어지고, BoundsClipper 크기가 바뀐 rect와 어긋나 손 모형이
+        // 표면에 붙은 것처럼 보였다. 말풍선은애초에 사용자가 드래그로 옮기는 대상이 아니므로
+        // (MRBalloonWorldFollow가 위치를 담당) MR에서는 통째로 끈다.
+        typeof(UIResizeHandler),
+
+        // --- XR Interaction Toolkit의 중복 UI 레이캐스터 ---
+        // PointableCanvasModule(_exclusiveMode)이 XRUIInputModule은 비활성화하지만,
+        // TrackedDeviceGraphicRaycaster 자체는 BaseRaycaster라 RaycasterManager에 남아있는 한
+        // EventSystem.RaycastAll()이 매 포인터 업데이트마다 계속 호출한다 — 아무 것도 소비하지
+        // 않는 순수 오버헤드. Building Block으로 캔버스에 UI 상호작용을 추가할 때 같이 붙는
+        // 경우가 있으니 새 캔버스를 만들 때마다 있는지 확인할 것.
+        typeof(UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster),
     };
 
     // =========================================================
@@ -157,8 +181,6 @@ public class MRSceneStripper : MonoBehaviour
         // --- 디버그 (무해, 필요시 별도로 끈다) ---
         typeof(DebugBalloonManager), typeof(DebugBalloonManager2), typeof(DebugMenuManager),
 
-        // --- 플랫폼 인지 있음 (Android 분기를 자체 보유) ---
-        typeof(BackgroundService),
 
         // --- MenuTrigger: KAIManager가 MenuTriggerKAI로 교체한다 ---
         typeof(MenuTrigger),
@@ -177,15 +199,16 @@ public class MRSceneStripper : MonoBehaviour
     // 컴포넌트 타입으로 특정할 수 없는 것들(카메라 등). 경로가 바뀌면 경고를 내므로
     // 데스크톱 쪽 씬 구조 변경도 여기서 감지된다.
     // 주의: Canvases/Canvas 는 Phase 3에서 World Space로 전환할 대상이라 여기 넣지 않는다.
+    // 2026-08-02: 아래 대상들은 씬에서 **영구 삭제**되었으므로 목록을 비웠다.
+    //   Cameras(3종) · Legacy/PIP · Tester · Manager/DevManager · SitSupport
+    //   → 삭제 작업은 Editor 도구가 담당한다: Tools → MR → 데스크톱 전용 오브젝트 삭제
+    //
+    // ⚠ PortraitCamera는 여기 넣지 않는다.
+    //   Operator 모드(원격 대화)에서 사용하는 기능이며, 카메라 활성/비활성은
+    //   OperatorModeManager가 모드 전환 시 제어한다. 여기서 강제로 끄면 모드가 동작하지 않는다.
     private static readonly string[] DisableObjectPaths =
     {
-        "Root260616/Cameras/Main Camera",     // OVR Camera Rig의 CenterEyeAnchor가 대체
-        "Root260616/Cameras/UI Camera",
-        "Root260616/Cameras/Effect Camera",
-        "Root260616/Legacy/PIP",              // PIP 카메라·캔버스
-        "Root260616/Tester",                  // 개발용
-        "Root260616/Manager/DevManager",      // 개발용
-        "Root260616/Canvases/Canvas/PortraitMask/PortraitSystem/PortraitCamera",
+        // 현재 비어 있음. 씬에서 지울 수 없고 런타임에만 꺼야 하는 오브젝트가 생기면 여기에 추가한다.
     };
 
     // =========================================================

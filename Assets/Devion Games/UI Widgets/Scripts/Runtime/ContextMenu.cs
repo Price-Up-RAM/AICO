@@ -91,6 +91,17 @@ namespace DevionGames.UIWidgets
 				hoverOutTimer = 0f;
 			}
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+			// MR: 마우스가 없다. 메뉴 항목 클릭 자체는 MenuItem이 IPointerClickHandler라
+			// PointableCanvasModule이 알아서 배달해준다 — 여기서 다시 다룰 필요가 없다.
+			// 남은 건 "메뉴 밖 선택 시 닫기"뿐이라 MRPointerBridge로만 대체한다.
+			if (m_CanvasGroup.alpha > 0f) {
+				MRPointerBridge.EnsureSubscribed();
+				if (MRPointerBridge.ConsumeSelectedOutside(m_RectTransform)) {
+					Close();
+				}
+			}
+#else
 			if (m_CanvasGroup.alpha > 0f && (Input.GetMouseButtonDown (0) || Input.GetMouseButtonDown (1) || Input.GetMouseButtonDown (2))) {
 
 				var pointer = new PointerEventData (EventSystem.current);
@@ -110,6 +121,7 @@ namespace DevionGames.UIWidgets
 
 				Close ();
 			}
+#endif
 		}
 
 		public virtual void Clear ()

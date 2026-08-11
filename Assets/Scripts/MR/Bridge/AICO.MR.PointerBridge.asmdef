@@ -1,8 +1,8 @@
 {
-    "name": "DevionGames.UIWidgets",
+    "name": "AICO.MR.PointerBridge",
+    "rootNamespace": "",
     "references": [
-        "GUID:907b3328f60158944b2faf1e1b0a7749",
-        "AICO.MR.PointerBridge"
+        "Oculus.Interaction"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

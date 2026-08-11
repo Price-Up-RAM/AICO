@@ -646,4 +646,26 @@ public class MRCharacterWorldRoot : MonoBehaviour
 
     /// <summary>픽셀 공간 래퍼. Phase 2의 바닥 배치·드래그는 이것을 움직여야 한다.</summary>
     public Transform PixelSpace => _pixelSpace;
+
+    // =========================================================
+    // 외부 호출용 — Phase 3-2 AICO 시스템 메뉴의 크기 슬라이더
+    // =========================================================
+    /// <summary>현재 전역 크기 배율. FixedPixelRatio 모드에서만 의미가 있다.</summary>
+    public float SizeMultiplier => sizeMultiplier;
+
+    /// <summary>
+    /// 런타임에 크기 배율을 바꾸고 즉시 적용한다 (시스템 메뉴의 크기 슬라이더용).
+    /// scaleMode가 FixedPixelRatio가 아니면 무시된다 — UniformHeight/None은 다른 기준으로 크기를 정한다.
+    /// </summary>
+    public void SetSizeMultiplier(float multiplier)
+    {
+        if (scaleMode != CharacterScaleMode.FixedPixelRatio)
+        {
+            Debug.LogWarning($"[MRCharWorld] SetSizeMultiplier는 FixedPixelRatio 모드 전용입니다 (현재: {scaleMode}). 무시합니다.");
+            return;
+        }
+
+        sizeMultiplier = Mathf.Max(0.01f, multiplier);
+        if (_lastCharacter != null) ApplyScale(_lastCharacter);
+    }
 }

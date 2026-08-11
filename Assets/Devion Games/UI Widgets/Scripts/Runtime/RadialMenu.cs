@@ -25,6 +25,17 @@ namespace DevionGames.UIWidgets
 		protected override void Update ()
 		{
 			base.Update();
+#if UNITY_ANDROID && !UNITY_EDITOR
+			// MR: 항목 클릭은 MenuItem(IPointerClickHandler)이 PointableCanvasModule을 통해 이미 받는다.
+			// "타겟 위에서 뗐는지" 재확인하는 데스크톱 전용 제스처는 이식하지 않는다 —
+			// 남은 것은 "메뉴 밖 선택 시 닫기"뿐이다.
+			if (m_CanvasGroup.alpha > 0f) {
+				MRPointerBridge.EnsureSubscribed();
+				if (MRPointerBridge.ConsumeSelectedOutside(m_RectTransform)) {
+					Close();
+				}
+			}
+#else
 			if (m_CanvasGroup.alpha > 0f && (Input.GetMouseButtonUp (0) || Input.GetMouseButtonUp (1) || Input.GetMouseButtonUp (2))) {
 
 				var pointer = new PointerEventData (EventSystem.current);
@@ -38,6 +49,7 @@ namespace DevionGames.UIWidgets
                 }else
 					Close ();
 			}
+#endif
 		}
 
         public virtual void Show (GameObject target, Sprite[] icons, UnityAction<int> result)
@@ -79,7 +91,13 @@ namespace DevionGames.UIWidgets
 			if (characterTransformPos != Vector2.zero) {
 				m_RectTransform.anchoredPosition = characterTransformPos;
 			} else {
+#if UNITY_ANDROID && !UNITY_EDITOR
+				// MR: 마우스가 없다. characterTransformPos를 항상 명시적으로 넘겨줄 것 —
+				// 이 폴백은 안전한 기본값(캔버스 로컬 원점)일 뿐이다.
+				m_RectTransform.anchoredPosition = Vector2.zero;
+#else
 				m_RectTransform.position = Input.mousePosition;
+#endif
 			}
 			base.Show ();
 		}
