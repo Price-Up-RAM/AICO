@@ -43,6 +43,11 @@ public class MRBalloonWorldFollow : MonoBehaviour
              "(MR_Phase3-2_Canvas_Plan.md §3-2-B step 4 확정 사항).")]
     [SerializeField] private bool billboardYOnly = true;
 
+    [Tooltip("true면 매 프레임 계속 따라다닌다(기존 6종 말풍선). false면 활성화되는 " +
+             "순간(소환 시점) 딱 한 번만 위치/회전을 맞추고 그 뒤로는 손대지 않는다 " +
+             "(Image_ChatBalloon처럼 원본 스크립트가 이후 자체 위치 로직을 갖고 있는 경우).")]
+    [SerializeField] private bool continuousFollow = true;
+
     private static MRCharacterWorldRoot _worldRootCache;
     private Camera _cam;
     private bool _warnedNoTarget;
@@ -52,7 +57,20 @@ public class MRBalloonWorldFollow : MonoBehaviour
         _cam = Camera.main;
     }
 
+    private void OnEnable()
+    {
+        // 소환(=SetActive(true)) 시점에 한 번은 항상 맞춰준다. continuousFollow=true인
+        // 경우에도 첫 프레임 LateUpdate 전에 미리 맞춰서 초기 프레임 깜빡임을 줄인다.
+        ApplyFollow();
+    }
+
     private void LateUpdate()
+    {
+        if (!continuousFollow) return;
+        ApplyFollow();
+    }
+
+    private void ApplyFollow()
     {
         if (_cam == null) _cam = Camera.main;
 

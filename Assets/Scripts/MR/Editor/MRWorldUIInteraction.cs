@@ -163,8 +163,12 @@ namespace AICO.MR.EditorTools
 
             // ---- 3. PlaneSurface ----
             var plane = GetOrAdd<PlaneSurface>(childGo, log, "PlaneSurface");
-            // 캔버스는 +Z를 향한다. 법선도 +Z(Forward)로 맞춘다.
-            plane.InjectNormalFacing(PlaneSurface.NormalFacing.Forward);
+            // 실기 검증(Quest 3S, 2026-08-11): 캔버스 정면은 로컬 -Z다(Forward가 아니라 Backward).
+            // 유니티 월드 스페이스 캔버스의 표준 관례가 -Z front이고, 이미 동작 중인
+            // MRBalloonWorldFollow의 빌보드 공식(Quaternion.LookRotation(pos - camPos))도
+            // 이 관례를 전제로 한다. 예전에 Forward로 넣었던 게 원인이 되어 Image_ChatBalloon에서
+            // 포크 방향이 반대로 잡히고 캔버스 뒷면이 사용자 쪽을 향하는 문제가 있었다.
+            plane.InjectNormalFacing(PlaneSurface.NormalFacing.Backward);
             plane.InjectDoubleSided(false);
             EditorUtility.SetDirty(plane);
 
