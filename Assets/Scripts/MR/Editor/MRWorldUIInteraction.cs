@@ -48,6 +48,18 @@ namespace AICO.MR.EditorTools
         // 상호작용 면의 두께(m). Poke가 뒤에서 뚫고 들어오는 것을 막는 용도라 얇아도 된다.
         private const float SurfaceDepth = 0.02f;
 
+        // 패널 바깥으로 상호작용 면을 넓히는 여유(m).
+        //
+        // 왜 필요한가 (2026-08-15 실기)
+        // MRPinchDraggable의 잡기 영역은 패널 rect **바깥** 테두리 띠다(메타 홈 방식).
+        // 그런데 RayInteractable의 면이 패널 크기에 딱 맞게 잘려 있으면, 그 띠를 겨누는
+        // 순간 레이가 아무것도 맞히지 못해 **레이 시각화가 사라진다** — 조준이 불가능해진다.
+        // 면을 띠만큼 넓혀두면 레이가 계속 표시돼 바깥 테두리를 겨눌 수 있다.
+        // 넓어진 영역에는 그래픽이 없으므로 포크/클릭에는 아무 영향이 없다.
+        //
+        // MRPinchDraggable.outerPadding(기본 0.06)과 맞춰둘 것.
+        private const float GraspBandPadding = 0.06f;
+
         [MenuItem(MenuRoot + "5. 월드 UI에 손 상호작용 추가 (캔버스 선택)", false, 104)]
         public static void AddInteractionToSelectedCanvas()
         {
@@ -173,9 +185,16 @@ namespace AICO.MR.EditorTools
             EditorUtility.SetDirty(plane);
 
             // ---- 4. BoundsClipper ----
+            // 패널 크기 + 잡기 띠(바깥 테두리)까지 덮도록 넓힌다 — 안 그러면 띠를 겨눌 때
+            // 레이가 사라져서 원거리 이동이 불가능하다(위 GraspBandPadding 주석 참고).
             var clipper = GetOrAdd<BoundsClipper>(childGo, log, "BoundsClipper");
             clipper.Position = Vector3.zero;
-            clipper.Size = new Vector3(widthM, heightM, SurfaceDepth);
+            clipper.Size = new Vector3(
+                widthM + GraspBandPadding * 2f,
+                heightM + GraspBandPadding * 2f,
+                SurfaceDepth);
+            log.AppendLine($"        상호작용 면: {widthM + GraspBandPadding * 2f:F3}×{heightM + GraspBandPadding * 2f:F3} m " +
+                           $"(패널 + 잡기 띠 {GraspBandPadding:F2}m)");
             EditorUtility.SetDirty(clipper);
 
             // ---- 5. ClippedPlaneSurface ----

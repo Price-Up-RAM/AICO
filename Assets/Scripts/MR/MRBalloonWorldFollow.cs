@@ -28,6 +28,7 @@
 // 아직 설계되지 않았다(Phase 2/3-1은 메인 캐릭터만 다뤘다). 필요해지면 explicitTarget에
 // 서브 캐릭터 Transform을 런타임에 할당하는 방식으로 확장한다.
 
+using Oculus.Interaction;
 using UnityEngine;
 
 public class MRBalloonWorldFollow : MonoBehaviour
@@ -59,15 +60,57 @@ public class MRBalloonWorldFollow : MonoBehaviour
 
     private void OnEnable()
     {
-        // 소환(=SetActive(true)) 시점에 한 번은 항상 맞춰준다. continuousFollow=true인
-        // 경우에도 첫 프레임 LateUpdate 전에 미리 맞춰서 초기 프레임 깜빡임을 줄인다.
+        // 새로 소환될 때(닫았다 다시 열 때 포함)는 사용자가 옮겨둔 위치를 잊고
+        // 다시 캐릭터 기준으로 배치한다 — "열면 캐릭터 옆에 뜨고, 내가 옮기면 그 자리에
+        // 남는다"가 의도된 동작이다 (Phase3-2 Plan §3-2-B 소환 동작 확정).
+        _userTookOver = false;
+
+        // 소환 시점에 한 번은 항상 맞춰준다. continuousFollow=true인 경우에도
+        // 첫 프레임 LateUpdate 전에 미리 맞춰서 초기 프레임 깜빡임을 줄인다.
         ApplyFollow();
     }
 
     private void LateUpdate()
     {
         if (!continuousFollow) return;
+
+        // 사용자가 한 번이라도 손으로 옮겼으면 위치 소유권을 사용자에게 넘기고
+        // 다시는 따라다니지 않는다.
+        //
+        // 실기 확인(2026-08-15):
+        //  - 가드가 아예 없으면 → ISDK grab으로 옮겨도 같은 프레임 LateUpdate에서
+        //    위치·회전을 되돌려 "잡아도 안 움직이는" 것처럼 보이고, 빌보드도 상시로 걸린다.
+        //  - "잡는 동안만" 멈추게 하면 → 놓는 순간 원래 자리로 팅 하고 돌아간다.
+        // 그래서 잡힌 적이 있는지를 영구 플래그로 기억한다.
+        if (IsBeingGrabbed())
+        {
+            _userTookOver = true;
+            return;
+        }
+        if (_userTookOver) return;
+
         ApplyFollow();
+    }
+
+    private Grabbable _grabbable;
+    private bool _grabbableLookedUp;
+    private bool _userTookOver;
+
+    private bool IsBeingGrabbed()
+    {
+        if (!_grabbableLookedUp)
+        {
+            _grabbableLookedUp = true;
+            _grabbable = GetComponent<Grabbable>();
+        }
+
+        return _grabbable != null && _grabbable.GrabPoints.Count > 0;
+    }
+
+    /// <summary>다시 캐릭터를 따라다니게 되돌린다 (예: 패널을 닫았다가 새로 소환할 때).</summary>
+    public void ResumeFollowing()
+    {
+        _userTookOver = false;
     }
 
     private void ApplyFollow()
