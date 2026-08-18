@@ -45,20 +45,29 @@ namespace AICO.MR.EditorTools
         private const string MenuRoot = "Tools/MR/";
         private const string InteractionChildName = "HandInteraction";
 
+        // rect 밖으로 나온 버튼용 판정 조각의 이름 접두사.
+        private const string OutlyingPatchPrefix = "HandInteraction_Out_";
+
+        // 그 조각을 패널 평면보다 사용자 쪽으로 얼마나 내밀지(m).
+        // 잡기 바는 반대편(뒤)에 있으므로 이 값이면 겹치는 자리에서 버튼이 항상 이긴다.
+        private const float PatchForwardOffset = 0.006f;
+
         // 상호작용 면의 두께(m). Poke가 뒤에서 뚫고 들어오는 것을 막는 용도라 얇아도 된다.
         private const float SurfaceDepth = 0.02f;
 
-        // 패널 바깥으로 상호작용 면을 넓히는 여유(m).
+        // 패널 바깥으로 상호작용 면을 넓히는 여유(m). **0이어야 한다.**
         //
-        // 왜 필요한가 (2026-08-15 실기)
-        // MRPinchDraggable의 잡기 영역은 패널 rect **바깥** 테두리 띠다(메타 홈 방식).
-        // 그런데 RayInteractable의 면이 패널 크기에 딱 맞게 잘려 있으면, 그 띠를 겨누는
-        // 순간 레이가 아무것도 맞히지 못해 **레이 시각화가 사라진다** — 조준이 불가능해진다.
-        // 면을 띠만큼 넓혀두면 레이가 계속 표시돼 바깥 테두리를 겨눌 수 있다.
-        // 넓어진 영역에는 그래픽이 없으므로 포크/클릭에는 아무 영향이 없다.
+        // 이력: 자체 구현(MRPinchDraggable) 시절에는 잡기 띠를 겨눌 때 레이가 사라지는 것을
+        // 막으려고 0.06을 넣었다. ISDK grab으로 전환(§4-22)한 뒤로는 띠마다 자기
+        // RayInteractable(Bar_*)이 있어 이 여유가 필요 없어졌고, 오히려 해롭다:
+        //   · 확장된 UI 면이 잡기 띠를 덮어 레이가 Bar가 아닌 UI 평면을 맞힌다
+        //     → **원거리 grab이 아예 시작되지 않는다.**
+        //   · 확장된 면이 PokeInteractable 면이라 ISDK 포크 제한이 손을 거기서 멈춘다
+        //     → **테두리인데도 손이 정면에서 막혀** 잡기가 불편해진다.
+        // (둘 다 2026-08-15 실기에서 그룹 A 패널들이 겪은 증상이다.)
         //
-        // MRPinchDraggable.outerPadding(기본 0.06)과 맞춰둘 것.
-        private const float GraspBandPadding = 0.06f;
+        // 상호작용 면은 패널 크기와 정확히 일치시킨다.
+        private const float GraspBandPadding = 0f;
 
         [MenuItem(MenuRoot + "5. 월드 UI에 손 상호작용 추가 (캔버스 선택)", false, 104)]
         public static void AddInteractionToSelectedCanvas()
@@ -161,14 +170,18 @@ namespace AICO.MR.EditorTools
             childGo.transform.localScale = new Vector3(
                 1f / canvasScale.x, 1f / canvasScale.y, 1f / canvasScale.z);
 
-            // 패널의 피벗이 중앙이 아닐 수 있으므로 rect 중심으로 맞춘다.
+            // 메인 판정 면은 **패널 rect 그대로**다.
+            //
+            // rect 밖으로 삐져나온 닫기 버튼까지 덮으려고 면을 통째로 넓히면 안 된다 —
+            // 넓어진 빈 공간이 UI 판정 면이 되어, 그 자리에 있어야 할 잡기 핸들(GrabFrame의 띠)이
+            // 죽어버린다(§4-23에서 GraspBandPadding을 없앤 것과 같은 문제).
+            // 대신 삐져나온 버튼마다 그 크기만큼의 작은 판정 조각을 따로 붙인다(아래 8번).
             Vector2 centerPx = rt.rect.center;
             childGo.transform.localPosition = new Vector3(centerPx.x, centerPx.y, 0f);
 
-            // 패널의 실제 월드 크기(m)
             float widthM = rt.rect.width * Mathf.Abs(canvasScale.x);
             float heightM = rt.rect.height * Mathf.Abs(canvasScale.y);
-            log.AppendLine($"        패널 크기: {rt.rect.width}×{rt.rect.height} px → {widthM:F3}×{heightM:F3} m");
+            log.AppendLine($"        패널 크기: {rt.rect.width:F0}×{rt.rect.height:F0} px → {widthM:F3}×{heightM:F3} m");
 
             if (widthM < 0.02f || heightM < 0.02f)
                 log.AppendLine("      ⚠ 패널이 2cm 미만입니다. 손으로 누르기 어렵습니다.");
@@ -185,16 +198,13 @@ namespace AICO.MR.EditorTools
             EditorUtility.SetDirty(plane);
 
             // ---- 4. BoundsClipper ----
-            // 패널 크기 + 잡기 띠(바깥 테두리)까지 덮도록 넓힌다 — 안 그러면 띠를 겨눌 때
-            // 레이가 사라져서 원거리 이동이 불가능하다(위 GraspBandPadding 주석 참고).
             var clipper = GetOrAdd<BoundsClipper>(childGo, log, "BoundsClipper");
             clipper.Position = Vector3.zero;
             clipper.Size = new Vector3(
                 widthM + GraspBandPadding * 2f,
                 heightM + GraspBandPadding * 2f,
                 SurfaceDepth);
-            log.AppendLine($"        상호작용 면: {widthM + GraspBandPadding * 2f:F3}×{heightM + GraspBandPadding * 2f:F3} m " +
-                           $"(패널 + 잡기 띠 {GraspBandPadding:F2}m)");
+            log.AppendLine($"        상호작용 면: {widthM + GraspBandPadding * 2f:F3}×{heightM + GraspBandPadding * 2f:F3} m");
             EditorUtility.SetDirty(clipper);
 
             // ---- 5. ClippedPlaneSurface ----
@@ -214,7 +224,116 @@ namespace AICO.MR.EditorTools
             poke.InjectOptionalPointableElement(pointable);
             EditorUtility.SetDirty(poke);
 
+            // ---- 8. rect 밖으로 나온 버튼용 판정 조각 ----
+            SetupOutlyingPatches(canvas, rt, pointable, canvasScale, log);
+
             return true;
+        }
+
+        /// <summary>패널 rect 밖으로 삐져나온 그래픽(닫기 버튼, 헤더 아이콘 등)마다
+        /// 그 크기만큼의 작은 판정 조각을 만든다.
+        ///
+        /// 왜 메인 면을 넓히지 않는가
+        /// -------------------------
+        /// 면을 통째로 넓히면 늘어난 빈 공간까지 UI 판정 면이 되어, 그 자리에 있어야 할
+        /// 잡기 핸들(GrabFrame의 띠)이 죽는다. 버튼 자리만 콕 집어 덮으면 나머지 띠는
+        /// 전부 잡기용으로 남는다.
+        ///
+        /// 깊이 우선순위
+        /// -------------
+        /// 조각을 패널 평면보다 살짝 **앞쪽**(사용자 쪽 = 로컬 -Z, §4-20)에 놓는다.
+        /// 잡기 바는 반대로 뒤쪽에 있으므로, 겹치는 자리에서는 항상 버튼이 먼저 맞는다.</summary>
+        private static void SetupOutlyingPatches(Canvas canvas, RectTransform panel,
+                                                 PointableCanvas pointable, Vector3 canvasScale,
+                                                 StringBuilder log)
+        {
+            Rect panelRect = panel.rect;
+            var corners = new Vector3[4];
+            int made = 0;
+
+            // 기존 조각을 먼저 지운다 — 레이아웃이 바뀌면 위치·크기가 달라지므로
+            // 남겨두면 엉뚱한 허공에 판정 면이 떠 있게 된다.
+            for (int i = canvas.transform.childCount - 1; i >= 0; i--)
+            {
+                Transform c = canvas.transform.GetChild(i);
+                if (c.name.StartsWith(OutlyingPatchPrefix)) Undo.DestroyObjectImmediate(c.gameObject);
+            }
+
+            foreach (var graphic in panel.GetComponentsInChildren<UnityEngine.UI.Graphic>(false))
+            {
+                if (graphic == null || !graphic.raycastTarget) continue;
+
+                var childRt = graphic.rectTransform;
+                if (childRt == null || childRt == panel) continue;
+
+                // 마스크(스크롤 뷰 등) 안의 내용물은 건너뛴다.
+                //
+                // 실기 확인 2026-08-15: Tab Window_Settings의 설정 항목들이 스크롤 뷰 안에 있는데,
+                // 도구를 돌린 시점의 스크롤 위치에서 뷰포트 밖에 있던 항목들이 "패널 rect 밖"으로
+                // 판정돼 조각 9개가 패널 위/아래 허공에 생겼다. 그 조각들은 UI 우선권을 갖도록
+                // 앞으로 나와 있어서, 보이지도 않는데 레이 이동을 막는 유령 콜라이더가 됐다.
+                //
+                // 마스크 안의 그래픽은 정의상 뷰포트로 잘리므로 패널 밖으로 나갈 일이 없다.
+                // 진짜 "삐져나온 닫기 버튼"은 마스크 밖에 있으므로 이 가드에 걸리지 않는다.
+                if (IsUnderMask(childRt, panel)) continue;
+
+                childRt.GetWorldCorners(corners);
+
+                float xMin = float.MaxValue, xMax = float.MinValue;
+                float yMin = float.MaxValue, yMax = float.MinValue;
+                for (int i = 0; i < 4; i++)
+                {
+                    Vector3 local = panel.InverseTransformPoint(corners[i]);
+                    xMin = Mathf.Min(xMin, local.x); xMax = Mathf.Max(xMax, local.x);
+                    yMin = Mathf.Min(yMin, local.y); yMax = Mathf.Max(yMax, local.y);
+                }
+
+                // 패널 rect 안에 완전히 들어가면 메인 면이 이미 덮으므로 건너뛴다.
+                bool inside = xMin >= panelRect.xMin - 0.5f && xMax <= panelRect.xMax + 0.5f &&
+                              yMin >= panelRect.yMin - 0.5f && yMax <= panelRect.yMax + 0.5f;
+                if (inside) continue;
+
+                var patch = new GameObject(OutlyingPatchPrefix + graphic.name);
+                Undo.RegisterCreatedObjectUndo(patch, "Create Outlying Patch");
+                Undo.SetTransformParent(patch.transform, canvas.transform, "Parent Outlying Patch");
+
+                patch.transform.localRotation = Quaternion.identity;
+                patch.transform.localScale = new Vector3(
+                    1f / canvasScale.x, 1f / canvasScale.y, 1f / canvasScale.z);
+
+                // 캔버스 정면이 -Z이므로 사용자 쪽으로 나오려면 -Z로 민다.
+                float forwardPx = PatchForwardOffset / Mathf.Abs(canvasScale.z);
+                patch.transform.localPosition = new Vector3(
+                    (xMin + xMax) * 0.5f, (yMin + yMax) * 0.5f, -forwardPx);
+
+                var pPlane = GetOrAdd<PlaneSurface>(patch, log, null);
+                pPlane.InjectNormalFacing(PlaneSurface.NormalFacing.Backward);
+                pPlane.InjectDoubleSided(false);
+
+                var pClipper = GetOrAdd<BoundsClipper>(patch, log, null);
+                pClipper.Position = Vector3.zero;
+                pClipper.Size = new Vector3(
+                    (xMax - xMin) * Mathf.Abs(canvasScale.x),
+                    (yMax - yMin) * Mathf.Abs(canvasScale.y),
+                    SurfaceDepth);
+
+                var pClipped = GetOrAdd<ClippedPlaneSurface>(patch, log, null);
+                pClipped.InjectAllClippedPlaneSurface(pPlane, new List<IBoundsClipper> { pClipper });
+
+                var pRay = GetOrAdd<RayInteractable>(patch, log, null);
+                pRay.InjectSurface(pClipped);
+                pRay.InjectOptionalPointableElement(pointable);
+
+                var pPoke = GetOrAdd<PokeInteractable>(patch, log, null);
+                pPoke.InjectSurfacePatch(pClipped);
+                pPoke.InjectOptionalPointableElement(pointable);
+
+                made++;
+                log.AppendLine($"        + 판정 조각 '{graphic.name}' " +
+                               $"({(xMax - xMin):F0}×{(yMax - yMin):F0} px, rect 밖)");
+            }
+
+            if (made == 0) log.AppendLine("        · rect 밖으로 나온 버튼 없음");
         }
 
         // =========================================================
@@ -270,16 +389,31 @@ namespace AICO.MR.EditorTools
         // =========================================================
         // 유틸
         // =========================================================
+        /// <summary>이 그래픽이 패널까지 올라가는 경로 어딘가에서 마스크로 잘리는지.</summary>
+        private static bool IsUnderMask(Transform child, Transform panel)
+        {
+            Transform cur = child.parent;
+            while (cur != null && cur != panel.parent)
+            {
+                if (cur.GetComponent<UnityEngine.UI.RectMask2D>() != null) return true;
+                if (cur.GetComponent<UnityEngine.UI.Mask>() != null) return true;
+                if (cur == panel) break;
+                cur = cur.parent;
+            }
+            return false;
+        }
+
+        /// <summary>label이 null이면 로그를 남기지 않는다 (호출부가 자체 로그를 찍는 경우).</summary>
         private static T GetOrAdd<T>(GameObject go, StringBuilder log, string label) where T : Component
         {
             var c = go.GetComponent<T>();
             if (c != null)
             {
-                log.AppendLine($"        · {label} (있음)");
+                if (label != null) log.AppendLine($"        · {label} (있음)");
                 return c;
             }
             c = Undo.AddComponent<T>(go);
-            log.AppendLine($"        + {label}");
+            if (label != null) log.AppendLine($"        + {label}");
             return c;
         }
 

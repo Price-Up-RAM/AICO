@@ -241,7 +241,14 @@ namespace DevionGames.UIWidgets
 				Focus ();
 			}
 			TweenCanvasGroupAlpha (m_CanvasGroup.alpha, 1f);
+#if UNITY_ANDROID && !UNITY_EDITOR
+			// MR: 스케일을 1로 되돌리지 않는다.
+			// 월드 스페이스 패널의 정상 스케일은 0.0005~0.001 수준이라 Vector3.one으로 트윈하면
+			// 1000~2000배로 부풀어 화면을 뒤덮는다 (MR_Phase_Kickoff_Guide.md §4-30).
+			// 표시/숨김은 CanvasGroup alpha로만 처리한다.
+#else
 			TweenTransformScale (Vector3.ClampMagnitude (m_RectTransform.localScale, 1.9f), Vector3.one);
+#endif
 			
 			WidgetUtility.PlaySound (this.m_ShowSound, 1.0f);
 			m_CanvasGroup.interactable = true;
@@ -284,7 +291,11 @@ namespace DevionGames.UIWidgets
             }
             m_IsShowing = false;
 			TweenCanvasGroupAlpha (m_CanvasGroup.alpha, 0f);
+#if UNITY_ANDROID && !UNITY_EDITOR
+			// MR: 스케일을 0으로 만들지 않는다 — 다시 열 때 복구할 원래 값을 잃는다 (§4-30).
+#else
 			TweenTransformScale (m_RectTransform.localScale, Vector3.zero);
+#endif
 			
 			WidgetUtility.PlaySound (this.m_CloseSound, 1.0f);
 			m_CanvasGroup.interactable = false;

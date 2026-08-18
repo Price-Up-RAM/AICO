@@ -25,8 +25,9 @@ public class MRGrabFrameFitter : MonoBehaviour
     [Tooltip("패널 가장자리 바깥으로 잡을 수 있는 띠의 두께(m).")]
     [SerializeField] private float bandThickness = 0.06f;
 
-    [Tooltip("콜라이더의 앞뒤 두께(m). 두꺼우면 UI 앞으로 튀어나와 조준을 가린다.")]
-    [SerializeField] private float bandDepth = 0.008f;
+    [Tooltip("콜라이더의 앞뒤 두께(m). 너무 얇으면 핀치 grab이 안 걸린다. " +
+             "두께는 뒤쪽으로만 늘어나므로(아래 오프셋) UI 조준은 가리지 않는다.")]
+    [SerializeField] private float bandDepth = 0.04f;
 
     [Tooltip("패널 평면보다 뒤로 밀어낼 여유(m). UI가 항상 조준 우선권을 갖게 한다.")]
     [SerializeField] private float extraZOffset = 0.004f;

@@ -43,7 +43,7 @@ public class MRPanelGrabTransformer : MonoBehaviour, ITransformer
     [SerializeField] private bool enableSmoothing = true;
 
     private IGrabbable _grabbable;
-    private Camera _cam;
+    private Transform _eye;
 
     // 잡은 지점을 패널 로컬로 기억한다 — 회전을 빌보드로 덮어써도
     // "잡은 지점이 손에 온다"를 항상 정확히 만족시키기 위함.
@@ -53,13 +53,29 @@ public class MRPanelGrabTransformer : MonoBehaviour, ITransformer
     public void Initialize(IGrabbable grabbable)
     {
         _grabbable = grabbable;
-        _cam = Camera.main;
+        _eye = ResolveEye();
+    }
+
+    /// <summary>빌보드 기준이 되는 "눈" 트랜스폼.
+    ///
+    /// Camera.main을 그냥 쓰면 OVR 리그에서 좌안 카메라가 잡히는 경우가 있어 패널이
+    /// 살짝 왼쪽을 향한 것처럼 비뚤어진다(실기 확인 2026-08-15). CenterEyeAnchor를
+    /// 우선적으로 찾는다.</summary>
+    private static Transform ResolveEye()
+    {
+        var byName = GameObject.Find("CenterEyeAnchor");
+        if (byName != null) return byName.transform;
+
+        if (Camera.main != null) return Camera.main.transform;
+
+        var any = Object.FindFirstObjectByType<Camera>();
+        return any != null ? any.transform : null;
     }
 
     public void BeginTransform()
     {
         if (_grabbable == null || _grabbable.GrabPoints.Count == 0) return;
-        if (_cam == null) _cam = Camera.main;
+        if (_eye == null) _eye = ResolveEye();
 
         Transform target = _grabbable.Transform;
         Pose grabPose = _grabbable.GrabPoints[0];
@@ -70,18 +86,18 @@ public class MRPanelGrabTransformer : MonoBehaviour, ITransformer
     public void UpdateTransform()
     {
         if (_grabbable == null || _grabbable.GrabPoints.Count == 0) return;
-        if (_cam == null) _cam = Camera.main;
+        if (_eye == null) _eye = ResolveEye();
 
         Transform target = _grabbable.Transform;
         Pose grabPose = _grabbable.GrabPoints[0];
 
         // ---- 목표 회전 ----
         Quaternion desiredRot = target.rotation;
-        if (billboardWhileGrabbed != BillboardMode.None && _cam != null)
+        if (billboardWhileGrabbed != BillboardMode.None && _eye != null)
         {
-            // 캔버스 정면은 -Z 관례(§4-20)이므로, 카메라에서 패널로 향하는 방향을
+            // 캔버스 정면은 -Z 관례(§4-20)이므로, 눈에서 패널로 향하는 방향을
             // forward로 잡으면 패널 앞면이 사용자를 향한다.
-            Vector3 dir = target.position - _cam.transform.position;
+            Vector3 dir = target.position - _eye.position;
             if (billboardWhileGrabbed == BillboardMode.YAxisOnly) dir.y = 0f;
             if (dir.sqrMagnitude > 0.0001f)
             {

@@ -955,7 +955,21 @@ public class UIManager : MonoBehaviour
 
     public void ShowCalendar()
     {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        // MR: 반드시 MR 포크를 요구한다.
+        //
+        // EnsureTypedComponent<T>()는 T가 없으면 AddComponent<T>()로 **런타임에 붙인다.**
+        // 여기서 원본 JarvisCalendarUI를 요구하면, 씬에 MRJarvisCalendarUI가 있어도
+        // 별개 클래스라 GetComponent<JarvisCalendarUI>()가 못 찾아 데스크톱 원본이
+        // 추가되고 MR 포크와 나란히 돌아간다. 그러면 원본의 데스크톱 가정이 되살아난다:
+        //   · gameObject.name = "Calendar" 로 이름을 바꿈
+        //   · SetExpanded()가 pickerRect.sizeDelta = (0,0) 을 대입 → 레이아웃 붕괴
+        //   · 날짜 버튼을 따로 42개 더 생성 → 84개, 캘린더 높이 2배
+        // 실기에서 위 세 증상이 동시에 관측됐다(2026-08-18). Kickoff Guide §4-31/§4-42.
+        MRJarvisCalendarUI calendarUI = GetOrCreateTypedManagedUI<MRJarvisCalendarUI>(ref calendar, "Calendar", "calendar");
+#else
         JarvisCalendarUI calendarUI = GetOrCreateTypedManagedUI<JarvisCalendarUI>(ref calendar, "Calendar", "calendar");
+#endif
         if (calendarUI == null)
         {
             return;
@@ -1327,6 +1341,25 @@ public class UIManager : MonoBehaviour
         }
 
         Canvas.ForceUpdateCanvases();
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        // MR: 이 오프셋은 캔버스 픽셀 단위다. 월드 스페이스로 전환된 패널들은 각자
+        // 독립 캔버스라 anchoredPosition이 사실상 부모(WorldUI/Panels, scale 1) 기준
+        // 로컬 위치가 된다 — 340을 그대로 대입하면 340 m 밖으로 날아간다.
+        // 실측(2026-08-18): 캘린더에서 날짜를 누른 뒤 TODOList가 눈에서 339.65 m에 놓였다.
+        // 미터로 환산해 캘린더 오른쪽에 붙인다.
+        const float TodoOffsetMetersX = 0.34f;
+        const float TodoOffsetMetersY = -0.01f;
+
+        Vector3 calendarWorld = calendarRect.position;
+        Vector3 right = calendarRect.right;
+        Vector3 up = calendarRect.up;
+
+        rootRect.position = calendarWorld
+                          + right * TodoOffsetMetersX
+                          + up * TodoOffsetMetersY;
+        rootRect.rotation = calendarRect.rotation;
+#else
         float todoOffsetX = 340f;
         float todoOffsetY = -10f;
         float todoOffsetZ = 0f;
@@ -1336,6 +1369,7 @@ public class UIManager : MonoBehaviour
         Vector3 localPosition = rootRect.localPosition;
         localPosition.z = todoOffsetZ;
         rootRect.localPosition = localPosition;
+#endif
     }
 
     private RectTransform GetChildRect(Transform parent, string childName)

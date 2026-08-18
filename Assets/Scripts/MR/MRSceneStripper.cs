@@ -115,6 +115,17 @@ public class MRSceneStripper : MonoBehaviour
         // (MRBalloonWorldFollow가 위치를 담당) MR에서는 통째로 끈다.
         typeof(UIResizeHandler),
 
+        // --- 마우스 드래그 이동 핸들러들 (UIResizeHandler와 같은 이유) ---
+        // 전부 IBeginDragHandler/IDragHandler를 구현한 데스크톱 전용 "창 끌어서 옮기기"
+        // 스크립트다. MR에서는 ISDK grab(§4-22)이 이동을 담당하므로 켜두면 손 드래그가
+        // 두 경로로 동시에 처리돼 패널이 튀거나 anchoredPosition이 매 프레임 덮어써진다.
+        // 그룹 C 패널(TalkMenuImage / DebugMenuImage / PortraitMask / Image_DebugBalloon*)에
+        // 붙어 있으니 MR 전환 시 반드시 함께 꺼야 한다.
+        typeof(DragUIHandler),
+        typeof(UIDragHandler),
+        typeof(DragHandler),
+        typeof(SubDragHandler),
+
         // --- XR Interaction Toolkit의 중복 UI 레이캐스터 ---
         // PointableCanvasModule(_exclusiveMode)이 XRUIInputModule은 비활성화하지만,
         // TrackedDeviceGraphicRaycaster 자체는 BaseRaycaster라 RaycasterManager에 남아있는 한

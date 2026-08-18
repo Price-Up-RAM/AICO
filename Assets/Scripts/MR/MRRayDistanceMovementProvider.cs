@@ -39,15 +39,32 @@ public class MRRayDistanceMovementProvider : MonoBehaviour, IMovementProvider
         }
     }
 
+    [Tooltip("레이 잡기가 왜 안 되는지 추적할 때 켠다.")]
+    [SerializeField] private bool verboseLog = false;
+
     public IMovement CreateMovement()
     {
-        return new RayDistanceMovement(FindActiveRay(), Camera.main,
-                                       maxDistanceMultiplier, minDistanceFromCamera);
+        RayInteractor ray = FindActiveRay();
+
+        if (verboseLog)
+        {
+            int count = rayInteractables != null ? rayInteractables.Length : 0;
+            Debug.Log($"[MRRayDistance] '{name}' CreateMovement 호출됨. " +
+                      $"RayInteractable {count}개, 선택 중인 RayInteractor={(ray != null ? "찾음" : "없음")}");
+        }
+
+        return new RayDistanceMovement(ray, Camera.main,
+                                       maxDistanceMultiplier, minDistanceFromCamera, verboseLog, name);
     }
 
     /// <summary>지금 이 패널을 선택하고 있는 RayInteractor를 찾는다.</summary>
     private RayInteractor FindActiveRay()
     {
+        // Awake 시점에 비어 있었을 수 있으므로(런타임 생성 등) 매번 비었으면 다시 찾는다.
+        if (rayInteractables == null || rayInteractables.Length == 0)
+        {
+            rayInteractables = GetComponentsInChildren<RayInteractable>(true);
+        }
         if (rayInteractables == null) return null;
 
         foreach (var interactable in rayInteractables)
@@ -58,6 +75,18 @@ public class MRRayDistanceMovementProvider : MonoBehaviour, IMovementProvider
                 if (view is RayInteractor ray) return ray;
             }
         }
+
+        // CreateMovement가 "선택 확정" 직전에 불릴 수 있어 SelectingInteractorViews가
+        // 아직 비어 있는 경우가 있다. 그때는 호버 중인 인터랙터라도 집는다.
+        foreach (var interactable in rayInteractables)
+        {
+            if (interactable == null) continue;
+            foreach (var view in interactable.InteractorViews)
+            {
+                if (view is RayInteractor ray) return ray;
+            }
+        }
+
         return null;
     }
 
@@ -76,12 +105,18 @@ public class MRRayDistanceMovementProvider : MonoBehaviour, IMovementProvider
         public Pose Pose { get; private set; } = Pose.identity;
         public bool Stopped => true;
 
-        public RayDistanceMovement(RayInteractor ray, Camera cam, float maxMultiplier, float minCamDistance)
+        private readonly bool _verbose;
+        private readonly string _owner;
+
+        public RayDistanceMovement(RayInteractor ray, Camera cam, float maxMultiplier, float minCamDistance,
+                                   bool verbose = false, string owner = "")
         {
             _ray = ray;
             _cam = cam != null ? cam : Camera.main;
             _maxMultiplier = maxMultiplier;
             _minCamDistance = minCamDistance;
+            _verbose = verbose;
+            _owner = owner;
         }
 
         public void StopAndSetPose(Pose source) => Pose = source;
@@ -118,6 +153,13 @@ public class MRRayDistanceMovementProvider : MonoBehaviour, IMovementProvider
                 : 1f;
 
             _initialized = true;
+
+            if (_verbose)
+            {
+                Debug.Log($"[MRRayDistance] '{_owner}' 잡음. 레이원점~패널={_lengthAlongRay:F2}m " +
+                          $"카메라~손={_handDistance0:F2}m 카메라~패널={objectDistance0:F2}m " +
+                          $"배율={_multiplier:F2}");
+            }
         }
 
         private Pose Compute(Pose fallback)
