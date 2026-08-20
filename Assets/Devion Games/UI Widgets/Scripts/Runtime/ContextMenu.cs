@@ -235,12 +235,25 @@ namespace DevionGames.UIWidgets
 					subMenu.ShowNextTo (item);
 				};
 
+#if UNITY_ANDROID || UNITY_EDITOR
+				// MR: hover로 서브메뉴를 열지 않는다. **클릭(onTrigger)만 쓴다.**
+				//
+				// 실기 2026-08-19: 하위 메뉴가 있는 항목을 레이로 겨누면 조준점이 0.5초 주기로
+				// 튀어 항목을 고를 수 없었다. onEnter로 열린 서브메뉴의 판정 면이 곧바로 레이를
+				// 가로채 부모 항목에 onExit가 발생하고, 그러면 서브메뉴가 닫혀 레이가 되돌아오며
+				// 다시 onEnter가 뜨는 **진동 루프**다.
+				//
+				// 데스크톱은 커서가 서브메뉴 위로 "이동"하면 되지만 MR의 레이는 그 사이를
+				// 연속적으로 지날 수 없다. §4-13("PointableCanvasModule에는 전역 마우스 좌표가 없다")과
+				// 같은 뿌리다 — hover 의미론을 그대로 옮길 수 없다.
+#else
 				item.onEnter.AddListener (delegate() {
 					ContextMenu subMenu = GetSubMenu();
 					if (subMenu != null && !subMenu.keepOpen) {
 						showSubMenu.Invoke();
 					}
 				});
+#endif
 
 				item.onTrigger.AddListener (delegate() {
 					ContextMenu subMenu = GetSubMenu();
@@ -293,14 +306,38 @@ namespace DevionGames.UIWidgets
 				-m_RectTransform.pivot.y * m_RectTransform.rect.height,
 				0f
 			);
+
+#if UNITY_ANDROID || UNITY_EDITOR
+			// MR: 서브메뉴를 부모 항목과 **같은 회전**으로 맞춘 뒤 그 평면 위에서 옆으로 민다.
+			//
+			// 원본은 오프셋을 자기 부모(Widgets 그룹)의 회전으로 변환한다. 데스크톱에서는
+			// 두 메뉴가 같은 캔버스 안이라 그게 곧 부모 항목의 평면이었다. MR에서는 메뉴마다
+			// 독립 월드 캔버스라 회전이 제각각이고, 그 결과 서브메뉴가 **뒤로 꺾여** 생긴다
+			// (실기 2026-08-19: 오른쪽에 뜨는데 몸 쪽으로 접혀 레이 패널에 가려짐).
+			m_RectTransform.rotation = itemTransform.rotation;
+			subMenuBottomLeftOffset = m_RectTransform.TransformVector (subMenuBottomLeftOffset);
+#else
 			if (m_RectTransform.parent != null) {
 				subMenuBottomLeftOffset = m_RectTransform.parent.TransformVector (subMenuBottomLeftOffset);
 			}
+#endif
 
 			m_RectTransform.position = itemBottomRight - subMenuBottomLeftOffset;
 			m_IsShowing = false;
 			m_CanvasGroup.alpha = 0f;
+#if UNITY_ANDROID || UNITY_EDITOR
+			// MR: 스케일을 0으로 만들지 않는다 — UIWidget.OnEnable(§4-39)과 같은 이유다.
+			//
+			// MR 포크는 UIWidget.Show()의 스케일 복원 트윈을 제거했다(월드 패널의 정상 스케일이
+			// 0.001 수준이라 Vector3.one으로 트윈하면 1000배로 부푼다, §4-30).
+			// 그래서 여기서 0으로 만들면 **되돌릴 코드가 없어 서브메뉴가 영구히 보이지 않는다.**
+			// 실기 2026-08-19: 캐릭터 메뉴의 Chat / Mode를 눌러도 서브메뉴가 뜨지 않았다.
+			//
+			// UIWidget.cs 쪽은 이미 가드돼 있었는데 이 호출부만 빠져 있었다 —
+			// **같은 처방을 호출부마다 따로 해야 하는 형태**라 놓치기 쉽다.
+#else
 			m_RectTransform.localScale = Vector3.zero;
+#endif
 			base.Show ();
 		}
 

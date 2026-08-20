@@ -647,6 +647,21 @@ public class MRCharacterWorldRoot : MonoBehaviour
     /// <summary>픽셀 공간 래퍼. Phase 2의 바닥 배치·드래그는 이것을 움직여야 한다.</summary>
     public Transform PixelSpace => _pixelSpace;
 
+    // 위치와 **회전**을 조작할 대상 트랜스폼. 래퍼가 있으면 래퍼, 없으면 캐릭터다.
+    //
+    // SetCharacterPosition은 위치만 다루는데 MRRayDragAdapter가 손 회전으로 캐릭터를
+    // 돌려야 해서 노출했다. "무엇을 움직이는가"의 판단이 두 곳으로 갈라지면
+    // 위치와 회전이 서로 다른 트랜스폼에 걸리는 사고가 난다(§4-47).
+    public Transform CharacterMoveTarget
+    {
+        get
+        {
+            if (_lastCharacter == null) return null;
+
+            return MoveTarget(_lastCharacter);
+        }
+    }
+
     // =========================================================
     // 외부 호출용 — Phase 3-2 AICO 시스템 메뉴의 크기 슬라이더
     // =========================================================

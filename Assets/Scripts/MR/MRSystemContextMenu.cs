@@ -138,7 +138,8 @@ public class MRSystemContextMenu : MonoBehaviour
             (LanguageData.Translate("Alarm", targetLang), delegate {
                 UIManager.Instance.ShowAlarm();
             }),
-            (LanguageData.Translate("Change Character", targetLang), delegate {
+            // "Change Char"가 LanguageData에 이미 등록된 키다 — 중복 엔트리를 만들지 않는다.
+            (LanguageData.Translate("Change Char", targetLang), delegate {
                 UIManager.Instance.ShowCharChange();
             }),
         };

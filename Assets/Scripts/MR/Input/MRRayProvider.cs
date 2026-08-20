@@ -80,6 +80,7 @@ public class MRRayProvider : MonoBehaviour, IMRAimProvider
     private Vector3 _rayOrigin;
     private Vector3 _rayDir;
     private bool _hasRayPose;
+    private Quaternion _rayRot = Quaternion.identity;
 
     public bool IsChannelActive => _hasRayPose;
     public bool IsPressed { get; private set; }
@@ -88,6 +89,14 @@ public class MRRayProvider : MonoBehaviour, IMRAimProvider
     public Vector3 PressPoint => _rayOrigin;
 
     /// <summary>드래그 어댑터가 쓸 현재 레이. `MRIntentRouter`가 홀드를 판정한 뒤 넘겨준다.</summary>
+    // 손(또는 컨트롤러)의 포즈 전체. 방향만으로는 알 수 없는 **롤(축 회전)**이 필요할 때 쓴다 —
+    // MRRayDragAdapter가 손목을 돌려 캐릭터를 회전시키는 데 사용한다.
+    public bool TryGetPose(out Pose pose)
+    {
+        pose = new Pose(_rayOrigin, _rayRot);
+        return _hasRayPose;
+    }
+
     public bool TryGetRay(out Ray ray)
     {
         ray = new Ray(_rayOrigin, _rayDir);
@@ -260,7 +269,8 @@ public class MRRayProvider : MonoBehaviour, IMRAimProvider
             if (_hand.GetPointerPose(out Pose pointerPose))
             {
                 _rayOrigin = pointerPose.position;
-                _rayDir = pointerPose.rotation * Vector3.forward;
+                _rayRot = pointerPose.rotation;
+                _rayDir = _rayRot * Vector3.forward;
                 _hasRayPose = true;
                 return;
             }
@@ -269,6 +279,8 @@ public class MRRayProvider : MonoBehaviour, IMRAimProvider
                 _hand.GetJointPose(HandJointId.HandWristRoot, out Pose wristPose))
             {
                 _rayOrigin = indexPose.position;
+                // 방향은 검지-손목 축을 쓰지만, 롤은 검지 관절의 회전에서 가져온다.
+                _rayRot = indexPose.rotation;
                 _rayDir = (indexPose.position - wristPose.position).normalized;
                 _hasRayPose = true;
                 return;
@@ -294,6 +306,7 @@ public class MRRayProvider : MonoBehaviour, IMRAimProvider
         }
 
         _rayOrigin = ctrlPos;
+        _rayRot = ctrlRot;
         _rayDir = ctrlRot * Vector3.forward;
         _hasRayPose = true;
     }

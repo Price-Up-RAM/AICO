@@ -170,6 +170,20 @@ public static class LanguageData
         new Dictionary<string, string> { { "ko", "실험" }, { "jp", "実験" }, { "en", "Experiment" } },
         new Dictionary<string, string> { { "ko", "스무고개게임" }, { "jp", "20Qゲーム" }, { "en", "20 Questions Game" } },
 
+        // MR 메뉴 (MR_Phase4A_SystemMenu_Design.md §3)
+        // 시스템 메뉴 — 빈 공간 + palm-up 탭
+        new Dictionary<string, string> { { "ko", "공간" }, { "jp", "空間" }, { "en", "Space" } },
+        new Dictionary<string, string> { { "ko", "앵커 편집" }, { "jp", "アンカー編集" }, { "en", "Edit Anchors" } },
+        new Dictionary<string, string> { { "ko", "방 재스캔" }, { "jp", "部屋を再スキャン" }, { "en", "Rescan Room" } },
+        new Dictionary<string, string> { { "ko", "열기" }, { "jp", "開く" }, { "en", "Open" } },
+        new Dictionary<string, string> { { "ko", "주크박스" }, { "jp", "ジュークボックス" }, { "en", "Jukebox" } },
+        new Dictionary<string, string> { { "ko", "패널 모으기" }, { "jp", "パネルを集める" }, { "en", "Gather Panels" } },
+        new Dictionary<string, string> { { "ko", "정말 종료" }, { "jp", "本当に終了" }, { "en", "Confirm Exit" } },
+
+        // 캐릭터 메뉴에서 빠져 있던 것 — 그동안 영어로 표시되고 있었다
+        new Dictionary<string, string> { { "ko", "캐릭터 상세" }, { "jp", "キャラ詳細" }, { "en", "Character Detail" } },
+        new Dictionary<string, string> { { "ko", "아로프라 모드" }, { "jp", "アロプラモード" }, { "en", "Aropla Mode" } },
+
         // Dev submenu
         new Dictionary<string, string> { { "ko", "디버그" }, { "jp", "デバッグ" }, { "en", "Debug" } },
         new Dictionary<string, string> { { "ko", "테스트1" }, { "jp", "テスト1" }, { "en", "Test" } },

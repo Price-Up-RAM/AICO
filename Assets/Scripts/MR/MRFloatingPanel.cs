@@ -67,6 +67,26 @@ public class MRFloatingPanel : MonoBehaviour
     private Quaternion _savedRotation;
 
     public bool IsOpen => _isOpen;
+
+    // DevionGames 위젯인가 — 가시성을 CanvasGroup.alpha로 관리하는 부류인가(§4-44).
+    //
+    // 위젯은 UIWidget.Show()/Close()가 alpha만 건드리고 Canvas.enabled는 우리 코드만 만진다.
+    // 그래서 Awake에서 캔버스를 꺼버리면 alpha가 1이 돼도 렌더링되지 않는다.
+    // 가시성 게이트를 두 겹으로 두지 않는다 — 위젯은 alpha 한 겹으로 충분하다.
+    private bool IsAlphaManagedWidget
+    {
+        get
+        {
+            if (_widgetChecked) return _isWidget;
+
+            _widgetChecked = true;
+            _isWidget = GetComponent<DevionGames.UIWidgets.UIWidget>() != null;
+            return _isWidget;
+        }
+    }
+
+    private bool _widgetChecked;
+    private bool _isWidget;
     public bool HasBeenPlaced => _hasBeenPlaced;
 
     // alpha 감시용 — placeInFrontOnShow(열림 감지)와 hideInteractionWhenTransparent가 공유한다.
@@ -109,7 +129,13 @@ public class MRFloatingPanel : MonoBehaviour
         // 관리한다(§4-44). UIWidget.Show()는 alpha와 활성 상태만 건드리고 Canvas 컴포넌트의
         // enabled는 우리 코드만 만지므로, 여기서 꺼버리면 alpha가 1이 돼도 렌더링되지 않는다.
         // 가시성 게이트를 두 겹으로 두지 않는다 — 위젯은 alpha 한 겹으로 충분하다.
-        if (panelCanvas != null && !placeInFrontOnShow) panelCanvas.enabled = false;
+        // 위젯 판정을 placeInFrontOnShow에 얹지 않는다.
+        //
+        // 예전에는 이 플래그가 "정면 배치"와 "위젯 모드"를 겸했다. 그래서 위치를 직접
+        // 계산하는 위젯(ContextMenuSub는 ShowNextTo가 월드 좌표를 잡는다)에서 정면 배치를
+        // 끄면 **캔버스까지 같이 꺼져 영영 안 보이는** 사고가 났다(2026-08-19 실기).
+        // 두 가지는 다른 사실이므로 UIWidget 유무로 따로 판정한다.
+        if (panelCanvas != null && !IsAlphaManagedWidget) panelCanvas.enabled = false;
     }
 
     /// <summary>비활성화 직전의 월드 포즈를 기억한다.

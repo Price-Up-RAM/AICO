@@ -50,7 +50,6 @@ public class MRAimHighlight : MonoBehaviour
     [SerializeField] private Color ringColor = new Color(1f, 0.85f, 0.2f, 0.9f);
 
     private LineRenderer _ring;
-    private GameObject _ringObject;
 
     private void OnDisable()
     {
@@ -60,7 +59,7 @@ public class MRAimHighlight : MonoBehaviour
     private void OnDestroy()
     {
         // 링은 최상위 오브젝트라 이 컴포넌트가 사라져도 씬에 남는다. 같이 치운다.
-        if (_ringObject != null) Destroy(_ringObject);
+        MRRingRenderer.Dispose(_ring);
     }
 
     private void LateUpdate()
@@ -82,7 +81,7 @@ public class MRAimHighlight : MonoBehaviour
         EnsureRing();
         if (_ring == null) return;
 
-        BuildCircle(center, radius);
+        MRRingRenderer.BuildCircle(_ring, center, radius, segments);
         _ring.enabled = true;
     }
 
@@ -133,44 +132,13 @@ public class MRAimHighlight : MonoBehaviour
         return true;
     }
 
-    private void BuildCircle(Vector3 center, float radius)
-    {
-        if (segments < 8) segments = 8;
-
-        if (_ring.positionCount != segments) _ring.positionCount = segments;
-
-        for (int i = 0; i < segments; i++)
-        {
-            float t = (float)i / segments * Mathf.PI * 2f;
-            Vector3 offset = new Vector3(Mathf.Cos(t) * radius, 0f, Mathf.Sin(t) * radius);
-            _ring.SetPosition(i, center + offset);
-        }
-    }
-
+    // 원 그리기와 링 생성은 MRRingRenderer로 뽑았다 — MRRayDragAdapter의 착지 링과
+    // 같은 코드를 쓰기 위해서다(§4-47: 같은 것을 다루는 코드가 둘이면 반드시 어긋난다).
     private void EnsureRing()
     {
         if (_ring != null) return;
 
-        _ringObject = new GameObject("MRAimRing");
-
-        // ⚠ 최상위에 둔다. 캐릭터(픽셀 공간 래퍼 1/120)나 스케일이 걸린 부모 밑에 두면
-        //    반경과 선 굵기가 그 배율만큼 왜곡된다 (Kickoff Guide §4-1).
-        _ringObject.transform.SetParent(null);
-
-        _ring = _ringObject.AddComponent<LineRenderer>();
-        _ring.useWorldSpace = true;
-        _ring.loop = true;
-        _ring.startWidth = lineWidth;
-        _ring.endWidth = lineWidth;
-        _ring.startColor = ringColor;
-        _ring.endColor = ringColor;
-        _ring.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        _ring.receiveShadows = false;
-        _ring.enabled = false;
-
-        Shader shader = Shader.Find("Sprites/Default");
-        if (shader == null) shader = Shader.Find("Unlit/Color");
-        if (shader != null) _ring.material = new Material(shader);
+        _ring = MRRingRenderer.Create("MRAimRing", lineWidth, ringColor);
     }
 
     private void ResolveRefs()
