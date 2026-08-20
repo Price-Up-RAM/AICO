@@ -31,9 +31,13 @@ namespace DevionGames.UIWidgets
 		protected List<MenuItem> itemCache = new List<MenuItem> ();
 		protected Canvas m_Canvas;
 
+
 		public override void Show ()
 		{
 			base.Show ();
+#if UNITY_ANDROID || UNITY_EDITOR
+			MRPointerBridge.Flush();
+#endif
 		}
 
 		public override void Close ()
@@ -91,16 +95,23 @@ namespace DevionGames.UIWidgets
 				hoverOutTimer = 0f;
 			}
 
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID || UNITY_EDITOR
 			// MR: 마우스가 없다. 메뉴 항목 클릭 자체는 MenuItem이 IPointerClickHandler라
 			// PointableCanvasModule이 알아서 배달해준다 — 여기서 다시 다룰 필요가 없다.
 			// 남은 건 "메뉴 밖 선택 시 닫기"뿐이라 MRPointerBridge로만 대체한다.
-			if (m_CanvasGroup.alpha > 0f) {
-				MRPointerBridge.EnsureSubscribed();
-				if (MRPointerBridge.ConsumeSelectedOutside(m_RectTransform)) {
-					Close();
-				}
-			}
+			// MR: 위젯 쪽 "메뉴 밖 선택 시 닫기"는 **의도적으로 비웠다** (2026-08-18 결정).
+			//
+			// PointableCanvasModule.WhenSelected는 **허공(비-UI) 선택에는 발생하지 않는다**(§4-13).
+			// 그래서 이 경로로는 "빈 공간을 눌러 닫기"가 원리적으로 불가능하고, 반대로
+			// 손 레이가 **다른 캔버스를 스치기만 해도** "바깥 선택"으로 잡혀 메뉴가 제멋대로 닫힌다.
+			// 실측(2026-08-18): 라디얼 메뉴가 열리자마자 Update()에서 반복 Close() —
+			// 콜스택 RadialMenu:Update() → Close() 로 확인.
+			//
+			// Flush()나 유예 시간으로 우회하려 했으나 둘 다 실패했다. 근본적으로
+			// **허공 판정을 여기서 할 수 없다**는 것이 문제다.
+			//
+			// 닫기는 Phase 4-A의 MRIntentRouter가 담당한다 — 진리표가 이미 "빈 공간 + 탭"을
+			// 판정하므로 허공 판정을 거기 한 벌만 둔다. 항목 클릭으로 닫히는 경로는 그대로 살아 있다.
 #else
 			if (m_CanvasGroup.alpha > 0f && (Input.GetMouseButtonDown (0) || Input.GetMouseButtonDown (1) || Input.GetMouseButtonDown (2))) {
 

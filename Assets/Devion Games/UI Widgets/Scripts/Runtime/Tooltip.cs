@@ -72,7 +72,7 @@ namespace DevionGames.UIWidgets{
 
         protected void UpdatePosition()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID || UNITY_EDITOR
             // MR: 마우스 포인터 추종은 의미가 없다(미결 항목 — MR_Phase3-2_Canvas_Plan.md §6 4번).
             // 뜬 위치에 고정한다. 손 레이 시각화가 커서 대신 위치를 알려준다.
             Focus();

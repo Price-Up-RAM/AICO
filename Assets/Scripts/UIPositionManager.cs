@@ -120,7 +120,7 @@ public class UIPositionManager : MonoBehaviour
     {
         Vector2 offsetPx = GetMenuOffsetPixels(menuName);
 
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID || UNITY_EDITOR
         // 여기서 돌려주는 값은 **최초 소환 기본 위치**일 뿐이다.
         // 이미 배치된 패널을 다시 여는 경우 MRFloatingPanel이 비활성 직전의 포즈를
         // 복원해 이 값을 덮으므로, 사용자가 옮겨둔 자리가 지켜진다 (§4-27).
@@ -186,7 +186,7 @@ public class UIPositionManager : MonoBehaviour
         }
     }
 
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID || UNITY_EDITOR
     // 캔버스 픽셀 오프셋 1px당 미터. 700px가 약 0.56m가 되도록 잡았다.
     private const float MenuPixelsToMeters = 0.0008f;
 

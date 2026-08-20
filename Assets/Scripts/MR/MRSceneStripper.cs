@@ -34,6 +34,13 @@ public class MRSceneStripper : MonoBehaviour
     [Tooltip("서브 캐릭터 등 뒤늦게 스폰되는 오브젝트용 안전망 스윕 주기")]
     [SerializeField] private float safetySweepInterval = 5f;
 
+    [Tooltip("기동 직후 이 시간(초) 동안은 안전망을 촘촘하게 돈다. " +
+             "KAIManager.Start()처럼 늦게 도는 초기화가 데스크톱 컴포넌트를 새로 붙이기 때문이다(§4-46).")]
+    [SerializeField] private float earlyWindowSeconds = 20f;
+
+    [Tooltip("기동 창 동안의 안전망 주기(초).")]
+    [SerializeField] private float earlySweepInterval = 0.25f;
+
     // =========================================================
     // 1. 씬에 상주하는 데스크톱 전용 매니저
     // =========================================================
@@ -66,6 +73,20 @@ public class MRSceneStripper : MonoBehaviour
         typeof(HotkeyManager),                  // 주의: 파일명은 HotKeyManager.cs지만 클래스는 HotkeyManager
         typeof(HotKeyCatalogManager),
         typeof(HotKeyActionManager),
+
+        // --- 데스크톱 컨텍스트 메뉴 트리거 (2026-08-18 이동) ---
+        // 예전에는 ReviewedKeepTypes("검토했고 유지")에 있었으나 **잘못된 분류였다.**
+        // MenuTrigger.Update()가 매 프레임 UpdateRadialMenuActionPosition()을 부르고,
+        // 그 안에서 라디얼 메뉴의 anchoredPosition을
+        //   (캐릭터X, 캐릭터Y + 200 * char_size/100 + 100)  ← char_size 100이면 +300
+        // 으로 덮어쓴다. 라디얼 메뉴는 이제 최상위 월드 캔버스라 그 300이 **300 m**가 되어
+        // 메뉴가 하늘로 날아간다(§4-38 계열). 실측 2026-08-18: 메뉴가 열린 직후 사라짐 —
+        // Close()는 한 번도 불리지 않았고, 위치만 y=300으로 고정돼 있었다.
+        //
+        // 마우스 우클릭/더블클릭으로 캐릭터 메뉴를 여는 데스크톱 전용 트리거이며,
+        // MR에서는 Phase 4-A의 MRIntentRouter가 그 역할을 대신한다.
+        typeof(MenuTrigger),
+        typeof(MenuTriggerKAI),
 
         // --- Operator / VL 에이전트 (화면 보고 마우스·키보드 조작) ---
         typeof(OperatorManager),
@@ -193,9 +214,7 @@ public class MRSceneStripper : MonoBehaviour
         typeof(DebugBalloonManager), typeof(DebugBalloonManager2), typeof(DebugMenuManager),
 
 
-        // --- MenuTrigger: KAIManager가 MenuTriggerKAI로 교체한다 ---
-        typeof(MenuTrigger),
-        typeof(MenuTriggerKAI),   // KAIManager가 런타임에 부착한다 (감사 시점에 이미 존재)
+        // (MenuTrigger / MenuTriggerKAI는 2026-08-18에 DesktopOnlyTypes로 옮겼다 — 아래 참고)
     };
 
     // 외부 패키지/플러그인 타입 — typeof()로 참조하면 어셈블리 의존이 생기므로 이름으로만 분류한다.
@@ -244,7 +263,9 @@ public class MRSceneStripper : MonoBehaviour
 
     private GameObject _lastCharacter;
     private float _safetyTimer;
+    private float _elapsed;
     private int _disabledCount;
+    private bool _secondPassDone;
 
     private void Awake()
     {
@@ -384,14 +405,24 @@ public class MRSceneStripper : MonoBehaviour
             {
                 _lastCharacter = current;
                 if (current != null) StripCharacter(current);
+
+                // 캐릭터 교체는 KAIManager.SweepMenuTriggers()를 다시 태워
+                // MenuTriggerKAI를 새로 AddComponent 할 수 있다. 5초 안전망을 기다리지 않는다.
+                if (_secondPassDone) StripSceneManagers("캐릭터 교체 후");
             }
         }
 
-        // 서브 캐릭터 등 위 경로로 안 잡히는 경우를 위한 느린 안전망
+        // 서브 캐릭터 등 위 경로로 안 잡히는 경우를 위한 안전망.
+        // 기동 직후에는 촘촘하게, 그 뒤에는 느리게 돈다 — 실측(2026-08-18)에서
+        // KAIManager가 붙인 MenuTriggerKAI 6개를 **오직 이 안전망만** 잡아냈다.
+        // 1차(Awake)·2차(첫 프레임 LateUpdate) 둘 다 놓쳤다 = KAIManager.Start()가
+        // 첫 프레임보다 늦게 돈다는 뜻이다. 기동 창이 그 간극을 메운다.
+        _elapsed += Time.deltaTime;
+
         _safetyTimer -= Time.deltaTime;
         if (_safetyTimer <= 0f)
         {
-            _safetyTimer = safetySweepInterval;
+            _safetyTimer = _elapsed < earlyWindowSeconds ? earlySweepInterval : safetySweepInterval;
             SafetySweepCharacterComponents();
         }
     }
@@ -399,9 +430,10 @@ public class MRSceneStripper : MonoBehaviour
     // =========================================================
     // 씬 상주 매니저 비활성화
     // =========================================================
-    private void StripSceneManagers()
+    private void StripSceneManagers(string pass = "1차(Awake)")
     {
-        // Awake 시점 1회만 전수 순회한다. 이후에는 돌지 않는다.
+        int before = _disabledCount;
+
         MonoBehaviour[] all = FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 
         foreach (MonoBehaviour mb in all)
@@ -411,7 +443,25 @@ public class MRSceneStripper : MonoBehaviour
             Disable(mb, "데스크톱 전용");
         }
 
-        Debug.Log($"[MRStripper] 데스크톱 전용 컴포넌트 {_disabledCount}개를 비활성화했습니다.");
+        Debug.Log($"[MRStripper] {pass}: 데스크톱 전용 컴포넌트 {_disabledCount - before}개 비활성화 (누적 {_disabledCount}개).");
+    }
+
+    // =========================================================
+    // 2차 패스 — 런타임에 AddComponent 된 데스크톱 컴포넌트
+    // =========================================================
+    // Awake 1회 전수 순회로는 **부족하다.** 실측 사고(2026-08-18):
+    //   KAIManager.Start() → SweepMenuTriggers() → go.AddComponent<MenuTriggerKAI>()
+    // 이 스트리퍼의 Awake(실행 순서 -10000)보다 **나중에** 돌기 때문에, 방금 태어난
+    // MenuTriggerKAI는 1차 패스를 그대로 통과했다. 그 Update()가 매 프레임 라디얼 메뉴의
+    // anchoredPosition.y를 300으로 덮어써 메뉴가 하늘(300 m)로 날아갔다. (Kickoff Guide §4-46)
+    //
+    // LateUpdate는 그 프레임의 모든 Start()보다 뒤에 돌므로, 한 프레임 안에 잡힌다.
+    private void LateUpdate()
+    {
+        if (_secondPassDone) return;
+        _secondPassDone = true;
+
+        StripSceneManagers("2차(첫 프레임 LateUpdate — 런타임 추가분)");
     }
 
     // =========================================================
@@ -439,6 +489,19 @@ public class MRSceneStripper : MonoBehaviour
     // 캐릭터 교체 감지로 잡히지 않는 경우(서브 캐릭터 등)를 위한 느린 안전망.
     private void SafetySweepCharacterComponents()
     {
+        // 데스크톱 전용 매니저도 같이 훑는다 — 2차 패스 이후에 AddComponent 되는 경우
+        // (캐릭터 교체 → KAIManager.SweepMenuTriggers 재실행 등)를 위한 마지막 그물이다.
+        foreach (Type t in DesktopOnlyTypes)
+        {
+            if (FindAnyObjectByType(t, FindObjectsInactive.Include) == null) continue;
+
+            UnityEngine.Object[] hits = FindObjectsByType(t, FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (UnityEngine.Object o in hits)
+            {
+                if (o is MonoBehaviour mb && mb.enabled) Disable(mb, "데스크톱 전용(안전망)");
+            }
+        }
+
         foreach (Type t in CharacterDesktopTypes)
         {
             // 존재 여부만 먼저 확인해 배열 할당을 피한다.
@@ -461,7 +524,10 @@ public class MRSceneStripper : MonoBehaviour
 
         if (logDisabled)
         {
-            Debug.Log($"[MRStripper] 비활성화: {mb.GetType().Name} ({reason}) — {mb.gameObject.name}");
+            // 기동 후 경과 시간을 같이 찍는다 — 런타임에 붙는 컴포넌트를 얼마나 빨리 잡았는지가
+            // "그 사이에 무슨 일을 할 수 있었는가"를 결정한다 (§4-46).
+            Debug.Log($"[MRStripper] 비활성화: {mb.GetType().Name} ({reason}) — {mb.gameObject.name} " +
+                      $"[기동 후 {Time.timeSinceLevelLoad:F2}s]");
         }
     }
 

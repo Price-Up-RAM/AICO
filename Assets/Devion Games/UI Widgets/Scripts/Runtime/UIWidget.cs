@@ -179,10 +179,23 @@ namespace DevionGames.UIWidgets
 				this.m_ThirdPersonController = playerInfo.gameObject.GetComponent("ThirdPersonController") as MonoBehaviour;
 
 
+#if UNITY_ANDROID || UNITY_EDITOR
+			// MR: 스케일을 0으로 만들지 않는다.
+			//
+			// 원본은 "숨은 위젯은 스케일 0"으로 두고 Show()의 스케일 트윈이 1로 되돌리는 구조다.
+			// MR에서는 그 트윈을 제거했으므로(월드 패널의 정상 스케일은 0.001 수준이라
+			// Vector3.one으로 트윈하면 1000~2000배로 부푼다, §4-30/§4-39),
+			// 여기서 0으로 만들면 **되돌릴 코드가 없어 영구히 보이지 않는다.**
+			// 실기 2026-08-18: 위치는 정확한데(눈앞 0.71m) 위젯이 사방 어디에도 안 보였다.
+			//
+			// MR에서 위젯의 가시성은 CanvasGroup.alpha 한 겹으로만 관리한다 —
+			// 스케일은 씬에 저장된 값 그대로 둔다.
+#else
 			if (!IsVisible) {
 				//Set local scale to zero, when widget is not visible. Used to correctly animate the widget.
 				m_RectTransform.localScale = Vector3.zero;
 			}
+#endif
 			if (this.m_AlphaTweenRunner == null)
 				this.m_AlphaTweenRunner = new TweenRunner<FloatTween> ();
 			this.m_AlphaTweenRunner.Init (this);
@@ -241,7 +254,7 @@ namespace DevionGames.UIWidgets
 				Focus ();
 			}
 			TweenCanvasGroupAlpha (m_CanvasGroup.alpha, 1f);
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID || UNITY_EDITOR
 			// MR: 스케일을 1로 되돌리지 않는다.
 			// 월드 스페이스 패널의 정상 스케일은 0.0005~0.001 수준이라 Vector3.one으로 트윈하면
 			// 1000~2000배로 부풀어 화면을 뒤덮는다 (MR_Phase_Kickoff_Guide.md §4-30).
@@ -291,7 +304,7 @@ namespace DevionGames.UIWidgets
             }
             m_IsShowing = false;
 			TweenCanvasGroupAlpha (m_CanvasGroup.alpha, 0f);
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID || UNITY_EDITOR
 			// MR: 스케일을 0으로 만들지 않는다 — 다시 열 때 복구할 원래 값을 잃는다 (§4-30).
 #else
 			TweenTransformScale (m_RectTransform.localScale, Vector3.zero);

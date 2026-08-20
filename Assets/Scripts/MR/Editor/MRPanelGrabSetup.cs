@@ -13,7 +13,7 @@
 // 조립 내용 (씬의 [BuildingBlock] Cube 구성을 그대로 따름)
 // ----------------------------------------------------
 //   패널 루트: Rigidbody(kinematic, no gravity) + Grabbable + MRPanelGrabTransformer
-//   자식 "GrabFrame": 테두리 모양 BoxCollider 4개(trigger) + GrabInteractable + HandGrabInteractable
+//   자식 "GrabFrame": 뒤판 BoxCollider 1개(trigger, GrabPlate) + GrabInteractable + HandGrabInteractable
 //
 // 왜 콜라이더가 "테두리 4개"인가
 // ----------------------------
@@ -215,10 +215,13 @@ namespace AICO.MR.EditorTools
             RemoveIfPresent<MoveFromTargetProvider>(frame, log, "MoveFromTargetProvider");
 
             // 바 4개를 만들고 컴포넌트를 배선한다. 위치·크기는 아래 fitter.Fit()이 채운다.
-            SetupBar(frame, "Bar_Top", grabbable, mover, log);
-            SetupBar(frame, "Bar_Bottom", grabbable, mover, log);
-            SetupBar(frame, "Bar_Left", grabbable, mover, log);
-            SetupBar(frame, "Bar_Right", grabbable, mover, log);
+            // 2026-08-18: 테두리 4바 → 뒤판 1개.
+            // 4개였던 이유는 기능이 아니라 ColliderSurface가 콜라이더를 하나만 참조하는
+            // SDK 제약이었다(§4-23). 패널은 평면이고 잡기 영역은 그 뒤에 있으므로
+            // 캔버스보다 조금 큰 얇은 판 하나로 대체된다 — 오브젝트 1/4, 모서리 틈 없음.
+            // 위치·크기·깊이는 MRGrabFrameFitter가 런타임에 계산한다.
+            SetupBar(frame, "GrabPlate", grabbable, mover, log);
+            RemoveLegacyBars(frame, log);
 
             fitter.Fit();
             log.AppendLine($"      + 테두리 바 4개 (띠 두께 {BandThickness:F2}m, 직선 레이 잡기 포함)");
@@ -320,6 +323,20 @@ namespace AICO.MR.EditorTools
             SetIfExists(rSo, "_pointableElement", grabbable);
             SetIfExists(rSo, "_movementProvider", mover);
             rSo.ApplyModifiedProperties();
+        }
+
+        /// <summary>예전 테두리 바 4개를 지운다. 판과 공존하면 같은 자리에서 두 번 판정된다.</summary>
+        private static void RemoveLegacyBars(GameObject frame, StringBuilder log)
+        {
+            string[] legacy = { "Bar_Top", "Bar_Bottom", "Bar_Left", "Bar_Right" };
+            for (int i = 0; i < legacy.Length; i++)
+            {
+                Transform bar = frame.transform.Find(legacy[i]);
+                if (bar == null) continue;
+
+                log.AppendLine($"        - 옛 바 제거: {legacy[i]}");
+                Undo.DestroyObjectImmediate(bar.gameObject);
+            }
         }
 
         private static T GetOrAdd<T>(GameObject go, StringBuilder log, string label) where T : Component

@@ -28,6 +28,23 @@ using UnityEngine.UI;
 
 public class MRTextInputGuard : MonoBehaviour
 {
+    // 2026-08-19 결정 — 기본값을 **끔**으로 바꿨다 (MR_Phase4A_SystemMenu_Design.md §4).
+    //
+    // 알림·설정 등 다른 패널에도 TMP_InputField가 있어 어차피 키보드가 뜨고,
+    // Phase 5에서 키보드 UX를 통째로 교체할 예정이라 지금 막을 실익이 없다는 판단이다.
+    //
+    // ⚠ 감수하는 비용: 실측(Quest 3S, 2026-08-10)에서 TMP_InputField.LateUpdate() 하나가
+    // 프레임당 최대 223 ms(self)를 먹었다. PlayerLoop 예산 13.89 ms의 16배다.
+    // **입력창에 포커스가 걸려 있는 동안은 성능 측정이 무의미하다** — 성능을 잴 때는
+    // 입력창을 건드리지 않은 상태에서 잰다.
+    //
+    // ⚠ 인스펙터에서 이 컴포넌트의 체크를 끄는 것으로는 차단이 안 꺼진다 —
+    // Awake()는 컴포넌트를 비활성화해도 실행되기 때문이다(Kickoff Guide §4-2).
+    // 그래서 필드 가드로 만들었다. 되살리려면 이 값을 켜면 된다.
+    [Tooltip("켜면 TMP_InputField의 raycastTarget을 꺼서 시스템 키보드 호출을 차단한다. " +
+             "2026-08-19부터 기본 꺼짐 — Phase 5의 텍스트 입력 UX까지 그대로 둔다.")]
+    [SerializeField] private bool blockTextInput = false;
+
     [Tooltip("비워두면 자식에서 자동으로 찾는다.")]
     [SerializeField] private TMP_InputField[] targetFields;
 
@@ -35,6 +52,8 @@ public class MRTextInputGuard : MonoBehaviour
 
     private void Awake()
     {
+        if (!blockTextInput) return;
+
         if (targetFields == null || targetFields.Length == 0)
         {
             targetFields = GetComponentsInChildren<TMP_InputField>(true);
@@ -48,6 +67,8 @@ public class MRTextInputGuard : MonoBehaviour
     // 활성화될 때마다 한 번 더 강제로 막는다.
     private void OnEnable()
     {
+        if (!blockTextInput) return;
+
         AllowInteraction(false);
     }
 

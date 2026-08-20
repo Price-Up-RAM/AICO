@@ -37,6 +37,19 @@ public class MRFloatingPanel : MonoBehaviour
              "스스로 숨었다 나타나는 특수 패널만 끈다.")]
     [SerializeField] private bool showOnEnable = true;
 
+    [Tooltip("표시될 때마다 사용자 정면으로 배치할지. " +
+             "순간적으로 떴다 사라지는 DevionGames 위젯(Context Menu / Radial Menu / Tooltip)은 켠다. " +
+             "UIPositionManager가 위치를 잡아주고 사용자가 옮긴 자리를 지켜야 하는 " +
+             "레거시 패널은 꺼둔다(§4-27).")]
+    [SerializeField] private bool placeInFrontOnShow = false;
+
+    [Tooltip("투명해지면(alpha 0) 잡기 판·판정 면 자식을 함께 끈다.\n" +
+             "UIWidget.Close()는 CanvasGroup의 blocksRaycasts만 끄는데 그건 uGUI 레이캐스트만 막는다. " +
+             "GrabPlate의 물리 콜라이더와 HandInteraction의 판정 면은 그대로 살아남아 " +
+             "**보이지 않는 유령 히트박스**가 되어 레이를 가로챈다(설계서 §8-7).\n" +
+             "씬에서 이미 꺼둔 자식은 건드리지 않는다.")]
+    [SerializeField] private bool hideInteractionWhenTransparent = true;
+
     [Header("이벤트")]
     public UnityEvent onOpened;
     public UnityEvent onClosed;
@@ -55,6 +68,15 @@ public class MRFloatingPanel : MonoBehaviour
 
     public bool IsOpen => _isOpen;
     public bool HasBeenPlaced => _hasBeenPlaced;
+
+    // alpha 감시용 — placeInFrontOnShow(열림 감지)와 hideInteractionWhenTransparent가 공유한다.
+    private CanvasGroup _watchedGroup;
+    private float _lastAlpha;
+
+    // alpha를 따라 켜고 끌 자식들. **씬에서 처음부터 꺼져 있던 것은 목록에 넣지 않는다** —
+    // Tooltip처럼 "레이를 통과시키려고 일부러 꺼둔"(§8-2) 설정을 되살리면 안 되기 때문이다.
+    private Transform[] _interactionChildren;
+    private bool _interactionApplied;
 
     private void Awake()
     {
@@ -81,7 +103,13 @@ public class MRFloatingPanel : MonoBehaviour
             }
         }
 
-        if (panelCanvas != null) panelCanvas.enabled = false;
+        // 캔버스를 꺼둔 채 시작한다 — 단, DevionGames 위젯 모드는 예외다.
+        //
+        // 위젯(Context Menu / Radial Menu / Tooltip)은 가시성을 **CanvasGroup.alpha**로
+        // 관리한다(§4-44). UIWidget.Show()는 alpha와 활성 상태만 건드리고 Canvas 컴포넌트의
+        // enabled는 우리 코드만 만지므로, 여기서 꺼버리면 alpha가 1이 돼도 렌더링되지 않는다.
+        // 가시성 게이트를 두 겹으로 두지 않는다 — 위젯은 alpha 한 겹으로 충분하다.
+        if (panelCanvas != null && !placeInFrontOnShow) panelCanvas.enabled = false;
     }
 
     /// <summary>비활성화 직전의 월드 포즈를 기억한다.
@@ -111,7 +139,14 @@ public class MRFloatingPanel : MonoBehaviour
     /// 눈앞으로 끌려와 §4-27("내가 옮기면 그 자리에 남는다")과 충돌한다.</summary>
     private void OnEnable()
     {
-        if (_hasSavedPose && panelRoot != null)
+        if (placeInFrontOnShow)
+        {
+            // 순간적으로 떴다 사라지는 위젯은 **열 때마다** 눈앞에 잡는다.
+            // 최초 1회만 잡으면 처음 뜬 자리에 계속 남아, 몸을 돌린 뒤 열면 등 뒤에서 뜬다.
+            // 저장된 포즈는 일부러 무시한다.
+            PlaceInFront();
+        }
+        else if (_hasSavedPose && panelRoot != null)
         {
             // 레거시가 덮어쓴 데스크톱 좌표를 되돌린다.
             panelRoot.position = _savedPosition;
@@ -119,14 +154,16 @@ public class MRFloatingPanel : MonoBehaviour
         }
         else if (panelRoot != null)
         {
-            // 최초 표시. 위치는 호출자(UIPositionManager의 MR 분기)가 정한 값을 그대로 쓰고,
-            // **회전만** 사용자를 향하게 맞춘다.
+            // 최초 표시.
             //
-            // 씬에 저장된 회전은 에디터에서 패널을 배치할 때의 방향이라, 사용자가 지금
-            // 어느 쪽을 보고 있는지와 아무 상관이 없다. 그대로 두면 패널이 등을 돌린 것처럼
-            // 보인다 — 실기에서 "모든 UI가 180도 돌아서 나온다"로 나타났다(2026-08-18).
+            // 기본은 **회전만** 맞춘다 — 위치는 호출자(UIPositionManager의 MR 분기)가 이미
+            // 정해뒀기 때문이다. 씬에 저장된 회전은 에디터 배치 시점의 방향이라 사용자가
+            // 지금 보는 방향과 무관해서, 그대로 두면 등을 돌린 것처럼 보인다
+            // (실기 2026-08-18 "모든 UI가 180도 돌아서 나옴").
             //
-            // Show()는 의도적으로 배치를 하지 않으므로(§4-27), 여기서 최초 1회만 처리한다.
+            // 다만 **위치를 정해주는 호출자가 없는 위젯**(DevionGames Context Menu /
+            // Radial Menu / Tooltip)은 원점에 그대로 남는다 — 이들은 UIWidget.Show()가
+            // SetActive만 하고 배치는 아무도 안 한다. 그 경우 위치까지 잡아준다.
             FaceCameraYAxisOnly();
             _hasBeenPlaced = true;
         }
@@ -134,6 +171,96 @@ public class MRFloatingPanel : MonoBehaviour
         if (!showOnEnable) return;
 
         Show();
+    }
+
+    /// <summary>DevionGames 위젯의 "표시"를 감시한다.
+    ///
+    /// 왜 OnEnable로는 안 되는가
+    /// -------------------------
+    /// `UIWidget.Close()`는 **GameObject를 비활성화하지 않는다** — `CanvasGroup.alpha`만
+    /// 0으로 트윈한다. 그래서 한 번 열린 위젯은 계속 활성 상태로 남고,
+    /// 다음 `Show()`의 `gameObject.SetActive(true)`는 no-op이 되어 **OnEnable이 다시 뜨지 않는다.**
+    /// (§4-34와 같은 함정이 위젯 쪽에서 재현된 것 — 실기 확인 2026-08-18.)
+    ///
+    /// 즉 이 위젯들의 "열림" 신호는 활성화가 아니라 **alpha 상승**이다.
+    /// Tooltip처럼 우리가 호출부를 모르는 위젯까지 한 번에 커버된다.</summary>
+    private void LateUpdate()
+    {
+        if (!placeInFrontOnShow && !hideInteractionWhenTransparent) return;
+
+        if (_watchedGroup == null)
+        {
+            _watchedGroup = GetComponent<CanvasGroup>();
+            if (_watchedGroup == null) return;
+        }
+
+        float alpha = _watchedGroup.alpha;
+
+        bool wasVisible = _lastAlpha > 0.001f;
+        bool isVisible = alpha > 0.001f;
+
+        // 0 → 양수로 올라간 순간이 "열렸다"이다.
+        if (placeInFrontOnShow && !wasVisible && isVisible)
+        {
+            PlaceInFront();
+        }
+
+        // 첫 프레임에는 변화가 없어도 한 번 적용한다 — 앱 시작 시점부터
+        // 닫힌 위젯의 히트박스가 살아 있으면 안 되기 때문이다.
+        if (hideInteractionWhenTransparent && (!_interactionApplied || wasVisible != isVisible))
+        {
+            _interactionApplied = true;
+            SetInteractionActive(isVisible);
+        }
+
+        _lastAlpha = alpha;
+    }
+
+    /// <summary>잡기 판(`GrabFrame`)과 판정 면(`HandInteraction*`)을 함께 켜고 끈다.
+    ///
+    /// 왜 필요한가 (설계서 §8-7)
+    /// -----------------------
+    /// `UIWidget.Close()`는 `CanvasGroup.blocksRaycasts`를 끄지만 그것은 **uGUI 레이캐스트만**
+    /// 막는다. `GrabPlate`의 `BoxCollider`와 ISDK 판정 면은 `CanvasGroup`의 영향을 받지 않으므로
+    /// 위젯이 투명해진 뒤에도 살아남아 **보이지 않는데 레이를 먹는다.**
+    ///
+    /// 켜질 때 `MRGrabFrameFitter`/`MRHandInteractionFitter`의 `OnEnable`이 다시 돌아
+    /// **항목이 채워진 뒤의 크기로 다시 맞춰지는 부수 효과**도 있다(§4-35가 요구하던 것).</summary>
+    private void SetInteractionActive(bool active)
+    {
+        CacheInteractionChildren();
+
+        for (int i = 0; i < _interactionChildren.Length; i++)
+        {
+            Transform child = _interactionChildren[i];
+            if (child == null) continue;
+            if (child.gameObject.activeSelf == active) continue;
+
+            child.gameObject.SetActive(active);
+        }
+    }
+
+    private void CacheInteractionChildren()
+    {
+        if (_interactionChildren != null) return;
+
+        var found = new System.Collections.Generic.List<Transform>();
+
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            Transform child = transform.GetChild(i);
+
+            bool isInteraction = child.name == "GrabFrame" ||
+                                 child.name.StartsWith("HandInteraction");
+            if (!isInteraction) continue;
+
+            // 씬에서 이미 꺼둔 것은 대상에서 제외한다 — 의도적으로 끈 설정을 되살리지 않는다.
+            if (!child.gameObject.activeSelf) continue;
+
+            found.Add(child);
+        }
+
+        _interactionChildren = found.ToArray();
     }
 
     /// <summary>표시만 한다. 위치는 건드리지 않는다.</summary>

@@ -64,6 +64,23 @@ public static class MRPointerBridge
     /// 이번 프레임에 "이 rectTransform 바깥"에서 선택이 발생했으면 true를 반환하고 플래그를 소비한다.
     /// 호출부(위젯의 Update)에서 프레임당 한 번씩 불러 쓰는 것을 전제로 한다.
     /// </summary>
+    /// <summary>대기 중인 선택 신호를 버린다.
+    ///
+    /// 왜 필요한가 (2026-08-18)
+    /// -----------------------
+    /// `SelectedThisFrame`은 **정적 플래그**라 먼저 소비하는 쪽이 가져간다.
+    /// 그래서 "컨텍스트 메뉴의 Action 항목을 클릭 → 라디얼 메뉴 열림"처럼
+    /// **클릭이 새 메뉴를 여는** 경우, 그 클릭 신호가 그대로 남아 있다가
+    /// 새로 열린 메뉴의 첫 Update에서 "메뉴 밖 선택"으로 소비되어 즉시 닫힌다.
+    /// 실기 증상: 라디얼 메뉴가 순간 보였다가 저절로 사라진다.
+    ///
+    /// 메뉴를 여는 쪽에서 Show 직후 이걸 불러 신호를 버린다.</summary>
+    public static void Flush()
+    {
+        SelectedThisFrame = false;
+        LastSelected = null;
+    }
+
     public static bool ConsumeSelectedOutside(RectTransform bounds)
     {
         if (!SelectedThisFrame) return false;

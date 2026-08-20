@@ -33,6 +33,10 @@ public class MRLegacyOpenDebugTrigger : MonoBehaviour
     [Tooltip("눈(CenterEyeAnchor)에서 이 거리(m)를 넘으면 경고 로그를 낸다.")]
     [SerializeField] private float suspiciousDistance = 5f;
 
+    [Tooltip("캐릭터 컨텍스트 메뉴. 비워두면 런타임에 찾는다. " +
+             "DevionGames 위젯(Context Menu / Radial Menu)은 이걸 통해야 항목이 채워지고 크기가 생긴다.")]
+    [SerializeField] private MRCharacterContextMenu characterContextMenu;
+
     private class Step
     {
         public string label;
@@ -87,7 +91,27 @@ public class MRLegacyOpenDebugTrigger : MonoBehaviour
             close = delegate { UIManager.Instance.CloseCharChange(); }
         });
 
-        Debug.Log($"[MRLegacyOpen] 준비 완료. 비주력 손 palm-up 핀치로 {_steps.Count}개 패널을 순환합니다.");
+        // DevionGames 위젯(Context Menu / Radial Menu)은 항목이 채워질 때 비로소 크기가 생긴다
+        // (씬 저장값이 160×4, 0×0 — §4-35). 즉 **열어보지 않으면 크기를 맞출 수도, 검증할 수도 없다.**
+        // 정식 진입점은 MRCharacterContextMenu.Show()다 — MRIntentRouter가 Phase 4-A에서
+        // 부르게 될 바로 그 메서드이므로, 여기서 직접 부르는 것은 §4-37 위반이 아니다.
+        _steps.Add(new Step
+        {
+            label = "CharacterContextMenu",
+            panelObjectName = "Context Menu",
+            open = ShowCharacterContextMenu,
+            close = null
+        });
+
+        _steps.Add(new Step
+        {
+            label = "RadialMenuAction",
+            panelObjectName = "Radial Menu Action",
+            open = ShowRadialMenuAction,
+            close = null
+        });
+
+        Debug.Log($"[MRLegacyOpen] 준비 완료. 비주력 손 palm-up 핀치로 {_steps.Count}개를 순환합니다.");
     }
 
     private void Update()
@@ -125,6 +149,39 @@ public class MRLegacyOpenDebugTrigger : MonoBehaviour
         SafeInvoke(cur.open, cur.label + ".open");
 
         if (logWorldPosition) ReportPosition(cur);
+    }
+
+    private void ShowCharacterContextMenu()
+    {
+        MRCharacterContextMenu menu = ResolveContextMenu();
+        if (menu == null)
+        {
+            Debug.LogError("[MRLegacyOpen] MRCharacterContextMenu를 찾지 못했습니다. " +
+                           "씬의 'Context Menu' 오브젝트에 부착하고 contextMenu / radialMenuAction 참조를 연결하세요.");
+            return;
+        }
+
+        menu.Show();
+    }
+
+    private void ShowRadialMenuAction()
+    {
+        MRCharacterContextMenu menu = ResolveContextMenu();
+        if (menu == null)
+        {
+            Debug.LogError("[MRLegacyOpen] MRCharacterContextMenu를 찾지 못했습니다.");
+            return;
+        }
+
+        menu.ShowRadialMenuAction();
+    }
+
+    private MRCharacterContextMenu ResolveContextMenu()
+    {
+        if (characterContextMenu != null) return characterContextMenu;
+
+        characterContextMenu = FindFirstObjectByType<MRCharacterContextMenu>(FindObjectsInactive.Include);
+        return characterContextMenu;
     }
 
     private void SafeInvoke(Action action, string what)

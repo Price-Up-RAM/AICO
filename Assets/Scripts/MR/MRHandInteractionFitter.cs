@@ -41,6 +41,9 @@ public class MRHandInteractionFitter : MonoBehaviour
     [Tooltip("크기가 0인 rect에는 맞추지 않는다. 항목이 채워지기 전 상태이기 때문이다.")]
     [SerializeField] private float minValidSize = 1f;
 
+    [Tooltip("(임시) 판정 면 크기를 로그로 남긴다. 원인 확인 후 끄거나 지운다.")]
+    [SerializeField] private bool logDiagnostics = true;
+
     private Transform _interactionChild;
     private BoundsClipper _clipper;
 
@@ -99,14 +102,32 @@ public class MRHandInteractionFitter : MonoBehaviour
         _interactionChild.localRotation = Quaternion.identity;
         _interactionChild.localScale = new Vector3(1f / lossy.x, 1f / lossy.y, 1f / lossy.z);
 
-        // 피벗이 중앙이 아닐 수 있으므로 rect 중심으로 맞춘다.
-        Vector2 centerPx = panelRect.rect.center;
-        _interactionChild.localPosition = new Vector3(centerPx.x, centerPx.y, 0f);
+        // 판정 영역 = rect 와 **실제 내용물 경계의 합집합**.
+        //
+        // rect 중심만 쓰면 피벗이 모서리인 위젯에서 통째로 어긋난다.
+        // 실측(2026-08-18) Context Menu: rect=(160,130)이라 rect.center=(80,-65)인데
+        // 항목들의 중심은 (80,+65) — 메뉴 높이 하나만큼(130px) 어긋나 있었다.
+        // 그래서 레이가 판정 면에는 맞지만 그 자리에 Selectable이 없어
+        // "canvas는 잡히는데 target=null"(§4-18 패턴)이 나왔다.
+        //
+        // 어느 쪽이 '옳은' 영역인지 판단하지 않고 둘 다 덮는다 — 판정 면이 조금 넓은 것은
+        // 무해하지만, 어긋나면 아무것도 눌리지 않는다.
+        Rect rectPx = panelRect.rect;
+        Bounds area = new Bounds(new Vector3(rectPx.center.x, rectPx.center.y, 0f),
+                                 new Vector3(rectPx.width, rectPx.height, 0f));
+
+        Bounds contentPx = ComputeContentBounds();
+        if (contentPx.size.x > 0.01f && contentPx.size.y > 0.01f)
+        {
+            area.Encapsulate(contentPx);
+        }
+
+        _interactionChild.localPosition = new Vector3(area.center.x, area.center.y, 0f);
 
         if (_clipper != null)
         {
-            float widthM = size.x * Mathf.Abs(lossy.x);
-            float heightM = size.y * Mathf.Abs(lossy.y);
+            float widthM = area.size.x * Mathf.Abs(lossy.x);
+            float heightM = area.size.y * Mathf.Abs(lossy.y);
 
             _clipper.Position = Vector3.zero;
             _clipper.Size = new Vector3(
@@ -117,6 +138,50 @@ public class MRHandInteractionFitter : MonoBehaviour
 
         _lastRectSize = size;
         _lastLossyScale = lossy;
+
+        if (logDiagnostics)
+        {
+            // 항목이 rect 밖으로 나가면 판정 면이 항목을 안 덮는다 —
+            // "canvas는 잡히는데 target이 null"(§4-18 패턴)의 원인이 될 수 있다.
+            // 자식들의 실제 경계도 함께 찍어 rect와 비교한다.
+            Debug.Log($"[MRHandFit] '{panelRect.name}' rect={size} rect.center={rectPx.center} " +
+                      $"판정영역 center={area.center} size={area.size} " +
+                      $"clipper={( _clipper != null ? _clipper.Size.ToString("F3") : "없음" )} " +
+                      $"자식수={panelRect.childCount}");
+        }
+    }
+
+    /// <summary>자식 RectTransform들의 로컬 경계를 합쳐 반환한다(패널 로컬 px 기준).
+    /// rect보다 크면 판정 면이 항목을 못 덮고 있다는 뜻이다.</summary>
+    private Bounds ComputeContentBounds()
+    {
+        var bounds = new Bounds(Vector3.zero, Vector3.zero);
+        bool first = true;
+
+        for (int i = 0; i < panelRect.childCount; i++)
+        {
+            var child = panelRect.GetChild(i) as RectTransform;
+            if (child == null) continue;
+            if (!child.gameObject.activeInHierarchy) continue;
+            if (child.name == InteractionChildName) continue;
+
+            Vector3 center = panelRect.InverseTransformPoint(child.TransformPoint(child.rect.center));
+            Vector3 size = new Vector3(child.rect.width * child.localScale.x,
+                                       child.rect.height * child.localScale.y,
+                                       0f);
+
+            var b = new Bounds(center, size);
+            if (first)
+            {
+                bounds = b;
+                first = false;
+                continue;
+            }
+
+            bounds.Encapsulate(b);
+        }
+
+        return bounds;
     }
 
     private bool Resolve()

@@ -105,6 +105,30 @@ public class MicrophoneManager : MonoBehaviour
         NoticeManager.Instance.ShowNoticeEmotionBalloon("Listen", maxRecordingDuration);
     }
 
+    /// <summary>녹음을 **버리고** 중단한다. 저장·전송하지 않는다.
+    ///
+    /// Phase 4-A의 낙관적 탭(MR_Phase4A_Input_Plan.md §2-4)에 필요하다 —
+    /// 첫 탭에 음성 입력을 즉시 시작해두고, 0.45초 안에 두 번째 탭이 오면 "더블탭"이었던
+    /// 것이므로 그때까지 녹음된 소리를 없던 일로 만들어야 한다.
+    /// StopRecording()은 WAV로 저장하므로 이 용도로 쓸 수 없다.</summary>
+    public void CancelRecording()
+    {
+        NoticeManager.Instance.DeleteNoticeBalloonInstance();
+
+        if (overlayFilter != null)
+        {
+            overlayFilter.SetActive(false);
+        }
+
+        if (!isRecording) return;
+
+        Microphone.End(microphoneDevice);
+        isRecording = false;
+        audioClip = null;
+
+        Debug.Log("Recording cancelled (discarded).");
+    }
+
     public void StopRecording()
     {
         // emotionBalloon 제거

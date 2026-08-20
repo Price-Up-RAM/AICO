@@ -955,7 +955,7 @@ public class UIManager : MonoBehaviour
 
     public void ShowCalendar()
     {
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID || UNITY_EDITOR
         // MR: 반드시 MR 포크를 요구한다.
         //
         // EnsureTypedComponent<T>()는 T가 없으면 AddComponent<T>()로 **런타임에 붙인다.**
@@ -1342,7 +1342,7 @@ public class UIManager : MonoBehaviour
 
         Canvas.ForceUpdateCanvases();
 
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID || UNITY_EDITOR
         // MR: 이 오프셋은 캔버스 픽셀 단위다. 월드 스페이스로 전환된 패널들은 각자
         // 독립 캔버스라 anchoredPosition이 사실상 부모(WorldUI/Panels, scale 1) 기준
         // 로컬 위치가 된다 — 340을 그대로 대입하면 340 m 밖으로 날아간다.

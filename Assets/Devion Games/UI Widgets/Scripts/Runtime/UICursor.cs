@@ -47,7 +47,7 @@ namespace DevionGames.UIWidgets
 
 		void Update ()
 		{
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID || UNITY_EDITOR
 			// MR: 마우스 커서 개념이 없다. ISDK 손 레이 시각화(LineRenderer)가 그 역할을 대신한다.
 			// 항상 숨긴 채로 둔다.
 			if (canvasGroup.alpha > 0f) canvasGroup.alpha = 0f;
