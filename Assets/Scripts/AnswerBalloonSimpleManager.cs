@@ -34,6 +34,9 @@ public class AnswerBalloonSimpleManager : MonoBehaviour
 
     private void Awake()
     {
+#if UNITY_ANDROID || UNITY_EDITOR
+        transform.SetParent(null);
+#endif
         HideAnswerBalloonSimple(); // 시작 시 AnswerBalloonSimple 숨기기
     }
 
@@ -57,10 +60,17 @@ public class AnswerBalloonSimpleManager : MonoBehaviour
             UpdateAnswerBalloonSimplePosition();
         }
 
+#if UNITY_ANDROID || UNITY_EDITOR
+        if (StatusManager.Instance.IsListening || StatusManager.Instance.IsAsking )
+        {
+            HideAnswerBalloonSimple();
+        }
+#else
         if (StatusManager.Instance.IsPicking || StatusManager.Instance.IsListening || StatusManager.Instance.IsAsking )
         {
             HideAnswerBalloonSimple();
         }
+#endif
     }
 
     // AnswerBalloonSimple을 타이머 무제한으로 보이기

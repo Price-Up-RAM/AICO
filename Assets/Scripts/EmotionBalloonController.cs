@@ -68,6 +68,11 @@ public class EmotionBalloonController : MonoBehaviour
         if (balloonRect == null) return;
         if (targetPortraitTransform == null && targetCollider == null) return;
 
+#if UNITY_ANDROID || UNITY_EDITOR
+        // MR 환경에서는 MRBalloonWorldFollow가 부착되어 있으면 이 스크립트의 위치 갱신을 무시합니다.
+        if (GetComponent("MRBalloonWorldFollow") != null) return;
+#endif
+
         Canvas _canvas = FindObjectOfType<Canvas>();
         
         if (targetPortraitTransform != null)

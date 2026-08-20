@@ -28,6 +28,9 @@ public class PortraitBalloonSimpleManager : MonoBehaviour
 
     private void Awake()
     {
+#if UNITY_ANDROID || UNITY_EDITOR
+        transform.SetParent(null);
+#endif
         Hide(); // 시작 시 숨기기
     }
 
@@ -68,10 +71,17 @@ public class PortraitBalloonSimpleManager : MonoBehaviour
             }
 
             // 다른 상태일 때 숨기기
+#if UNITY_ANDROID || UNITY_EDITOR
+            if (StatusManager.Instance.IsListening || StatusManager.Instance.IsAsking)
+            {
+                Hide();
+            }
+#else
             if (StatusManager.Instance.IsPicking || StatusManager.Instance.IsListening || StatusManager.Instance.IsAsking)
             {
                 Hide();
             }
+#endif
         }
     }
 

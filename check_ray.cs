@@ -1,0 +1,1 @@
+﻿using UnityEngine; using Oculus.Interaction; public class CheckRay : MonoBehaviour { void Start() { foreach(var r in FindObjectsOfType<RayInteractor>(true)) { Debug.Log($RayInteractor {r.name}, mask {r.RaycastMask.value}); } } }

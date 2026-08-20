@@ -64,6 +64,7 @@ public class MRBalloonWorldFollow : MonoBehaviour
         // 다시 캐릭터 기준으로 배치한다 — "열면 캐릭터 옆에 뜨고, 내가 옮기면 그 자리에
         // 남는다"가 의도된 동작이다 (Phase3-2 Plan §3-2-B 소환 동작 확정).
         _userTookOver = false;
+        _hasInitializedOffset = false;
 
         // 소환 시점에 한 번은 항상 맞춰준다. continuousFollow=true인 경우에도
         // 첫 프레임 LateUpdate 전에 미리 맞춰서 초기 프레임 깜빡임을 줄인다.
@@ -76,12 +77,6 @@ public class MRBalloonWorldFollow : MonoBehaviour
 
         // 사용자가 한 번이라도 손으로 옮겼으면 위치 소유권을 사용자에게 넘기고
         // 다시는 따라다니지 않는다.
-        //
-        // 실기 확인(2026-08-15):
-        //  - 가드가 아예 없으면 → ISDK grab으로 옮겨도 같은 프레임 LateUpdate에서
-        //    위치·회전을 되돌려 "잡아도 안 움직이는" 것처럼 보이고, 빌보드도 상시로 걸린다.
-        //  - "잡는 동안만" 멈추게 하면 → 놓는 순간 원래 자리로 팅 하고 돌아간다.
-        // 그래서 잡힌 적이 있는지를 영구 플래그로 기억한다.
         if (IsBeingGrabbed())
         {
             _userTookOver = true;
@@ -90,11 +85,26 @@ public class MRBalloonWorldFollow : MonoBehaviour
         if (_userTookOver) return;
 
         ApplyFollow();
+
+        // 데스크톱 스크립트(Manager)가 자식 RectTransform.anchoredPosition을
+        // 화면 픽셀 기준으로 덮어쓰는 것을 무력화 (항상 캔버스 부모 중앙에 고정)
+        if (transform.childCount > 0)
+        {
+            RectTransform child = transform.GetChild(0) as RectTransform;
+            if (child != null)
+            {
+                child.anchoredPosition = Vector2.zero;
+            }
+        }
     }
 
     private Grabbable _grabbable;
     private bool _grabbableLookedUp;
     private bool _userTookOver;
+
+    private Vector3 _lockedOffset;
+    private Quaternion _lockedRotation;
+    private bool _hasInitializedOffset;
 
     private bool IsBeingGrabbed()
     {
@@ -123,21 +133,63 @@ public class MRBalloonWorldFollow : MonoBehaviour
             if (!_warnedNoTarget)
             {
                 _warnedNoTarget = true;
-                Debug.LogWarning($"[MRBalloonWorldFollow] '{name}' — 따라다닐 캐릭터를 찾지 못했습니다. " +
+                Debug.LogWarning($"[MRBalloonWorldFollow] '{name}' 가 따라다닐 캐릭터를 찾지 못했습니다. " +
                                   "MRCharacterWorldRoot가 씬에 있고 캐릭터가 스폰됐는지 확인하세요.");
             }
             return;
         }
 
-        transform.position = target.position + worldOffset;
+        Vector3 targetPos = target.position;
 
-        if (billboardYOnly && _cam != null)
+        if (!_hasInitializedOffset)
         {
-            Vector3 dir = transform.position - _cam.transform.position;
-            dir.y = 0f;
-            if (dir.sqrMagnitude > 0.0001f)
+            Vector3 newPos = targetPos + worldOffset;
+
+            if (_cam != null)
             {
-                transform.rotation = Quaternion.LookRotation(dir);
+                Vector3 camPos = _cam.transform.position;
+                Vector3 dirToCam = camPos - targetPos;
+                dirToCam.y = 0f;
+
+                if (dirToCam.sqrMagnitude > 0.0001f)
+                {
+                    dirToCam.Normalize();
+                    newPos = targetPos + dirToCam * 0.35f;
+                }
+
+                newPos.y = camPos.y - 0.15f;
+
+                Vector3 lookDir = newPos - camPos;
+                lookDir.y = 0f;
+                if (lookDir.sqrMagnitude > 0.0001f)
+                {
+                    _lockedRotation = Quaternion.LookRotation(lookDir);
+                }
+                else
+                {
+                    _lockedRotation = transform.rotation;
+                }
+            }
+            else
+            {
+                _lockedRotation = transform.rotation;
+            }
+
+            _lockedOffset = newPos - targetPos;
+            _hasInitializedOffset = true;
+
+            transform.position = newPos;
+            if (billboardYOnly && _cam != null)
+            {
+                transform.rotation = _lockedRotation;
+            }
+        }
+        else
+        {
+            transform.position = target.position + _lockedOffset;
+            if (billboardYOnly)
+            {
+                transform.rotation = _lockedRotation;
             }
         }
     }

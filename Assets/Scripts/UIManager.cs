@@ -299,6 +299,17 @@ public class UIManager : MonoBehaviour
             if (targetRect != null)
             {
                 targetRect.position = UIPositionManager.Instance.GetMenuPosition(menuName);
+#if UNITY_ANDROID || UNITY_EDITOR
+                if (Camera.main != null)
+                {
+                    Vector3 forward = targetRect.position - Camera.main.transform.position;
+                    forward.y = 0;
+                    if (forward.sqrMagnitude > 0.001f)
+                    {
+                        targetRect.rotation = Quaternion.LookRotation(forward);
+                    }
+                }
+#endif
             }
         }
 
@@ -372,6 +383,17 @@ public class UIManager : MonoBehaviour
             if (targetRect != null)
             {
                 targetRect.position = UIPositionManager.Instance.GetMenuPosition("characterDetail");
+#if UNITY_ANDROID || UNITY_EDITOR
+                if (Camera.main != null)
+                {
+                    Vector3 forward = targetRect.position - Camera.main.transform.position;
+                    forward.y = 0;
+                    if (forward.sqrMagnitude > 0.001f)
+                    {
+                        targetRect.rotation = Quaternion.LookRotation(forward);
+                    }
+                }
+#endif
                 Debug.Log($"[CharacterDetail][UIManager] Position applied. world={targetRect.position} anchored={targetRect.anchoredPosition}");
             }
 

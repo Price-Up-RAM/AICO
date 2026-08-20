@@ -15,6 +15,11 @@ public class NoticeManager : MonoBehaviour
             if (instance == null)
             {
                 instance = FindObjectOfType<NoticeManager>();
+                if (instance == null)
+                {
+                    GameObject go = new GameObject("NoticeManager");
+                    instance = go.AddComponent<NoticeManager>();
+                }
             }
             return instance;
         }

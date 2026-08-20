@@ -67,6 +67,11 @@ public class EmotionBalloonManager : MonoBehaviour
         // 말풍선 생성
         GameObject emotionBalloonInstance = Instantiate(emotionBalloonPrefab, _canvas.transform);
 
+#if UNITY_ANDROID || UNITY_EDITOR
+        // MR 환경에서는 스크린 스페이스 캔버스에 종속되지 않도록 최상단으로 분리
+        emotionBalloonInstance.transform.SetParent(null);
+#endif
+
         // 말풍선 이미지 변경 ("Image" > "Emotion Bubble Image" 찾기)
         RectTransform emotionBalloonRect = emotionBalloonInstance.GetComponent<RectTransform>();
         Transform imageTransform = emotionBalloonRect.Find("Image");

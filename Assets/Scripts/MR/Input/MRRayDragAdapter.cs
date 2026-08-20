@@ -32,12 +32,12 @@ public class MRRayDragAdapter : MonoBehaviour
     [SerializeField] private float minDistance = 0.5f;
     [SerializeField] private float maxDistance = 5f;
 
-    [Tooltip("레이가 바닥과 이루는 각이 이 값보다 작으면 착지점이 발산한다. " +
-             "그때는 교차 대신 고정 거리로 떨어뜨린다.")]
-    [SerializeField] private float minIncidenceDegrees = 8f;
-
-    [Tooltip("얕은 각도일 때 쓰는 고정 거리(m).")]
-    [SerializeField] private float shallowFallbackDistance = 2f;
+    [Header("이동 거리 배율 (UI 원격 이동과 동일)")]
+    [Tooltip("손을 뻗고 당길 때 이동량의 배율 상한. 멀리 있을수록 커진다.")]
+    [SerializeField] private float maxDistanceMultiplier = 12f;
+    
+    [Tooltip("카메라에 이보다 가까이는 오지 않는다(m).")]
+    [SerializeField] private float minDistanceFromCamera = 0.25f;
 
     [Header("추종")]
     [Tooltip("지수 감쇠 계수(1/s). 클수록 빠르게 붙는다. 8~12 권장.")]
@@ -86,6 +86,7 @@ public class MRRayDragAdapter : MonoBehaviour
 
     private bool _dragging;
     private MRRayProvider _dragProvider;
+    private Oculus.Interaction.RayInteractor[] _disabledInteractors;
     private int _invalidFrames;
     private Vector3 _targetPosition;
     private float _footY;
@@ -93,6 +94,11 @@ public class MRRayDragAdapter : MonoBehaviour
     // 이동 대상(래퍼)의 로컬 좌표에서 본 캐릭터 접지점.
     // 캐릭터가 래퍼 안에서 (0,0,-70) 같은 오프셋에 있을 수 있어 래퍼 원점 ≠ 캐릭터 위치다.
     private Vector3 _localGroundOffset;
+
+    // 거리 배율 변수 (UI 이동과 동일)
+    private float _lengthAlongRay;   // 잡은 순간 레이 원점~캐릭터 거리
+    private float _handDistance0;    // 잡은 순간 카메라~손(레이 원점) 거리
+    private float _multiplier;       // 손 이동 → 이동량 배율
 
     private float _handYAtGrab;
 
@@ -201,6 +207,19 @@ public class MRRayDragAdapter : MonoBehaviour
 
         _dragProvider = provider;
         _dragging = true;
+        // 캐릭터를 잡았을 때 ISDK 레이 인터랙터를 비활성화하여 UI가 동시에 잡히는 것을 방지
+        var interactors = FindObjectsOfType<Oculus.Interaction.RayInteractor>(false);
+        var disabledList = new System.Collections.Generic.List<Oculus.Interaction.RayInteractor>();
+        foreach(var r in interactors)
+        {
+            if (r.enabled)
+            {
+                r.Unselect();
+                r.enabled = false;
+                disabledList.Add(r);
+            }
+        }
+        _disabledInteractors = disabledList.ToArray();
         _invalidFrames = 0;
 
         _hasRollBaseline = false;
@@ -209,9 +228,9 @@ public class MRRayDragAdapter : MonoBehaviour
         //
         // 실기에서 캐릭터가 래퍼 안 로컬 (0,0,-70)에 있었다(2026-08-19). 그대로 두면
         // 착지 링은 래퍼가 갈 자리를, 캐릭터는 거기서 70만큼 뒤를 간다 —
-        // **보이는 곳과 놓이는 곳이 달라진다.**
+        // 보이는 곳과 놓이는 곳이 달라진다.**
         // 로컬 좌표로 잡아두면 회전을 걸어도 오프셋이 같이 돈다.
-        if (!CaptureGroundOffset())
+        if (!CaptureGrabState())
         {
             Debug.LogWarning("[MRRayDrag] 캐릭터 경계를 잴 수 없어 드래그를 시작하지 않습니다.");
             _dragging = false;
@@ -244,6 +263,15 @@ public class MRRayDragAdapter : MonoBehaviour
         _invalidFrames = 0;
         _hasRollBaseline = false;
 
+        if (_disabledInteractors != null)
+        {
+            foreach (var r in _disabledInteractors)
+            {
+                if (r != null) r.enabled = true;
+            }
+            _disabledInteractors = null;
+        }
+
         // 띄워둔 캐릭터를 링 자리(바닥)에 내려놓는다. 안 하면 공중에 뜬 채로 남는다.
         DropToGround();
 
@@ -257,56 +285,43 @@ public class MRRayDragAdapter : MonoBehaviour
     }
 
     // =========================================================
-    // 착지점
+    // 착지점 (거리 배율 + 수직 낙하)
     // =========================================================
     private bool TryResolveTarget(out Vector3 landing)
     {
         landing = Vector3.zero;
 
-        if (_dragProvider == null) return false;
-        if (characterRoot == null) return false;
+        if (_dragProvider == null || characterRoot == null) return false;
 
         Ray ray;
         if (!_dragProvider.TryGetRay(out ray)) return false;
 
+        Vector3 origin = ray.origin;
         Vector3 dir = ray.direction;
         if (dir.sqrMagnitude < 0.0001f) return false;
         dir.Normalize();
 
-        // 바닥 평면과의 입사각. 아래를 향할 때만 교차가 의미를 갖는다.
-        float sinIncidence = -dir.y;
-        float minSin = Mathf.Sin(minIncidenceDegrees * Mathf.Deg2Rad);
+        Camera cam = Camera.main;
+        if (cam == null) return false;
 
-        float distance;
-        if (sinIncidence > minSin)
-        {
-            // 평면 교차 — 원점 높이에서 바닥까지 내려가는 데 필요한 거리.
-            float drop = ray.origin.y - _footY;
-            if (drop <= 0f)
-            {
-                // 손이 발 높이보다 아래에 있다. 교차가 뒤쪽에 생기므로 폴백.
-                distance = shallowFallbackDistance;
-            }
-            else
-            {
-                distance = drop / sinIncidence;
-            }
-        }
-        else
-        {
-            // 얕은 각도에서는 교차점이 급격히 발산한다(§2-5). 고정 거리로 떨어뜨린다.
-            distance = shallowFallbackDistance;
-        }
+        // UI 이동과 같은 공식: 손을 움직인 양 * 배율
+        float handDistance = Vector3.Distance(cam.transform.position, origin);
+        float length = _lengthAlongRay + (handDistance - _handDistance0) * _multiplier;
 
-        distance = Mathf.Clamp(distance, minDistance, maxDistance);
+        // 너무 가깝거나 멀어지지 않게 제한
+        length = Mathf.Max(length, minDistanceFromCamera);
+        length = Mathf.Clamp(length, minDistance, maxDistance);
 
-        Vector3 point = ray.origin + dir * distance;
+        // 레이 방향으로 계산된 위치
+        Vector3 point = origin + dir * length;
+        
+        // 캐릭터는 항상 바닥에 놓여야 하므로 위치의 y만 고정한다.
         landing = new Vector3(point.x, _footY, point.z);
         return true;
     }
 
-    // 래퍼 로컬 좌표에서 본 접지점을 잡아둔다. 회전이 걸려도 같이 돌도록 로컬로 저장한다.
-    private bool CaptureGroundOffset()
+    // 래퍼 로컬 좌표에서 본 접지점을 잡아두고, 손 이동 배율을 계산한다.
+    private bool CaptureGrabState()
     {
         Transform moveTarget = characterRoot.CharacterMoveTarget;
         if (moveTarget == null) return false;
@@ -316,10 +331,28 @@ public class MRRayDragAdapter : MonoBehaviour
 
         Vector3 ground = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
 
-        // 발 높이는 시작 시점에 한 번만 고정한다. 매 프레임 다시 재면 캐릭터가 스스로
-        // 만든 경계 변화를 따라가며 바닥이 서서히 밀린다.
+        // 발 높이는 시작 시점에 한 번만 고정한다.
         _footY = bounds.min.y;
         _localGroundOffset = moveTarget.InverseTransformPoint(ground);
+
+        // 거리 배율 계산
+        Ray ray;
+        Camera cam = Camera.main;
+        if (cam != null && _dragProvider != null && _dragProvider.TryGetRay(out ray))
+        {
+            Vector3 origin = ray.origin;
+            Vector3 camPos = cam.transform.position;
+            
+            // 패널 이동과 동일한 공식 적용. 캐릭터의 기준점은 방금 구한 ground 위치.
+            _lengthAlongRay = Vector3.Distance(origin, ground);
+            _handDistance0 = Vector3.Distance(camPos, origin);
+
+            float objectDistance0 = Vector3.Distance(camPos, ground);
+            _multiplier = _handDistance0 > 0.01f
+                ? Mathf.Clamp(objectDistance0 / _handDistance0, 1f, maxDistanceMultiplier)
+                : 1f;
+        }
+
         return true;
     }
 

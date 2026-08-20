@@ -127,16 +127,22 @@ public class MRCharacterContextMenu : MonoBehaviour
     private void ShowCurrentCharacterDetail()
     {
         GameObject currentChar = CharManager.Instance != null ? CharManager.Instance.GetCurrentCharacter() : null;
+        if (currentChar == null)
+        {
+            MRCharacterWorldRoot worldRoot = FindFirstObjectByType<MRCharacterWorldRoot>();
+            if (worldRoot != null) currentChar = worldRoot.CurrentCharacter;
+        }
+
         CharAttributes attrs = currentChar != null ? currentChar.GetComponent<CharAttributes>() : null;
 
-        string characterId = null;
+        string characterId = "arona";
         if (attrs != null)
         {
             if (!string.IsNullOrEmpty(attrs.charcode)) characterId = attrs.charcode.ToLower();
             else if (!string.IsNullOrEmpty(attrs.nickname)) characterId = attrs.nickname.ToLower();
         }
 
-        ChangeCharInfo charInfo = characterId != null ? CharManager.Instance.FindCharacterInfoByCharacterId(characterId) : null;
+        ChangeCharInfo charInfo = CharManager.Instance != null ? CharManager.Instance.FindCharacterInfoByCharacterId(characterId) : null;
         if (charInfo == null)
         {
             Debug.LogWarning($"[MRCharacterContextMenu] character_database에서 캐릭터를 찾지 못했습니다: {characterId}");

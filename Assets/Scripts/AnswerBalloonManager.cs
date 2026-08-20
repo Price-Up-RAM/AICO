@@ -49,6 +49,11 @@ public class AnswerBalloonManager : MonoBehaviour
 
     private void Awake()
     {
+#if UNITY_ANDROID || UNITY_EDITOR
+        // MR에서는 Game20QPanel 등 비활성 UI 부모에 묶여 같이 꺼지는 것을 막기 위해 최상단으로 뺌
+        transform.SetParent(null);
+#endif
+
         HideAnswerBalloon(); // 시작 시 AnswerBalloon 숨기기
     }
 
@@ -72,10 +77,18 @@ public class AnswerBalloonManager : MonoBehaviour
             UpdateAnswerBalloonPosition();
         }
 
+#if UNITY_ANDROID || UNITY_EDITOR
+        // MR에서는 드래그(IsPicking) 중에 말풍선을 끄지 않고 따라가게 둔다.
+        if (StatusManager.Instance.IsListening || StatusManager.Instance.IsAsking)
+        {
+            HideAnswerBalloon();
+        }
+#else
         if (StatusManager.Instance.IsPicking || StatusManager.Instance.IsListening || StatusManager.Instance.IsAsking)
         {
             HideAnswerBalloon();
         }
+#endif
     }
 
     // AnswerBalloon을 타이머 무제한으로 보이기

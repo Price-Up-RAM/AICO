@@ -219,6 +219,14 @@ public class MRCharacterWorldRoot : MonoBehaviour
         _fallbackInstance.name = fallbackCharacterPrefab.name + " (MR Fallback)";
         _fallbackInstance.SetActive(true);
 
+        CharAttributes fallbackAttrs = _fallbackInstance.GetComponent<CharAttributes>();
+        if (fallbackAttrs == null)
+        {
+            fallbackAttrs = _fallbackInstance.AddComponent<CharAttributes>();
+            fallbackAttrs.charcode = "aico";
+            fallbackAttrs.nickname = "AICO";
+        }
+
         _lastCharacter = _fallbackInstance;
         _everSawCharacter = true;
 

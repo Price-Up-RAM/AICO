@@ -67,6 +67,9 @@ public class AskBalloonManager : MonoBehaviour
 
     private void Awake()
     {
+#if UNITY_ANDROID || UNITY_EDITOR
+        transform.SetParent(null);
+#endif
         InitializeQuestions();  // question 정보 등록
         HideAskBalloon(); // 시작 시 askBalloon 숨기기
     }
@@ -79,10 +82,19 @@ public class AskBalloonManager : MonoBehaviour
             UpdateAskBalloonPosition();
         }
 
+#if UNITY_ANDROID || UNITY_EDITOR
+        if (StatusManager.Instance.IsAnswering)
+        {
+            HideAskBalloon();
+            return;
+        }
+#else
         if (StatusManager.Instance.IsPicking || StatusManager.Instance.IsAnswering)
         {
             HideAskBalloon();
+            return;
         }
+#endif
     }
 
     // askBalloon을 보이고 텍스트를 초기화하는 함수

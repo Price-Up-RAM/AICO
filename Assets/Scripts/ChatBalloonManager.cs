@@ -62,6 +62,10 @@ public class ChatBalloonManager : MonoBehaviour
 
     private void Awake()
     {
+#if UNITY_ANDROID || UNITY_EDITOR
+        // MR에서는 Game20QPanel 등 비활성 UI 부모에 묶여 같이 꺼지는 것을 막기 위해 최상단으로 뺌
+        transform.SetParent(null);
+#endif
         HideChatBalloon(); // 시작 시 chatBalloon 숨기기
 
         ApplyImageFeatureAvailability();
@@ -175,11 +179,19 @@ public class ChatBalloonManager : MonoBehaviour
         }
 
         // 선택중, 답변중에는 채팅창 숨기기        
+#if UNITY_ANDROID || UNITY_EDITOR
+        if (StatusManager.Instance.IsAnswering)
+        {
+            HideChatBalloon();
+            return;
+        }
+#else
         if (StatusManager.Instance.IsPicking || StatusManager.Instance.IsAnswering)
         {
             HideChatBalloon();
             return;
         }
+#endif
 
         if (chatBalloonMode == "char")
         {

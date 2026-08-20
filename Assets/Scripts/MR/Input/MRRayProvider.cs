@@ -203,11 +203,37 @@ public class MRRayProvider : MonoBehaviour, IMRAimProvider
 
         GameObject character = ResolveCharacter();
 
+        // UI / GrabPlate 블로킹 검사
+        int blockMask = LayerMask.GetMask("Default", "UI");
+        float blockDistance = maxRayDistance;
+        bool uiBlocked = false;
+        Vector3 blockPoint = Vector3.zero;
+
+        if (Physics.Raycast(ray, out RaycastHit blockHit, maxRayDistance, blockMask))
+        {
+            if (blockHit.collider.name.Contains("Grab") || 
+                blockHit.collider.name.Contains("HandInteraction") || 
+                blockHit.collider.name.Contains("UI") || 
+                blockHit.collider.gameObject.layer == UnityEngine.LayerMask.NameToLayer("UI") ||
+                blockHit.collider.GetComponent<UnityEngine.RectTransform>() != null)
+            {
+                blockDistance = blockHit.distance;
+                uiBlocked = true;
+                blockPoint = blockHit.point;
+            }
+        }
+
         // ① 콜라이더 히트
         if (Physics.Raycast(ray, out RaycastHit hit, maxRayDistance, characterLayers))
         {
             bool isCharacter = character != null &&
                                hit.collider.transform.IsChildOf(character.transform);
+
+            if (isCharacter && uiBlocked && (blockDistance - 0.05f) < hit.distance)
+            {
+                LogAim($"[MRRay] UI가 캐릭터를 가로막음 (UI {blockDistance:F2}m < 캐릭터 {hit.distance:F2}m)");
+                return new MRAimResult { valid = true, onCharacter = false, point = blockPoint };
+            }
 
             // ① 에서 곧바로 return하므로 ② 폴백은 아무것도 안 맞았을 때만 돈다.
             //   레이어를 Char로 좁혔기 때문에 여기 걸리는 건 캐릭터뿐이다 —

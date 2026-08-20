@@ -617,7 +617,16 @@ public class CharManager : MonoBehaviour
             if (charInfo == null || charInfo.clothesList == null) continue;
             foreach (var clothes in charInfo.clothesList)
             {
-                if (clothes != null && !string.IsNullOrEmpty(clothes.charAttr_charcode) && clothes.charAttr_charcode.ToLower() == characterId)
+                if (clothes == null) continue;
+                if (!string.IsNullOrEmpty(clothes.charAttr_charcode) && clothes.charAttr_charcode.ToLower() == characterId)
+                {
+                    return charInfo;
+                }
+                if (!string.IsNullOrEmpty(clothes.name) && clothes.name.ToLower() == characterId)
+                {
+                    return charInfo;
+                }
+                if (!string.IsNullOrEmpty(clothes.prefabAddress) && clothes.prefabAddress.ToLower() == characterId)
                 {
                     return charInfo;
                 }
