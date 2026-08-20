@@ -189,10 +189,37 @@ public class MRCharacterWorldRoot : MonoBehaviour
             return;
         }
 
-        _lastCharacter = current;
-        _everSawCharacter = true;
-        MoveToWorld(current);
+        if (current != _lastCharacter)
+        {
+            _lastCharacter = current;
+            _everSawCharacter = true;
+            MoveToWorld(current);
+            UpdateHologram(current);
+        }
     }
+
+    private MRWristSummoner _wristSummoner;
+    private MRHologramPortrait _hologramPortrait;
+
+    private void UpdateHologram(GameObject target)
+    {
+        if (_hologramPortrait == null)
+        {
+            GameObject holoObj = new GameObject("MRHologramPortrait");
+            holoObj.transform.SetParent(this.transform);
+            _hologramPortrait = holoObj.AddComponent<MRHologramPortrait>();
+            CurrentHologram = holoObj;
+
+            GameObject summonerObj = new GameObject("MRWristSummoner");
+            summonerObj.transform.SetParent(this.transform);
+            _wristSummoner = summonerObj.AddComponent<MRWristSummoner>();
+            _wristSummoner.hologramPortrait = _hologramPortrait;
+            
+            holoObj.SetActive(false);
+        }
+
+        _hologramPortrait.SetCharacter(target);
+    } 
 
     // =========================================================
     // 폴백 스폰 — StreamingAssets 문제의 임시 우회
@@ -229,6 +256,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
 
         _lastCharacter = _fallbackInstance;
         _everSawCharacter = true;
+        
+        UpdateHologram(_fallbackInstance);
 
         // 프리팹 루트가 RectTransform(localScale 120)이므로 크기·위치를 반드시 보정한다.
         ApplyScale(_fallbackInstance);
@@ -644,6 +673,9 @@ public class MRCharacterWorldRoot : MonoBehaviour
     // =========================================================
     public Transform WorldRoot => worldRoot;
     public GameObject CurrentCharacter => _lastCharacter;
+    
+    [HideInInspector]
+    public GameObject CurrentHologram { get; set; }
 
     /// <summary>현재 캐릭터를 지정 위치로 옮긴다. 바닥 안착·드래그에서 사용.</summary>
     public void SetCharacterPosition(Vector3 worldPosition)

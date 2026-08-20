@@ -110,16 +110,52 @@ public class MRRayProvider : MonoBehaviour, IMRAimProvider
         characterLayers = MRCharacterBounds.ResolveCharacterMask(characterLayers, this);
     }
 
+    private bool _wasTouching = false;
+    private int _touchPulseFrames = 0;
+
     private void Update()
     {
         ResolveHand();
 
-        // 핀치 판정과 포즈 조회를 분리한다(§4-19 주의 ①).
-        IsPressed = ReadPinch();
-
         UpdateRayPose();
 
-        Aim = _hasRayPose ? EvaluateAim() : MRAimResult.None;
+        bool isPinching = ReadPinch();
+        bool isTouchingNow = false;
+
+        GameObject character = ResolveCharacter();
+        var root = Object.FindFirstObjectByType<MRCharacterWorldRoot>();
+
+        if (_hasRayPose)
+        {
+            // 터치 반경을 1.5cm로 줄여서 오작동 방지
+            Collider[] hits = Physics.OverlapSphere(_rayOrigin, 0.015f, characterLayers);
+            foreach (var h in hits)
+            {
+                if ((character != null && h.transform.IsChildOf(character.transform)) ||
+                    (root != null && root.CurrentHologram != null && h.transform.IsChildOf(root.CurrentHologram.transform)))
+                {
+                    isTouchingNow = true;
+                    break;
+                }
+            }
+        }
+
+        // 터치를 처음 시작한 순간에만 2프레임 동안 펄스(클릭 판정)를 보낸다.
+        // 계속 닿고 있다고 해서 홀드(드래그)로 넘어가는 것을 방지함.
+        if (isTouchingNow && !_wasTouching)
+        {
+            _touchPulseFrames = 2;
+        }
+        _wasTouching = isTouchingNow;
+
+        bool isTouchPulse = _touchPulseFrames > 0;
+        if (_touchPulseFrames > 0) _touchPulseFrames--;
+
+        // 드래그(홀드)는 오직 핀치일 때만 유지되며, 터치는 짧은 클릭(펄스)만 발생시킨다.
+        IsPressed = isPinching || isTouchPulse;
+
+        // 조준점(Aim)은 터치 중(isTouchingNow)이면 계속 캐릭터 위로 판정하여 핀치 드래그가 가능하게 한다.
+        Aim = _hasRayPose ? EvaluateAim(character, root, isTouchingNow) : MRAimResult.None;
 
         DrawRayLine();
     }
@@ -197,11 +233,15 @@ public class MRRayProvider : MonoBehaviour, IMRAimProvider
         return _hand.GetFingerIsPinching(HandFinger.Index);
     }
 
-    private MRAimResult EvaluateAim()
+    private MRAimResult EvaluateAim(GameObject character, MRCharacterWorldRoot root, bool isTouching)
     {
-        var ray = new Ray(_rayOrigin, _rayDir);
+        if (isTouching)
+        {
+            LogAim("[MRRay] 캐릭터/홀로그램 터치 감지!");
+            return new MRAimResult { valid = true, onCharacter = true, point = _rayOrigin };
+        }
 
-        GameObject character = ResolveCharacter();
+        var ray = new Ray(_rayOrigin, _rayDir);
 
         // UI / GrabPlate 블로킹 검사
         int blockMask = LayerMask.GetMask("Default", "UI");
@@ -226,8 +266,9 @@ public class MRRayProvider : MonoBehaviour, IMRAimProvider
         // ① 콜라이더 히트
         if (Physics.Raycast(ray, out RaycastHit hit, maxRayDistance, characterLayers))
         {
-            bool isCharacter = character != null &&
-                               hit.collider.transform.IsChildOf(character.transform);
+            bool isHologram = root != null && root.CurrentHologram != null && hit.collider.transform.IsChildOf(root.CurrentHologram.transform);
+            
+            bool isCharacter = (character != null && hit.collider.transform.IsChildOf(character.transform)) || isHologram;
 
             if (isCharacter && uiBlocked && (blockDistance - 0.05f) < hit.distance)
             {

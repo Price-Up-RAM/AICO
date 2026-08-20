@@ -210,6 +210,16 @@ public class MRIntentRouter : MonoBehaviour
         OnSingleTap(onCharacter, isRayChannel);
     }
 
+    public void SimulateCharacterSingleTap()
+    {
+        OnSingleTap(true, false);
+    }
+
+    public void SimulateCharacterDoubleTap()
+    {
+        OnDoubleTap(true, false);
+    }
+
     private void OnSingleTap(bool onCharacter, bool isRayChannel)
     {
         if (onCharacter)

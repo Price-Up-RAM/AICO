@@ -52,10 +52,12 @@ public class MRBalloonWorldFollow : MonoBehaviour
     private static MRCharacterWorldRoot _worldRootCache;
     private Camera _cam;
     private bool _warnedNoTarget;
+    private Vector3 _originalScale = Vector3.one;
 
     private void Awake()
     {
         _cam = Camera.main;
+        _originalScale = transform.localScale;
     }
 
     private void OnEnable()
@@ -127,7 +129,7 @@ public class MRBalloonWorldFollow : MonoBehaviour
     {
         if (_cam == null) _cam = Camera.main;
 
-        Transform target = ResolveTarget();
+        Transform target = ResolveTarget(out bool isHologram);
         if (target == null)
         {
             if (!_warnedNoTarget)
@@ -141,61 +143,59 @@ public class MRBalloonWorldFollow : MonoBehaviour
 
         Vector3 targetPos = target.position;
 
+        // 홀로그램일 경우 스케일을 줄이고 오프셋도 약간 조절
+        float targetScale = isHologram ? 0.2f : 1.0f;
+        Vector3 offset = isHologram ? (worldOffset * 0.3f) : worldOffset;
+
+        Vector3 desiredScale = _originalScale * targetScale;
+        if (transform.localScale != desiredScale)
+        {
+            transform.localScale = desiredScale;
+        }
+
         if (!_hasInitializedOffset)
         {
-            Vector3 newPos = targetPos + worldOffset;
+            Vector3 newPos = targetPos + offset;
 
             if (_cam != null)
             {
                 Vector3 camPos = _cam.transform.position;
                 Vector3 dirToCam = camPos - targetPos;
-                dirToCam.y = 0f;
-
-                if (dirToCam.sqrMagnitude > 0.0001f)
+                dirToCam.y = 0; // 수평 방향
+                if (dirToCam.sqrMagnitude > 0.001f)
                 {
                     dirToCam.Normalize();
-                    newPos = targetPos + dirToCam * 0.35f;
+                    // 캐릭터와 카메라 사이(캐릭터 앞쪽)로 약간 당긴다
+                    newPos += dirToCam * (isHologram ? 0.05f : 0.15f);
                 }
-
-                newPos.y = camPos.y - 0.15f;
-
-                Vector3 lookDir = newPos - camPos;
-                lookDir.y = 0f;
-                if (lookDir.sqrMagnitude > 0.0001f)
-                {
-                    _lockedRotation = Quaternion.LookRotation(lookDir);
-                }
-                else
-                {
-                    _lockedRotation = transform.rotation;
-                }
-            }
-            else
-            {
-                _lockedRotation = transform.rotation;
             }
 
             _lockedOffset = newPos - targetPos;
-            _hasInitializedOffset = true;
-
-            transform.position = newPos;
-            if (billboardYOnly && _cam != null)
-            {
-                transform.rotation = _lockedRotation;
-            }
-        }
-        else
-        {
-            transform.position = target.position + _lockedOffset;
+            
             if (billboardYOnly)
             {
-                transform.rotation = _lockedRotation;
+                Vector3 dir = _cam.transform.position - newPos;
+                dir.y = 0;
+                if (dir.sqrMagnitude > 0.001f)
+                    _lockedRotation = Quaternion.LookRotation(dir);
+                else
+                    _lockedRotation = Quaternion.identity;
             }
+            else
+            {
+                _lockedRotation = Quaternion.LookRotation(_cam.transform.position - newPos);
+            }
+
+            _hasInitializedOffset = true;
         }
+
+        transform.position = targetPos + _lockedOffset;
+        transform.rotation = _lockedRotation;
     }
 
-    private Transform ResolveTarget()
+    private Transform ResolveTarget(out bool isHologram)
     {
+        isHologram = false;
         if (explicitTarget != null) return explicitTarget;
 
         if (_worldRootCache == null)
@@ -203,9 +203,18 @@ public class MRBalloonWorldFollow : MonoBehaviour
             _worldRootCache = FindFirstObjectByType<MRCharacterWorldRoot>();
         }
 
-        if (_worldRootCache != null && _worldRootCache.CurrentCharacter != null)
+        if (_worldRootCache != null)
         {
-            return _worldRootCache.CurrentCharacter.transform;
+            if (_worldRootCache.CurrentHologram != null && _worldRootCache.CurrentHologram.activeInHierarchy)
+            {
+                isHologram = true;
+                return _worldRootCache.CurrentHologram.transform;
+            }
+
+            if (_worldRootCache.CurrentCharacter != null)
+            {
+                return _worldRootCache.CurrentCharacter.transform;
+            }
         }
 
         return null;

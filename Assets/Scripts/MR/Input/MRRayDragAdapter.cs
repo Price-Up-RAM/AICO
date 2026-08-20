@@ -343,11 +343,19 @@ public class MRRayDragAdapter : MonoBehaviour
             Vector3 origin = ray.origin;
             Vector3 camPos = cam.transform.position;
             
-            // 패널 이동과 동일한 공식 적용. 캐릭터의 기준점은 방금 구한 ground 위치.
+            // 패널 이동과 동일한 공식 적용. 캐릭터의 기준은 방금 구한 ground 위치.
             _lengthAlongRay = Vector3.Distance(origin, ground);
+            
+            // 홀로그램을 잡은 경우, 진짜 캐릭터가 허공에서 잡힌 것으로 간주하여
+            // 사용자가 원하는 초기 거리(약 2m)로 덮어씌운다.
+            if (characterRoot.CurrentHologram != null && characterRoot.CurrentHologram.activeInHierarchy)
+            {
+                _lengthAlongRay = 2.0f;
+            }
+
             _handDistance0 = Vector3.Distance(camPos, origin);
 
-            float objectDistance0 = Vector3.Distance(camPos, ground);
+            float objectDistance0 = _lengthAlongRay; // 홀로그램 덮어쓰기 반영
             _multiplier = _handDistance0 > 0.01f
                 ? Mathf.Clamp(objectDistance0 / _handDistance0, 1f, maxDistanceMultiplier)
                 : 1f;
