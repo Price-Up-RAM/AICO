@@ -62,9 +62,8 @@ public class MRSceneStripper : MonoBehaviour
         typeof(GlobalInputVariableManager),
 
         // --- 화면 캡처 / OCR (대상 화면이 MR에 없음) ---
-        typeof(ScreenshotManager),
-        typeof(ScreenshotOCRManager),
         typeof(ScreenshotOCRRectManager),
+        typeof(ScreenshotOCRManager),
         typeof(OCRManager),
         typeof(OCRAutoMapManager),
         typeof(PIPManager),

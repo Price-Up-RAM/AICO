@@ -342,7 +342,17 @@ public class ScreenshotManager : MonoBehaviour
     // 스크린샷 영역이 설정되었는지 확인
     public bool IsScreenshotAreaSet()
     {
+#if UNITY_ANDROID || UNITY_EDITOR
+        if (mrInjectedBytes != null) return true;
+#endif
         return isAreaSet;
+    }
+    
+    // MR 포팅: 제스처 프레임에서 캡처한 이미지를 주입
+    private byte[] mrInjectedBytes = null;
+    public void InjectMRScreenshot(byte[] bytes)
+    {
+        mrInjectedBytes = bytes;
     }
 
     // Unity 창을 캡처에서 제외/포함 설정
@@ -735,6 +745,16 @@ public class ScreenshotManager : MonoBehaviour
             yield break;
         }
         
+#if UNITY_ANDROID || UNITY_EDITOR
+        if (mrInjectedBytes != null)
+        {
+            byte[] bytes = mrInjectedBytes;
+            mrInjectedBytes = null; // 소비
+            callback?.Invoke(bytes);
+            yield break;
+        }
+#endif
+
         // 전처리
         CaptureState state = PrepareCapture("[Screenshot Memory]");
         
@@ -771,6 +791,16 @@ public class ScreenshotManager : MonoBehaviour
             callback?.Invoke(null, 0, 0, 0, 0);
             yield break;
         }
+
+#if UNITY_ANDROID || UNITY_EDITOR
+        if (mrInjectedBytes != null)
+        {
+            byte[] bytes = mrInjectedBytes;
+            mrInjectedBytes = null; // 소비
+            callback?.Invoke(bytes, 0, 0, 0, 0); // MR은 영역 정보 없음
+            yield break;
+        }
+#endif
         
         // 전처리
         CaptureState state = PrepareCapture("[OCR Screenshot]");
