@@ -137,12 +137,50 @@ Controller가 없으면 Latte 본도 멀쩡함 — 즉 Animator 활성화 자체
 
 **주의:** 한 오브젝트에 위 세 컨트롤러(DogAnimationController/LowPolyDogAnimationController/WolfAnimationController)를 동시에 붙이면 안 됨 — 각 모델 전용이라 파라미터 이름이 안 맞는 것까지 호출되어 콘솔 경고 발생. cookie 강아지가 LowPoly 애니메이션으로 리타겟되면, `LowPolyDogAnimationController` + `DogTestInput`을 붙이면 됨 (단, cookie 전용 새 Animator Controller를 만들어 리타겟된 클립을 연결해야 함).
 
+## 6. Blender 작업 파일 위치 (중요, 팀원 전달용)
+
+**이 문서가 다루는 리깅 작업은 Unity 프로젝트 밖, 로컬 Blender 파일에서 진행 중입니다.** Unity `Assets/Dog/`에는 완성/중간 산출물 FBX만 들어있고, 실제 본/웨이트 편집은 아래 blend 파일에서 이루어집니다.
+
+- **작업 중인 blend 파일:** `C:\Users\BaeSoohyun\Documents\dog3.blend` (Latte 본을 cookie 메쉬 "쿠키"에 이식하는 리타겟 작업 진행 중)
+- **Idle 애니메이션 완성 백업:** `C:\Users\BaeSoohyun\Documents\dog3.fbx`
+- 이 파일들은 Unity 프로젝트 디렉터리 밖에 있어 git으로 관리되지 않으므로, 팀원과 공유하려면 파일을 직접 전달해야 함.
+
+## 7. 2026-08-22 진행 — 팔다리 스케일 조정 스크립트 적용 + 애니메이션 미재생 이슈 (미해결)
+
+**배경:** cookie는 Latte보다 체형(다리 길이·척추 비율)이 커서, Latte 본을 그대로 이식하면 팔다리가 짧게 붙는 문제가 있었음. Neck 이하 각 본 체인(척추/양팔/양다리/꼬리)을 "Latte 안에서의 본별 상대 길이 비율은 유지한 채, 체인 하나당 하나의 배율만 곱해서" cookie 크기에 맞게 확대하는 스크립트(`retarget_limbs_scaled.py`, 다운로드 폴더)를 작성해 `dog3.blend`에 적용 완료.
+
+적용된 체인별 배율: 척추 1.41배, 왼팔 1.70배, 오른팔 1.72배, 왼다리 1.58배, 오른다리 1.62배, 꼬리 1.84배. Pelvis(기준점)와 Neck 이상(Head/Eye/Mouth/Tongue/Nose/Ear)은 건드리지 않음.
+
+**새로 발생한 문제 (미해결):** 이 스크립트로 본 Rest Pose(위치/길이)를 바꾼 뒤, cookie(`Bip001`) 아마추어에서 기존 Walk 애니메이션을 재생해보면 **Latte(`Bip001.001`)는 정상적으로 움직이는데 cookie(`Bip001`)는 전혀 움직이지 않음.** Action Editor상 `Bip001`에 `Walk` Action이 정상 연결돼 있고 각 본마다 키프레임도 존재하는 것까지는 확인됨 (즉 Action 연결 자체가 끊긴 건 아님). "포즈 위치/휴식 위치" 토글을 "포즈 위치"로 바꿔도 해결 안 됨.
+
+**다음 세션에서 확인할 것 (아직 안 해본 것):**
+1. Pose Mode에서 본을 손으로 직접 회전(R키)해도 반응이 없는지 → 반응 없으면 본 자체가 잠겨있거나 다른 문제, 반응 있으면 재생/Action 연결 쪽 문제로 좁혀짐
+2. NLA 에디터에 별도 스트립이 있고 influence가 0이거나 뮤트돼 있는지 확인
+3. Rest Pose 변경으로 기존 F-curve(포즈 본 회전값)의 상대 계산이 새 Rest Pose 기준으로 깨졌을 가능성 (다만 보통 "이상하게 움직인다"가 예상되는데 실제로는 "전혀 안 움직임"이라 이 가설과는 안 맞을 수 있음 — 원인 미확정)
+
+**주의:** 이 문제를 해결하기 전까지는 Weight Paint(웨이트 보정) 단계로 넘어가지 않는 게 좋음 — 애니메이션이 재생 안 되면 웨이트가 맞는지 눈으로 확인할 방법이 없음.
+
+## 8. 팀원 작업용 "생메시" FBX 추출 (완료)
+
+다른 팀원이 별도로 리깅/웨이트를 시도해볼 수 있도록, `dog3.blend`의 cookie 메쉬(`Dog` 오브젝트, `DogMesh` 컬렉션)에서 리깅/웨이트를 제거한 순수 지오메트리만 FBX로 추출함.
+
+**절차 (재현 시 참고):**
+1. `Dog` 메쉬 오브젝트 선택 → 오브젝트 데이터 프로퍼티스(초록 삼각형 아이콘) → 버텍스 그룹 패널
+2. 버텍스 그룹이 197개(Rigify 기반 `DEF-f_index.02.R` 등 이름 패턴)로 많아 UI에서 하나씩 지우기 번거로우므로, **Scripting 탭 파이썬 콘솔에서 `bpy.data.objects["Dog"].vertex_groups.clear()`로 일괄 삭제**
+3. 모디파이어 프로퍼티스(렌치 아이콘)에서 Armature 모디파이어 제거
+4. File → Export → FBX, 오브젝트 유형에서 "메시"만 체크(아마츄어 체크 해제)하고 익스포트
+
+**주의 (재현 시 실수하기 쉬운 부분):** 아웃라이너에서 초록 역삼각형 "data" 항목을 직접 삭제하면 안 됨 — 그건 메시 지오메트리 데이터 블록 자체라 삭제 시 메시가 통째로 사라짐. 반드시 속성 에디터의 버텍스 그룹 패널(또는 파이썬 콘솔)에서 그룹만 지울 것.
+
+이 작업은 `dog3.blend` 원본에서 진행했으나 **작업 완료 직후 Ctrl+Z로 전부 되돌려서 원본은 리깅/웨이트가 살아있는 상태 그대로 안전하게 보존됨.** 팀원에게 넘긴 생메시 FBX는 원본과 별개의 산출물이며, 팀원이 그 위에 새로 리깅한 결과물을 다시 합칠 계획이 있다면 병합 방식을 사전에 논의할 것.
+
 ## 다음에 할 일
 
-1. Auto-Rig Pro 구매 여부 결정 (또는 무료 Bone Constraint 방법 택일)
-2. LowPoly GoldenRetriever FBX를 cookie 리그와 같은 Blender 씬으로 Import
-3. 본 매핑 (주요 관절: Root, Spine, Neck, Head, Tail, 다리 4관절 x4 위주. 발가락/얼굴 세부는 생략 가능)
-4. Walk/Run/Sit/Bark/Idle 클립 리타겟
-5. cookie 리그 기준으로 FBX 재익스포트 (Path Mode: Copy, Deform Bones Only 옵션 동일하게 적용)
-6. Unity에서 cookie 전용 새 Animator Controller 생성, State에 리타겟된 클립 연결
-7. `LowPolyDogAnimationController` + `DogTestInput`을 cookie 오브젝트에 붙여서 테스트
+1. **cookie 애니메이션 미재생 원인 진단** (7번 항목, 최우선 — 이게 안 풀리면 이후 웨이트 보정도 눈으로 확인 불가)
+2. Auto-Rig Pro 구매 여부 결정 (또는 무료 Bone Constraint 방법 택일)
+3. LowPoly GoldenRetriever FBX를 cookie 리그와 같은 Blender 씬으로 Import
+4. 본 매핑 (주요 관절: Root, Spine, Neck, Head, Tail, 다리 4관절 x4 위주. 발가락/얼굴 세부는 생략 가능)
+5. Walk/Run/Sit/Bark/Idle 클립 리타겟
+6. cookie 리그 기준으로 FBX 재익스포트 (Path Mode: Copy, Deform Bones Only 옵션 동일하게 적용)
+7. Unity에서 cookie 전용 새 Animator Controller 생성, State에 리타겟된 클립 연결
+8. `LowPolyDogAnimationController` + `DogTestInput`을 cookie 오브젝트에 붙여서 테스트
