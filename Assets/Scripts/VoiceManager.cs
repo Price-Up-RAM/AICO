@@ -74,8 +74,8 @@ public class VoiceManager : MonoBehaviour
         try
         {
             // string fullPath = "file://" + Application.dataPath + audioPath;  // Assets 패키지화 할 경우 사용
-            // string fullPath = "file://" + Application.streamingAssetsPath  + audioPath;  // Assets>StreamingAssets 활용시 사용
-            string fullPath = Path.Combine(Application.streamingAssetsPath, audioPath);
+            // string fullPath = "file://" + MRDataPath.Root  + audioPath;  // Assets>StreamingAssets 활용시 사용
+            string fullPath = Path.Combine(MRDataPath.Root, audioPath);
             StartCoroutine(LoadAudioOGG(fullPath));
         } catch {
             
@@ -89,8 +89,8 @@ public class VoiceManager : MonoBehaviour
         try
         {
             // string fullPath = "file://" + Application.dataPath + audioPath;  // Assets 패키지화 할 경우 사용
-            // string fullPath = "file://" + Application.streamingAssetsPath  + audioPath;  // Assets>StreamingAssets 활용시 사용
-            string fullPath = Path.Combine(Application.streamingAssetsPath, audioPath);
+            // string fullPath = "file://" + MRDataPath.Root  + audioPath;  // Assets>StreamingAssets 활용시 사용
+            string fullPath = Path.Combine(MRDataPath.Root, audioPath);
             StartCoroutine(LoadAudioWav(fullPath));
         }
         catch

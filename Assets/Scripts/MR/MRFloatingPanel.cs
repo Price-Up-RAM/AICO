@@ -37,11 +37,18 @@ public class MRFloatingPanel : MonoBehaviour
              "스스로 숨었다 나타나는 특수 패널만 끈다.")]
     [SerializeField] private bool showOnEnable = true;
 
-    [Tooltip("표시될 때마다 사용자 정면으로 배치할지. " +
-             "순간적으로 떴다 사라지는 DevionGames 위젯(Context Menu / Radial Menu / Tooltip)은 켠다. " +
-             "UIPositionManager가 위치를 잡아주고 사용자가 옮긴 자리를 지켜야 하는 " +
-             "레거시 패널은 꺼둔다(§4-27).")]
-    [SerializeField] private bool placeInFrontOnShow = false;
+    public enum SpawnBehavior
+    {
+        KeepSavedPose,  // 기존 좌표(저장된 위치 또는 UIPositionManager) 유지
+        InFrontOfUser,  // 항상 사용자 눈앞 정면
+        NearCharacter   // 캐릭터 앞, 사용자 눈높이
+    }
+
+    [Tooltip("표시될 때마다 어디에 배치할지.\n" +
+             "KeepSavedPose: 레거시 패널(사용자가 옮긴 위치 유지).\n" +
+             "InFrontOfUser: 떴다 사라지는 시스템 위젯(눈앞).\n" +
+             "NearCharacter: 대화창처럼 캐릭터 곁에 떠야 하는 패널.")]
+    [SerializeField] private SpawnBehavior spawnBehavior = SpawnBehavior.KeepSavedPose;
 
     [Tooltip("투명해지면(alpha 0) 잡기 판·판정 면 자식을 함께 끈다.\n" +
              "UIWidget.Close()는 CanvasGroup의 blocksRaycasts만 끄는데 그건 uGUI 레이캐스트만 막는다. " +
@@ -165,12 +172,13 @@ public class MRFloatingPanel : MonoBehaviour
     /// 눈앞으로 끌려와 §4-27("내가 옮기면 그 자리에 남는다")과 충돌한다.</summary>
     private void OnEnable()
     {
-        if (placeInFrontOnShow)
+        if (spawnBehavior == SpawnBehavior.InFrontOfUser)
         {
-            // 순간적으로 떴다 사라지는 위젯은 **열 때마다** 눈앞에 잡는다.
-            // 최초 1회만 잡으면 처음 뜬 자리에 계속 남아, 몸을 돌린 뒤 열면 등 뒤에서 뜬다.
-            // 저장된 포즈는 일부러 무시한다.
             PlaceInFront();
+        }
+        else if (spawnBehavior == SpawnBehavior.NearCharacter)
+        {
+            PlaceNearCharacter();
         }
         else if (_hasSavedPose && panelRoot != null)
         {
@@ -212,7 +220,8 @@ public class MRFloatingPanel : MonoBehaviour
     /// Tooltip처럼 우리가 호출부를 모르는 위젯까지 한 번에 커버된다.</summary>
     private void LateUpdate()
     {
-        if (!placeInFrontOnShow && !hideInteractionWhenTransparent) return;
+        bool doSpawnOnShow = spawnBehavior != SpawnBehavior.KeepSavedPose;
+        if (!doSpawnOnShow && !hideInteractionWhenTransparent) return;
 
         if (_watchedGroup == null)
         {
@@ -226,9 +235,10 @@ public class MRFloatingPanel : MonoBehaviour
         bool isVisible = alpha > 0.001f;
 
         // 0 → 양수로 올라간 순간이 "열렸다"이다.
-        if (placeInFrontOnShow && !wasVisible && isVisible)
+        if (doSpawnOnShow && !wasVisible && isVisible)
         {
-            PlaceInFront();
+            if (spawnBehavior == SpawnBehavior.NearCharacter) PlaceNearCharacter();
+            else PlaceInFront();
         }
 
         // 첫 프레임에는 변화가 없어도 한 번 적용한다 — 앱 시작 시점부터
@@ -338,9 +348,51 @@ public class MRFloatingPanel : MonoBehaviour
         PlaceAt(spawnPos);
     }
 
+    /// <summary>사용자 눈높이를 유지하되, 캐릭터 앞(캐릭터와 사용자 사이)에 배치한다.</summary>
+    public void PlaceNearCharacter()
+    {
+        Transform eye = ResolveEye();
+        if (eye == null || panelRoot == null) return;
+
+        GameObject charObj = CharManager.Instance != null ? CharManager.Instance.GetCurrentCharacter() : null;
+        if (charObj == null)
+        {
+            MRCharacterWorldRoot worldRoot = FindFirstObjectByType<MRCharacterWorldRoot>();
+            if (worldRoot != null) charObj = worldRoot.CurrentCharacter;
+        }
+
+        if (charObj != null)
+        {
+            Vector3 charPos = charObj.transform.position;
+            Vector3 dirFromCharToEye = eye.position - charPos;
+            dirFromCharToEye.y = 0f;
+
+            if (dirFromCharToEye.sqrMagnitude > 0.001f)
+            {
+                dirFromCharToEye.Normalize();
+            }
+            else
+            {
+                dirFromCharToEye = charObj.transform.forward;
+            }
+
+            // 캐릭터 앞쪽으로 살짝(0.4m) 당기고, 높이는 사용자 눈높이(혹은 설정된 오프셋 적용)
+            Vector3 spawnPos = charPos + dirFromCharToEye * 0.4f;
+            spawnPos.y = eye.position.y + spawnHeightOffset;
+            PlaceAt(spawnPos);
+        }
+        else
+        {
+            // 캐릭터를 찾을 수 없으면 눈앞 소환으로 폴백
+            PlaceInFront();
+        }
+    }
+
     private void PlaceAt(Vector3 worldPosition)
     {
         if (panelRoot == null) return;
+
+        Debug.Log($"[MRFloatingPanel] {name} PlaceAt called! worldPosition: {worldPosition}, eye.y: {ResolveEye()?.position.y}, char: {(CharManager.Instance?.GetCurrentCharacter() != null ? CharManager.Instance.GetCurrentCharacter().name : "null")}");
 
         panelRoot.position = worldPosition;
         FaceCameraYAxisOnly();
@@ -441,6 +493,9 @@ public class MRFloatingPanel : MonoBehaviour
     // UIWidget이 스케일을 0으로 만들어버린 경우의 복구값. 확정 캔버스 레시피 기준.
     private const float RecoveredCanvasScale = 0.0005f;
 
+    [Tooltip("패널의 앞면(+Z, -Z) 방향이 반대로 디자인된 경우 켭니다. (예: 180도 뒤집혀 보일 때)")]
+    [SerializeField] private bool faceReverse = false;
+
     private void FaceCameraYAxisOnly()
     {
         Transform eye = ResolveEye();
@@ -450,6 +505,7 @@ public class MRFloatingPanel : MonoBehaviour
         dirToCam.y = 0f;
         if (dirToCam.sqrMagnitude > 0.001f)
         {
+            if (faceReverse) dirToCam = -dirToCam;
             panelRoot.rotation = Quaternion.LookRotation(dirToCam);
         }
     }

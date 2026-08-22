@@ -217,6 +217,20 @@ public class AnswerBalloonSimpleManager : MonoBehaviour
     // AnswerBalloonSimple의 위치를 캐릭터 바로 위로 조정하는 함수
     private void UpdateAnswerBalloonSimplePosition()
     {
+#if UNITY_ANDROID || UNITY_EDITOR
+        // MR: 배치는 MRBalloonWorldFollow가 **월드 좌표로** 전담한다.
+        //
+        // 여기서 anchoredPosition을 대입하면 매 프레임 말풍선을 부모 원점으로 끌어내려
+        // MR 배치와 싸운다 (Kickoff Guide §4-45). Update()가 LateUpdate()보다 먼저 돌기 때문에
+        // **평소에는 MRBalloonWorldFollow가 마지막에 덮어써서 화면상 멀쩡해 보이지만**,
+        // 잡기(grab)로 위치 소유권이 사용자에게 넘어가 MR 쪽이 쓰기를 멈추는 순간
+        // 이 대입만 남아 말풍선이 바닥(부모 원점)으로 떨어진다. 2026-08-22 실기에서 확인.
+        //
+        // ⚠ UIPositionManager 쪽에서 값을 (0,0)으로 바꾸는 것만으로는 부족하다 —
+        //    값이 아니라 **대입 자체**를 멈춰야 한다.
+        return;
+#else
         answerBalloonSimpleTransform.anchoredPosition = UIPositionManager.Instance.GetBalloonAnchoredPosition(characterTransform);
+#endif
     }
 }

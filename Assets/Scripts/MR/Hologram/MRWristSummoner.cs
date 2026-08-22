@@ -63,17 +63,39 @@ public class MRWristSummoner : MonoBehaviour
         Hand[] hands = FindObjectsByType<Hand>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
         foreach (var h in hands)
         {
-            if (h.Handedness == Handedness.Left) _leftHand = h;
-            else if (h.Handedness == Handedness.Right) _rightHand = h;
+            if (!h.IsTrackedDataValid) continue;
+            
+            if (h.Handedness == Handedness.Left) 
+            {
+                _leftHand = h;
+                Debug.Log($"[MRWristSummoner] 왼손 바인딩: {h.gameObject.name}");
+            }
+            else if (h.Handedness == Handedness.Right) 
+            {
+                _rightHand = h;
+                Debug.Log($"[MRWristSummoner] 오른손 바인딩: {h.gameObject.name}");
+            }
         }
     }
 
+    private float _logTimer = 0f;
+    private float _handSearchLogTimer = 0f;
+
     private void Update()
     {
-        if (_leftHand == null || _rightHand == null)
+        if (_leftHand == null || _rightHand == null || !_leftHand.IsTrackedDataValid || !_rightHand.IsTrackedDataValid)
         {
             FindHands();
-            if (_leftHand == null || _rightHand == null) return;
+            if (_leftHand == null || _rightHand == null)
+            {
+                _handSearchLogTimer += Time.deltaTime;
+                if (_handSearchLogTimer >= 2.0f)
+                {
+                    _handSearchLogTimer = 0f;
+                    Debug.Log($"[MRWristSummoner] 유효한 트래킹 손을 찾는 중... (왼손: {_leftHand != null}, 오른손: {_rightHand != null})");
+                }
+                return;
+            }
         }
 
         if (!_leftHand.IsTrackedDataValid) return;
@@ -98,6 +120,11 @@ public class MRWristSummoner : MonoBehaviour
             }
         }
 
+        // 로그 출력 (1초에 1번)
+        _logTimer += Time.deltaTime;
+        bool shouldLog = _logTimer >= 1.0f;
+        if (shouldLog) _logTimer = 0f;
+
         // 탭 소환 판정 (거리 및 Latch(눌림 상태) 활용)
         if (_rightHand.IsTrackedDataValid && wristAngle <= 90f)
         {
@@ -105,6 +132,11 @@ public class MRWristSummoner : MonoBehaviour
             {
                 float distance = Vector3.Distance(leftWristPose.position, rightIndexTipPose.position);
                 
+                if (shouldLog)
+                {
+                    Debug.Log($"[MRWristSummoner] 손목(Angle:{wristAngle:F1}), 거리:{distance:F3}m (임계값:{tapDistanceThreshold}m), 왼쪽손목:{leftWristPose.position}, 오른쪽검지:{rightIndexTipPose.position}");
+                }
+
                 if (distance <= tapDistanceThreshold)
                 {
                     if (!_isTapping)
@@ -122,6 +154,10 @@ public class MRWristSummoner : MonoBehaviour
         }
         else
         {
+            if (shouldLog && wristAngle > 90f)
+            {
+                Debug.Log($"[MRWristSummoner] 손등이 아래를 향함 (Angle:{wristAngle:F1}) - 탭 무시");
+            }
             _isTapping = false;
         }
         

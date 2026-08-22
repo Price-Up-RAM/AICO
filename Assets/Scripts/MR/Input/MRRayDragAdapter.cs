@@ -272,8 +272,9 @@ public class MRRayDragAdapter : MonoBehaviour
             _disabledInteractors = null;
         }
 
-        // 띄워둔 캐릭터를 링 자리(바닥)에 내려놓는다. 안 하면 공중에 뜬 채로 남는다.
-        DropToGround();
+        // 띄워둔 캐릭터를 링 자리(바닥)에 내려놓는다.
+        // Phase 2: 이제 MRFloorPlacement가 중력을 적용하여 자연스럽게 떨어뜨린다.
+        // DropToGround();
 
         EndPickPose();
         HideRing();

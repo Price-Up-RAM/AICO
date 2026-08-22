@@ -11,7 +11,7 @@ public static class UtilAudio
     public static float GetWavDurationInSeconds(string filePath)
     {
         // wav는 streamingAsset내에만 보관할 것
-        string fullPath = Path.Combine(Application.streamingAssetsPath, filePath);
+        string fullPath = Path.Combine(MRDataPath.Root, filePath);
         if (!File.Exists(fullPath))
         {
             Debug.LogWarning($"[UtilAudio] 파일 없음: {fullPath}");

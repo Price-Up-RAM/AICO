@@ -83,9 +83,39 @@ public class UIPositionManager : MonoBehaviour
         return canvas.transform.TransformPoint(new Vector3(canvasRect.rect.width / 2 - 100f, -canvasRect.rect.height / 2 + 100f, 0f));
     }
 
+    // ⚠ 말풍선 앵커 계산 — MR에서는 반드시 (0,0)을 돌려준다 (2026-08-22)
+    //
+    // 왜 분기가 필요한가 (Kickoff Guide §4-36 / §4-38 / §4-45와 같은 계열, 네 번째 재발)
+    // --------------------------------------------------------------------------
+    // 아래 데스크톱 식은 "캐릭터보다 300px 위"라는 뜻이다:
+    //     charPosition.y + 200 * (char_size / 100) + 100      // char_size=100 → +300
+    //
+    // 그런데 MR에서 말풍선은 MR/WorldUI/Balloons 밑의 **독립 월드 스페이스 캔버스**이고
+    // 부모가 평범한 Transform(scale 1)이다. 이때 anchoredPosition은 사실상 부모 기준
+    // 로컬 위치이고 **1 단위 = 1 m**가 된다. 즉 이 값이 그대로 대입되면 말풍선이
+    // **300 m 밖으로 텔레포트**한다.
+    //
+    // 이 값을 쓰는 매니저는 4개다 — AnswerBalloonManager / AnswerBalloonSimpleManager /
+    // AskBalloonManager / SubAnswerBalloonManager. 전부 Update()에서 **매 프레임** 대입한다.
+    // 호출부 4곳을 각각 고치는 대신 **공급원인 여기 한 곳**을 막는다
+    // (§4-33에서 GetMenuPosition에 쓴 것과 같은 처방이고, 새 호출부가 생겨도 자동으로 안전하다).
+    //
+    // MR에서 말풍선의 실제 배치는 MRBalloonWorldFollow가 **월드 좌표로** 담당한다.
+    // 그러므로 여기서는 "부모 원점"만 돌려주면 되고, 그게 (0,0)이다.
+    //
+    // ⚠ 이 분기를 지우지 말 것. 지우면 다음 증상이 그대로 재현된다 —
+    //    "말풍선을 grab/ray로 옮기는 순간 Y가 300으로 튀고 다시는 안 돌아온다."
+    //    평소에는 MRBalloonWorldFollow가 매 LateUpdate에 transform.position을 덮어써서
+    //    이 대입을 지우고 있지만, grab 중에는 위치 소유권을 사용자에게 넘기느라
+    //    덮어쓰기를 멈춘다. 그 순간 이 +300이 살아난다.
+
     // 캐릭터의 Transform을 기반으로 말풍선의 AnchoredPosition 계산
     public Vector2 GetBalloonAnchoredPosition(RectTransform charTransform)
     {
+#if UNITY_ANDROID || UNITY_EDITOR
+        // MR: 배치는 MRBalloonWorldFollow가 월드 좌표로 한다. 여기서는 부모 원점만 준다.
+        return Vector2.zero;
+#else
         Vector2 charPosition = charTransform.anchoredPosition;
 
         // 캔버스 범위를 벗어나지 않도록 X 좌표 제한
@@ -96,11 +126,16 @@ public class UIPositionManager : MonoBehaviour
         // Y 좌표는 캐릭터 위치에 비례하여 위로 띄움
         float charSizeScale = SettingManager.Instance.settings.char_size / 100f;
         return new Vector2(charPositionX, charPosition.y + 200 * charSizeScale + 100);
+#endif
     }
 
     // 특정 좌표를 기반으로 말풍선의 AnchoredPosition 계산
     public Vector2 GetBalloonAnchoredPositionByPosition(Vector2 targetPosition)
     {
+#if UNITY_ANDROID || UNITY_EDITOR
+        // MR: 위와 같은 이유. SubAnswerBalloonManager가 쓴다.
+        return Vector2.zero;
+#else
         // 캔버스 범위를 벗어나지 않도록 X 좌표 제한
         float leftBound = -canvasRect.rect.width / 2;
         float rightBound = canvasRect.rect.width / 2;
@@ -109,6 +144,7 @@ public class UIPositionManager : MonoBehaviour
         // Y 좌표는 캐릭터 위치에 비례하여 위로 띄움
         float charSizeScale = SettingManager.Instance.settings.char_size / 100f;
         return new Vector2(positionX, targetPosition.y + 200 * charSizeScale + 100);
+#endif
     }
 
     // 특정 메뉴 이름에 따라 하드코딩된 위치 반환

@@ -136,7 +136,7 @@ public class ChangeCharManager : MonoBehaviour
     private string favoritesFilePath;
     private string databaseFilePath;
 
-    private void Awake()
+    private async void Awake()
     {
         // 핫키 등과 동일하게 config 폴더 사용
         string directoryPath = Path.Combine(Application.persistentDataPath, "config");
@@ -147,7 +147,14 @@ public class ChangeCharManager : MonoBehaviour
             Directory.CreateDirectory(directoryPath);
         }
 
-        databaseFilePath = Path.Combine(Application.streamingAssetsPath, "config", "character_database.json");
+#if UNITY_ANDROID && !UNITY_EDITOR
+        while (!MRStreamingAssetsInstaller.IsInstalled)
+        {
+            await System.Threading.Tasks.Task.Yield();
+        }
+#endif
+
+        databaseFilePath = Path.Combine(MRDataPath.Root, "Config", "character_database.json");
         LoadDatabase(); // JSON 파일에서 데이터베이스 로드 
 
         // UI 생성 전에 미리 즐겨찾기 데이터를 디스크에서 로드하여 DB에 덮어씌움
@@ -262,8 +269,15 @@ public class ChangeCharManager : MonoBehaviour
         Debug.Log("--- [DLC] 진단 종료 ---");
     }
 
-    void Start()
+    async void Start()
     {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        while (!MRStreamingAssetsInstaller.IsInstalled)
+        {
+            await System.Threading.Tasks.Task.Yield();
+        }
+#endif
+
         // 데이터베이스 기반 슬롯 생성
         GenerateCharacterSlots();
 
