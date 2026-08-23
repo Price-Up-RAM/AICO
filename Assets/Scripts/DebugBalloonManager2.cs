@@ -281,7 +281,7 @@ public class DebugBalloonManager2 : MonoBehaviour
     public void ToggleDebugBalloon()
     {
         // DevMode가 아닐 때는 Show 불가
-        if (!DevManager.Instance.IsDevModeEnabled())
+        if (DevManager.Instance == null || !DevManager.Instance.IsDevModeEnabled())
         {
             HideDebugBalloon();
             return;
@@ -300,8 +300,8 @@ public class DebugBalloonManager2 : MonoBehaviour
     // DebugBalloon 표시
     public void ShowDebugBalloon()
     {
-        // DevMode가 아닐 때는 표시 불가
-        if (!DevManager.Instance.IsDevModeEnabled()) return;
+        // DevMode가 아닐 때는 표시 불가 (또는 DevManager가 없을 때)
+        if (DevManager.Instance == null || !DevManager.Instance.IsDevModeEnabled()) return;
 
         // 보이지 않았다면 위치 설정
         if (!debugBalloon.activeSelf)

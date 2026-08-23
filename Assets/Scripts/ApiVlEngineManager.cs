@@ -56,7 +56,7 @@ public class ApiVlEngineManager : MonoBehaviour
     )
     {
         // verbose: 명시 전달 시 그 값 사용, null이면 DevManager 상태로 결정
-        bool verboseValue = verbose ?? DevManager.Instance.IsDevModeEnabled();
+        bool verboseValue = verbose ?? (DevManager.Instance != null && DevManager.Instance.IsDevModeEnabled());
         
         isCanceled = false;
         StartCoroutine(ExecuteVlEngineCoroutine(

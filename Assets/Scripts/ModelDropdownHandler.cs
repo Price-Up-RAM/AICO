@@ -13,7 +13,7 @@ public class ModelDropdownHandler : MonoBehaviour
 
     public void initModelDropdown()
     {
-        string modelsPath = Path.Combine(Application.streamingAssetsPath, "models");  // models 폴더 경로
+        string modelsPath = Path.Combine(MRDataPath.Root, "models");  // models 폴더 경로
         DirectoryInfo dir = new DirectoryInfo(modelsPath);
         FileInfo[] files = dir.GetFiles("*.gguf");
 

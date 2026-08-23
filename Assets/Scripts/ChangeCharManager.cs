@@ -139,7 +139,7 @@ public class ChangeCharManager : MonoBehaviour
     private async void Awake()
     {
         // 핫키 등과 동일하게 config 폴더 사용
-        string directoryPath = Path.Combine(Application.persistentDataPath, "config");
+        string directoryPath = Path.Combine(Application.persistentDataPath, "Config");
         favoritesFilePath = Path.Combine(directoryPath, "change_char_favorites.json");
 
         if (!Directory.Exists(directoryPath))

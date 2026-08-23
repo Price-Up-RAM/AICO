@@ -201,7 +201,7 @@ public class MRSceneStripper : MonoBehaviour
         // --- UI / 말풍선 (Phase 3에서 World Space로 전환 예정) ---
         typeof(AnswerBalloonManager), typeof(AnswerBalloonSimpleManager), typeof(AskBalloonManager),
         typeof(ChatBalloonManager), typeof(EmotionBalloonManager), typeof(NoticeBalloonManager),
-        typeof(NoticeManager), typeof(PortraitBalloonSimpleManager), typeof(TalkMenuManager),
+        typeof(NoticeManager), typeof(PortraitBalloonSimpleManager),
         typeof(UIChatSituationManager), typeof(UIGame20QPanelManager), typeof(UIPositionManager),
         typeof(UIUserCardManager), typeof(EffectManager), typeof(ClickEffecter),
 

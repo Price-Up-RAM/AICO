@@ -57,7 +57,11 @@ public class MRRayDragAdapter : MonoBehaviour
     [SerializeField] private bool followHandHeight = true;
 
     [Tooltip("손 높이로 추가할 수 있는 최대 높이(m).")]
-    [SerializeField] private float maxHandLift = 0.8f;
+    [SerializeField] private float maxHandLift = 2.0f;
+
+    [Tooltip("레이 원점(손목) 이동량 → 캐릭터 높이 이동량 배율. " +
+             "레이 원점은 실제 손 이동보다 작게 움직이므로 2~3이 자연스럽다.")]
+    [SerializeField] private float handLiftMultiplier = 3f;
 
     [Header("회전 — 손목 롤로 캐릭터 Y를 돌린다")]
     [SerializeField] private bool rotateWithHandRoll = true;
@@ -373,7 +377,9 @@ public class MRRayDragAdapter : MonoBehaviour
         if (followHandHeight && _dragProvider != null)
         {
             float handRise = _dragProvider.PressPoint.y - _handYAtGrab;
-            lift += Mathf.Clamp(handRise, 0f, maxHandLift);
+            // 레이 원점(손목 부근)은 실제 손 이동보다 적게 움직인다.
+            // handLiftMultiplier로 보정해 손을 1m 올리면 캐릭터도 ~1m 올라가게 한다.
+            lift += Mathf.Clamp(handRise * handLiftMultiplier, 0f, maxHandLift);
         }
 
         return lift;
