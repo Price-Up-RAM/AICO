@@ -955,7 +955,7 @@ public class APIManager : MonoBehaviour
             string answerVoice = null;
             foreach (var reply in replyToken)
             {
-                string answerJp = reply["answer_jp"]?.ToString() ?? string.Empty;
+                string answerJp = (reply["answer_ja"] ?? reply["answer_jp"])?.ToString() ?? string.Empty;
                 string answerKo = reply["answer_ko"]?.ToString() ?? string.Empty;
                 string answerEn = reply["answer_en"]?.ToString() ?? string.Empty;
 
@@ -963,7 +963,7 @@ public class APIManager : MonoBehaviour
                 if (!string.IsNullOrEmpty(answerJp))
                 {
                     session.replyListJp.Add(answerJp);
-                    if (SettingManager.Instance.settings.sound_language == "jp")
+                    if (SettingManager.Instance.settings.sound_language == "jp" || SettingManager.Instance.settings.sound_language == "ja")
                     {
                         answerVoice = answerJp;
                     }
@@ -1343,14 +1343,14 @@ public class APIManager : MonoBehaviour
         string chatIdx = jsonObject["chat_idx"]?.ToString() ?? "-1";
         foreach (var reply in replyToken)
         {
-            string answerJp = reply["answer_jp"]?.ToString() ?? string.Empty;
+            string answerJp = (reply["answer_ja"] ?? reply["answer_jp"])?.ToString() ?? string.Empty;
             string answerKo = reply["answer_ko"]?.ToString() ?? string.Empty;
             string answerEn = reply["answer_en"]?.ToString() ?? string.Empty;
 
             if (!string.IsNullOrEmpty(answerJp))
             {
                 replyListJp.Add(answerJp);
-                if (SettingManager.Instance.settings.sound_language == "jp")
+                if (SettingManager.Instance.settings.sound_language == "jp" || SettingManager.Instance.settings.sound_language == "ja")
                 {
                     answerVoice = answerJp;
                 }
@@ -1884,6 +1884,7 @@ public class APIManager : MonoBehaviour
                                         // 시스템 메시지로 저장
                                         currentMemoryType = "system";
                                     }
+                                    else if (replyType == "ping") { }
                                     else  // replyType == "reply"
                                     {
                                         // 최초 수신

@@ -397,7 +397,7 @@ public class SettingManager : MonoBehaviour
         bool modelExists = model != null && model.FileInfos.Count > 0 &&
                            File.Exists(Path.Combine(exeDirectory, "model", model.FileInfos[0].FileName));
 
-        if (DevManager.Instance.IsDevModeEnabled() || modelExists)
+        if ((DevManager.Instance != null && DevManager.Instance.IsDevModeEnabled()) || modelExists)
         {
             // 보유 중이거나 devmode → 바로 로드
             APIManager.Instance.CallLoadModel();
@@ -452,7 +452,7 @@ public class SettingManager : MonoBehaviour
         SaveSettings(); 
     }
 
-    public void SetIsDevModeToggle(bool value) { settings.isDevMode = value; DevManager.Instance.SetInteractableDev(value);}
+    public void SetIsDevModeToggle(bool value) { settings.isDevMode = value; if (DevManager.Instance != null) DevManager.Instance.SetInteractableDev(value);}
     public void SetIsDevHowlingToggle(bool value) { settings.isDevHowling = value; SaveSettings(); }
     public void SetIsDevSoundToggle(bool value) { settings.isDevSound = value; }  // dev_voice 서버 사용 여부 (저장 안함)
     public void SetIsLocalSoundToggle(bool value) { settings.isLocalSound = value; devSoundToggle.interactable = !value; if(value) { settings.isDevSound = false; devSoundToggle.isOn = false; } }  // local_voice 서버 사용 여부 (저장 안함)
@@ -611,7 +611,7 @@ public class SettingManager : MonoBehaviour
 
         
         // 저장 경로를 Application.persistentDataPath로 설정
-        string directoryPath = Path.Combine(Application.persistentDataPath, "config");
+        string directoryPath = Path.Combine(Application.persistentDataPath, "Config");
         configFilePath = Path.Combine(directoryPath, "settings.json");
 
         // 디렉토리가 없을 경우 생성
@@ -1317,7 +1317,7 @@ public class SettingManager : MonoBehaviour
     // 설정 데이터를 JSON 파일에서 불러오기
     public void LoadSettings()
     {
-        string directoryPath = Path.Combine(Application.persistentDataPath, "config");
+        string directoryPath = Path.Combine(Application.persistentDataPath, "Config");
         configFilePath = Path.Combine(directoryPath, "settings.json");
 
         try
@@ -1448,7 +1448,7 @@ public class SettingManager : MonoBehaviour
     // 설정 데이터를 JSON 파일에 저장하는 함수
     public void SaveSettings()
     {
-        string directoryPath = Path.Combine(Application.persistentDataPath, "config");
+        string directoryPath = Path.Combine(Application.persistentDataPath, "Config");
         configFilePath = Path.Combine(directoryPath, "settings.json");
         try
         {
@@ -1646,9 +1646,9 @@ public class SettingManager : MonoBehaviour
         settings.sound_volumeMaster = 70;
         settings.sound_speedMaster = 100;
 
-        settings.server_type_idx = 1;  // 0: Auto, 1: Local, 2: Google, 3: OpenRouter
-        settings.server_type = "Local";
-        settings.server_id = "temp";
+        settings.server_type_idx = 10;
+        settings.server_type = "Server";
+        settings.server_id = "arona614sd";
         settings.api_key_gemini = "";
         settings.api_key_openRouter = "";
         settings.server_local_mode_idx = 1;  // 0: CPU, 1: GPU
