@@ -47,7 +47,7 @@ public class SubVoiceManager : MonoBehaviour
     {
         try
         {
-            string fullPath = Path.Combine(Application.streamingAssetsPath, audioPath);
+            string fullPath = Path.Combine(MRDataPath.Root, audioPath);
             StartCoroutine(LoadAudioOGG(fullPath));
         }
         catch
@@ -61,7 +61,7 @@ public class SubVoiceManager : MonoBehaviour
     {
         try
         {
-            string fullPath = Path.Combine(Application.streamingAssetsPath, audioPath);
+            string fullPath = Path.Combine(MRDataPath.Root, audioPath);
             StartCoroutine(LoadAudioWav(fullPath));
         }
         catch

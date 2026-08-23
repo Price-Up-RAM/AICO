@@ -176,7 +176,7 @@ public class CharacterPromptManager : MonoBehaviour
 
     private string LoadFromStreamingAssetsPromptFallback(string charName, string lang, bool isOrigin)
     {
-        return LoadFromPromptRoot(Path.Combine(Application.streamingAssetsPath, "prompt"), charName, lang, isOrigin, "StreamingAssets prompt");
+        return LoadFromPromptRoot(Path.Combine(MRDataPath.Root, "prompt"), charName, lang, isOrigin, "StreamingAssets prompt");
     }
 
     private string LoadFromPromptRoot(string promptRoot, string charName, string lang, bool isOrigin, string label)

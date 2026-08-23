@@ -126,7 +126,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
         if (cams.Length > 0)
         {
             _cam = cams[0];
-            Debug.LogWarning($"[MRCharWorld] CenterEyeAnchor를 찾지 못해 '{_cam.name}'을 사용합니다.");
+            if(verboseLog)
+                Debug.LogWarning($"[MRCharWorld] CenterEyeAnchor를 찾지 못해 '{_cam.name}'을 사용합니다.");
             return _cam;
         }
 
@@ -176,7 +177,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
         // CharManager가 뒤늦게 정상 스폰했다면 폴백을 정리한다.
         if (_fallbackInstance != null && current != _fallbackInstance)
         {
-            Debug.Log("[MRCharWorld] CharManager가 캐릭터를 스폰해 폴백 인스턴스를 제거합니다.");
+            if(verboseLog)
+                Debug.Log("[MRCharWorld] CharManager가 캐릭터를 스폰해 폴백 인스턴스를 제거합니다.");
             Destroy(_fallbackInstance);
             _fallbackInstance = null;
         }
@@ -191,9 +193,10 @@ public class MRCharacterWorldRoot : MonoBehaviour
 
         if (current != _lastCharacter)
         {
+            bool isSwap = _everSawCharacter;
             _lastCharacter = current;
             _everSawCharacter = true;
-            MoveToWorld(current);
+            MoveToWorld(current, isSwap);
             UpdateHologram(current);
         }
     }
@@ -231,7 +234,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
         if (fallbackDelaySeconds <= 0f) return;
         if (_elapsed < fallbackDelaySeconds) return;
 
-        Debug.LogWarning($"[MRCharWorld] {fallbackDelaySeconds}초 동안 캐릭터 스폰이 없어 " +
+        if(verboseLog)
+                Debug.LogWarning($"[MRCharWorld] {fallbackDelaySeconds}초 동안 캐릭터 스폰이 없어 " +
                          $"'{fallbackCharacterPrefab.name}'을 직접 생성합니다. " +
                          "(StreamingAssets 로드 실패에 대한 임시 우회)");
 
@@ -264,7 +268,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
         PlaceInFrontOfUser(_fallbackInstance);
         if (targetLayer >= 0) ApplyLayerRecursive(_fallbackInstance.transform, targetLayer);
 
-        Debug.Log($"[MRCharWorld] 폴백 생성 완료 — lossyScale {_fallbackInstance.transform.lossyScale.y:F4}, " +
+        if(verboseLog)
+            Debug.Log($"[MRCharWorld] 폴백 생성 완료 — lossyScale {_fallbackInstance.transform.lossyScale.y:F4}, " +
                   $"pos {_fallbackInstance.transform.position}");
 
         DiagnoseVisibility(_fallbackInstance);
@@ -280,13 +285,14 @@ public class MRCharacterWorldRoot : MonoBehaviour
         if (_waitLogTimer > 0f) return;
 
         _waitLogTimer = 5f;
-        Debug.LogWarning($"[MRCharWorld] 대기 중 — {reason}");
+        if(verboseLog)
+            Debug.LogWarning($"[MRCharWorld] 대기 중 — {reason}");
     }
 
     // =========================================================
     // 캔버스 → 월드 이관
     // =========================================================
-    private void MoveToWorld(GameObject character)
+    private void MoveToWorld(GameObject character, bool isSwap)
     {
         if (character.transform.parent == worldRoot)
         {
@@ -313,7 +319,17 @@ public class MRCharacterWorldRoot : MonoBehaviour
         ClearCanvasDepth(character);
 
         ApplyScale(character);
-        PlaceInFrontOfUser(character);
+
+        // 최초 소환이 아닐 경우(교체) 기존 위치(래퍼 위치)를 그대로 유지한다.
+        if (!isSwap)
+        {
+            PlaceInFrontOfUser(character);
+        }
+        else if (verboseLog)
+        {
+            Debug.Log($"[MRCharWorld] '{character.name}' 교체 — 사용자 앞 초기 배치를 건너뛰고 기존 위치를 유지합니다.");
+        }
+
         if (targetLayer >= 0) ApplyLayerRecursive(character.transform, targetLayer);
 
         if (verboseLog)
@@ -338,7 +354,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
             Vector3 p3 = rt.anchoredPosition3D;
             if (Mathf.Abs(p3.z) > 0.001f)
             {
-                Debug.Log($"[MRCharWorld] 캔버스 깊이 상수 제거: anchoredPosition3D.z {p3.z} → 0");
+                if(verboseLog)
+                    Debug.Log($"[MRCharWorld] 캔버스 깊이 상수 제거: anchoredPosition3D.z {p3.z} → 0");
                 rt.anchoredPosition3D = new Vector3(p3.x, p3.y, 0f);
             }
         }
@@ -372,7 +389,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
         Renderer[] renderers = character.GetComponentsInChildren<Renderer>(true);
         if (renderers.Length == 0)
         {
-            Debug.LogWarning("[MRCharWorld] Renderer를 찾지 못해 크기를 측정할 수 없습니다.");
+            if(verboseLog)
+                Debug.LogWarning("[MRCharWorld] Renderer를 찾지 못해 크기를 측정할 수 없습니다.");
             return false;
         }
 
@@ -399,7 +417,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
             // 인코딩하고 있으므로, 비율만 고정하면 체격 차이가 그대로 보존된다.
             if (pixelsPerMeter <= 0f)
             {
-                Debug.LogWarning("[MRCharWorld] pixelsPerMeter가 0 이하입니다. 크기 적용을 건너뜁니다.");
+                if(verboseLog)
+                    Debug.LogWarning("[MRCharWorld] pixelsPerMeter가 0 이하입니다. 크기 적용을 건너뜁니다.");
                 return;
             }
             newScale = (1f / pixelsPerMeter) * Mathf.Max(0.0001f, sizeMultiplier);
@@ -408,7 +427,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
         {
             if (!TryMeasureHeight(character, out float h))
             {
-                Debug.LogWarning("[MRCharWorld] 높이 측정 실패로 크기 적용을 건너뜁니다.");
+                if(verboseLog)
+                    Debug.LogWarning("[MRCharWorld] 높이 측정 실패로 크기 적용을 건너뜁니다.");
                 return;
             }
             newScale = before * (targetHeightMeters / h);
@@ -419,7 +439,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
         // 적용 후 실제 높이를 재서 로그로 남긴다. 캐릭터별 체격 차이를 확인할 수 있다.
         TryMeasureHeight(character, out float finalH);
 
-        Debug.Log(
+        if(verboseLog)
+            Debug.Log(
             $"[MRCharWorld] 크기 적용 [{scaleMode}] — '{character.name}'\n" +
             $"  픽셀 공간 스케일 : {newScale:F6}  (1픽셀 ≈ {newScale * 1000f:F2}mm, 1/{(newScale > 0 ? 1f / newScale : 0f):F0})\n" +
             $"  실제 키          : {finalH:F3} m\n" +
@@ -427,7 +448,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
 
         if (finalH > 3f || (finalH > 0f && finalH < 0.05f))
         {
-            Debug.LogWarning($"[MRCharWorld] ⚠ 캐릭터 키가 비정상적입니다({finalH:F3}m). " +
+            if(verboseLog)
+                Debug.LogWarning($"[MRCharWorld] ⚠ 캐릭터 키가 비정상적입니다({finalH:F3}m). " +
                              $"pixelsPerMeter({pixelsPerMeter}) 값을 확인하세요.");
         }
     }
@@ -504,13 +526,15 @@ public class MRCharacterWorldRoot : MonoBehaviour
         {
             if (_elapsed > trackingWaitTimeout)
             {
-                Debug.LogWarning($"[MRCharWorld] {trackingWaitTimeout}초 동안 헤드 트래킹을 받지 못했습니다. 현재 위치를 유지합니다.");
+                if(verboseLog)
+                    Debug.LogWarning($"[MRCharWorld] {trackingWaitTimeout}초 동안 헤드 트래킹을 받지 못했습니다. 현재 위치를 유지합니다.");
                 _placedWithTracking = true;   // 더 시도하지 않음
             }
             return;
         }
 
-        Debug.Log("[MRCharWorld] 헤드 트래킹이 붙어 캐릭터를 사용자 앞으로 다시 배치합니다.");
+        if(verboseLog)
+            Debug.Log("[MRCharWorld] 헤드 트래킹이 붙어 캐릭터를 사용자 앞으로 다시 배치합니다.");
         PlaceInFrontOfUser(_lastCharacter);
         DiagnoseVisibility(_lastCharacter);
     }
@@ -580,7 +604,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
 
         if (cam == null)
         {
-            Debug.Log($"[MRTrack] char {ct.position} | 카메라 없음 | 렌더러 활성 {enabled} 표시 {visible}");
+            if(verboseLog)
+                Debug.Log($"[MRTrack] char {ct.position} | 카메라 없음 | 렌더러 활성 {enabled} 표시 {visible}");
             return;
         }
 
@@ -589,7 +614,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
         float dist = Vector3.Distance(cp, ct.position);
         bool inView = vp.z > 0f && vp.x >= 0f && vp.x <= 1f && vp.y >= 0f && vp.y <= 1f;
 
-        Debug.Log(
+        if(verboseLog)
+            Debug.Log(
             $"[MRTrack] cam {cp.ToString("F2")} fwd {cam.transform.forward.ToString("F2")} | " +
             $"char {ct.position.ToString("F2")} scale {ct.lossyScale.y:F3} | " +
             $"거리 {dist:F2}m | 뷰포트 {vp.ToString("F2")} 시야안 {inView} | " +
@@ -656,7 +682,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
             sb.AppendLine("  ❌ 기준 카메라를 찾지 못했습니다.");
         }
 
-        Debug.Log(sb.ToString());
+        if(verboseLog)
+            Debug.Log(sb.ToString());
     }
 
     private void ApplyLayerRecursive(Transform t, int layer)
@@ -716,7 +743,8 @@ public class MRCharacterWorldRoot : MonoBehaviour
     {
         if (scaleMode != CharacterScaleMode.FixedPixelRatio)
         {
-            Debug.LogWarning($"[MRCharWorld] SetSizeMultiplier는 FixedPixelRatio 모드 전용입니다 (현재: {scaleMode}). 무시합니다.");
+            if(verboseLog)
+                Debug.LogWarning($"[MRCharWorld] SetSizeMultiplier는 FixedPixelRatio 모드 전용입니다 (현재: {scaleMode}). 무시합니다.");
             return;
         }
 

@@ -53,17 +53,14 @@ public class DialogueManager : MonoBehaviour
         try
         {
             string voicePath = CharManager.Instance.GetVoicePath(CharManager.Instance.GetCurrentCharacter());
-            jsonFilePath = Path.Combine(Application.streamingAssetsPath, voicePath);
+            jsonFilePath = Path.Combine(MRDataPath.Root, voicePath);
+            string writableFilePath = Path.Combine(MRDataPath.WritableRoot, voicePath);
 
-    #if UNITY_ANDROID && !UNITY_EDITOR
-            StartCoroutine(LoadJsonFile(jsonFilePath, (json) =>
-            {
-                AssignDialogues(json);
-            }));
-    #else
-            string json = File.ReadAllText(jsonFilePath);
+            // 읽기 우선순위: 사용자가 변경하여 저장한 WritableRoot -> 원본 StreamingAssets
+            string readPath = File.Exists(writableFilePath) ? writableFilePath : jsonFilePath;
+
+            string json = File.ReadAllText(readPath);
             AssignDialogues(json);
-    #endif
         }
         catch (Exception ex)
         {
@@ -75,13 +72,23 @@ public class DialogueManager : MonoBehaviour
     public IEnumerator IEnumLoadDialoguesFromJSON()
     {
         string voicePath = CharManager.Instance.GetVoicePath(CharManager.Instance.GetCurrentCharacter());
-        jsonFilePath = Path.Combine(Application.streamingAssetsPath, voicePath);
+        jsonFilePath = Path.Combine(MRDataPath.Root, voicePath);
+        string writableFilePath = Path.Combine(MRDataPath.WritableRoot, voicePath);
 
-        // Android에서 JSON 파일을 비동기적으로 로드
-        yield return StartCoroutine(LoadJsonFile(jsonFilePath, (json) =>
+        string readPath = File.Exists(writableFilePath) ? writableFilePath : jsonFilePath;
+
+        string json = string.Empty;
+        try
         {
-            AssignDialogues(json);
-        }));
+            json = File.ReadAllText(readPath);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error reading dialogues: {ex.Message}");
+        }
+
+        AssignDialogues(json);
+        yield break;
     }
 
     // 안드로이드에서 JSON 파일 읽기
@@ -143,7 +150,17 @@ public class DialogueManager : MonoBehaviour
         };
 
         string json = JsonUtility.ToJson(wrapper, true);
-        File.WriteAllText(jsonFilePath, json);
+        
+        string voicePath = CharManager.Instance.GetVoicePath(CharManager.Instance.GetCurrentCharacter());
+        string writePath = Path.Combine(MRDataPath.WritableRoot, voicePath);
+        
+        string dir = Path.GetDirectoryName(writePath);
+        if (!Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        File.WriteAllText(writePath, json);
         Debug.Log("대사가 성공적으로 저장되었습니다.");
     }
 

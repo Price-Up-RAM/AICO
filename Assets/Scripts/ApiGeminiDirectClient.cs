@@ -197,6 +197,7 @@ public class ApiGeminiDirectClient : MonoBehaviour
         // HTTP 요청 생성
         HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
         request.Method = "POST";
+        request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
         request.ContentType = "application/json";
         request.Accept = "text/event-stream";
         request.Timeout = 120000;

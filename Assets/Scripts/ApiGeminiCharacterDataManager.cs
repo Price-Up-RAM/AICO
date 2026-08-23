@@ -17,9 +17,17 @@ public class ApiGeminiCharacterDataManager : MonoBehaviour
     
     private static readonly string[] SupportedLanguages = { "en", "ko", "ja" };
     
-    void Awake()
+    async void Awake()
     {
         Instance = this;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        while (!MRStreamingAssetsInstaller.IsInstalled)
+        {
+            await System.Threading.Tasks.Task.Yield();
+        }
+#endif
+
         LoadAllCharacterPrompts();  // 방식 1: 일괄 로드
     }
     
@@ -33,11 +41,11 @@ public class ApiGeminiCharacterDataManager : MonoBehaviour
             string basePath;
             if (lang == "en")
             {
-                basePath = System.IO.Path.Combine(Application.streamingAssetsPath, "prompt");
+                basePath = System.IO.Path.Combine(MRDataPath.Root, "prompt");
             }
             else
             {
-                basePath = System.IO.Path.Combine(Application.streamingAssetsPath, "prompt", lang);
+                basePath = System.IO.Path.Combine(MRDataPath.Root, "prompt", lang);
             }
             
             // StreamingAssets 폴더가 없으면 스킵
@@ -89,17 +97,17 @@ public class ApiGeminiCharacterDataManager : MonoBehaviour
         string filePath;
         if (lang == "en")
         {
-            filePath = System.IO.Path.Combine(Application.streamingAssetsPath, "prompt", $"{charName}.json");
+            filePath = System.IO.Path.Combine(MRDataPath.Root, "prompt", $"{charName}.json");
         }
         else
         {
-            filePath = System.IO.Path.Combine(Application.streamingAssetsPath, "prompt", lang, $"{charName}.json");
+            filePath = System.IO.Path.Combine(MRDataPath.Root, "prompt", lang, $"{charName}.json");
         }
         
         // 3. 없으면 영어 버전 Fallback
         if (!System.IO.File.Exists(filePath) && lang != "en")
         {
-            filePath = System.IO.Path.Combine(Application.streamingAssetsPath, "prompt", $"{charName}.json");
+            filePath = System.IO.Path.Combine(MRDataPath.Root, "prompt", $"{charName}.json");
             cacheKey = $"en/{charName}";
         }
         

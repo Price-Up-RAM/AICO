@@ -191,6 +191,12 @@ public class MicrophoneManager : MonoBehaviour
 
         samples.RemoveRange(0, i);
 
+        if (samples.Count == 0)
+        {
+            // 완전 무음일 경우 처리 방어
+            return AudioClip.Create("TempClip", 1, channels, hz, false);
+        }
+
         for (i = samples.Count - 1; i > 0; i--)
         {
             if (Mathf.Abs(samples[i]) > min)

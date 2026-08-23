@@ -254,10 +254,12 @@ public class ServerManager : MonoBehaviour
     private IEnumerator DetermineBaseUrl(int serverType, string serverId, Action<string> onComplete)
     {
         bool isReachable = false;
+        Debug.Log($"[DetermineBaseUrl] Start! serverType: {serverType}, serverId: {serverId}");
 
         // Local 선택 시에는 localhost만 사용한다.
         if (serverType == LocalServerTypeIndex)
         {
+            Debug.Log("[DetermineBaseUrl] Trying Local (127.0.0.1:5000)");
             yield return StartCoroutine(IsUrlReachable("http://127.0.0.1:5000/health", result => isReachable = result));
             onComplete?.Invoke(isReachable ? "http://127.0.0.1:5000" : "");
             yield break;
@@ -275,7 +277,9 @@ public class ServerManager : MonoBehaviour
             }
 
             string cfUrl = BuildTunnelUrl(normalizedServerId);
+            Debug.Log($"[DetermineBaseUrl] Trying Cloudflare Tunnel: {cfUrl}");
             yield return StartCoroutine(IsUrlReachable(cfUrl + "/health", result => isReachable = result));
+            Debug.Log($"[DetermineBaseUrl] Cloudflare Tunnel Reachable? {isReachable}");
             onComplete?.Invoke(isReachable ? cfUrl : "");
             yield break;
         }
@@ -368,6 +372,7 @@ public class ServerManager : MonoBehaviour
         using (UnityWebRequest request = UnityWebRequest.Get(url))
         {
             request.timeout = 3;
+            request.SetRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
             yield return request.SendWebRequest();
 
             if (request.result == UnityWebRequest.Result.Success)
@@ -376,6 +381,7 @@ public class ServerManager : MonoBehaviour
             }
             else
             {
+                Debug.LogWarning($"[IsUrlReachable] Failed: {url}. Result: {request.result}, Code: {request.responseCode}, Error: {request.error}");
                 callback(false);
             }
         }

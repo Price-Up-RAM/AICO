@@ -11,12 +11,20 @@ public class DialogueCacheManager : MonoBehaviour
     public static DialogueCacheManager instance;
     private Dictionary<string, DialogueCategoryWrapper> dialogueCache = new Dictionary<string, DialogueCategoryWrapper>();
 
-    private void Awake()
+    private async void Awake()
     {
         if (instance == null)
         {
             instance = this;
             DontDestroyOnLoad(gameObject);
+            
+#if UNITY_ANDROID && !UNITY_EDITOR
+            while (!MRStreamingAssetsInstaller.IsInstalled)
+            {
+                await System.Threading.Tasks.Task.Yield();
+            }
+#endif
+
             LoadAllDialogues();
             // DebugLoadAllDialogues();
             // Debug.Log(GetRandomGreeting("arona").filePath);
@@ -29,7 +37,7 @@ public class DialogueCacheManager : MonoBehaviour
 
     private void LoadAllDialogues()
     {
-        string path = Path.Combine(Application.streamingAssetsPath, "Sound");
+        string path = Path.Combine(MRDataPath.Root, "Sound");
         if (!Directory.Exists(path)) return;
 
         foreach (string directory in Directory.GetDirectories(path))

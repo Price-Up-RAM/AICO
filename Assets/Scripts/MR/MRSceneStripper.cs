@@ -201,7 +201,7 @@ public class MRSceneStripper : MonoBehaviour
         // --- UI / 말풍선 (Phase 3에서 World Space로 전환 예정) ---
         typeof(AnswerBalloonManager), typeof(AnswerBalloonSimpleManager), typeof(AskBalloonManager),
         typeof(ChatBalloonManager), typeof(EmotionBalloonManager), typeof(NoticeBalloonManager),
-        typeof(NoticeManager), typeof(PortraitBalloonSimpleManager), typeof(TalkMenuManager),
+        typeof(NoticeManager), typeof(PortraitBalloonSimpleManager),
         typeof(UIChatSituationManager), typeof(UIGame20QPanelManager), typeof(UIPositionManager),
         typeof(UIUserCardManager), typeof(EffectManager), typeof(ClickEffecter),
 
@@ -485,31 +485,25 @@ public class MRSceneStripper : MonoBehaviour
         }
     }
 
-    // 캐릭터 교체 감지로 잡히지 않는 경우(서브 캐릭터 등)를 위한 느린 안전망.
     private void SafetySweepCharacterComponents()
     {
-        // 데스크톱 전용 매니저도 같이 훑는다 — 2차 패스 이후에 AddComponent 되는 경우
-        // (캐릭터 교체 → KAIManager.SweepMenuTriggers 재실행 등)를 위한 마지막 그물이다.
-        foreach (Type t in DesktopOnlyTypes)
+        // 런타임에 추가되는 컴포넌트를 잡기 위해 매번 30개가 넘는 Type으로 FindObjectsByType를 호출하면
+        // 프레임당 100ms 이상의 엄청난 렉(가비지 컬렉션 및 네이티브 마샬링)이 발생합니다.
+        // 따라서 한 번의 MonoBehaviour 전수 스캔으로 모든 컴포넌트를 순회하며 타입 검사를 수행하도록 최적화했습니다.
+        MonoBehaviour[] all = FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        
+        foreach (MonoBehaviour mb in all)
         {
-            if (FindAnyObjectByType(t, FindObjectsInactive.Include) == null) continue;
+            if (mb == null || !mb.enabled) continue;
 
-            UnityEngine.Object[] hits = FindObjectsByType(t, FindObjectsInactive.Include, FindObjectsSortMode.None);
-            foreach (UnityEngine.Object o in hits)
+            Type t = mb.GetType();
+            if (_desktopOnly.Contains(t))
             {
-                if (o is MonoBehaviour mb && mb.enabled) Disable(mb, "데스크톱 전용(안전망)");
+                Disable(mb, "데스크톱 전용(안전망)");
             }
-        }
-
-        foreach (Type t in CharacterDesktopTypes)
-        {
-            // 존재 여부만 먼저 확인해 배열 할당을 피한다.
-            if (FindAnyObjectByType(t, FindObjectsInactive.Include) == null) continue;
-
-            UnityEngine.Object[] found = FindObjectsByType(t, FindObjectsInactive.Include, FindObjectsSortMode.None);
-            foreach (UnityEngine.Object o in found)
+            else if (_characterDesktop.Contains(t))
             {
-                if (o is MonoBehaviour mb && mb.enabled) Disable(mb, "캐릭터 데스크톱 입력(안전망)");
+                Disable(mb, "캐릭터 데스크톱 입력(안전망)");
             }
         }
     }
