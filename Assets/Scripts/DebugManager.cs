@@ -23,7 +23,7 @@ public class DebugManager : MonoBehaviour
     {
         // Unity 에디터 또는 DevMode에서만 실행
 #if !UNITY_EDITOR
-        if (!DevManager.Instance.IsDevModeEnabled())
+        if (DevManager.Instance == null || !DevManager.Instance.IsDevModeEnabled())
         {
             return;
         }

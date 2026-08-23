@@ -5,7 +5,7 @@ public class MRWristSummoner : MonoBehaviour
 {
     [Header("설정")]
     [Tooltip("탭(Tap)으로 인식할 거리(m)")]
-    public float tapDistanceThreshold = 0.04f;
+    public float tapDistanceThreshold = 0.05f;
     [Tooltip("더블 탭 간격(초)")]
     public float doubleTapWindow = 0.3f;
     
@@ -20,6 +20,9 @@ public class MRWristSummoner : MonoBehaviour
 
     [Header("참조")]
     public MRHologramPortrait hologramPortrait;
+    
+    [Tooltip("체크하면 거리 탭 감지 등 손목 홀로그램 관련 디버그 로그가 출력됩니다.")]
+    public bool debugLog = true;
 
     private Hand _leftHand;
     private Hand _rightHand;
@@ -54,7 +57,8 @@ public class MRWristSummoner : MonoBehaviour
         if (hologramPortrait != null && hologramPortrait.gameObject.activeSelf)
         {
             hologramPortrait.gameObject.SetActive(false);
-            Debug.Log("[MRWristSummoner] 홀로그램을 밖으로 꺼내어 숨김 처리됨");
+            if(debugLog)
+                Debug.Log("[MRWristSummoner] 홀로그램을 밖으로 꺼내어 숨김 처리됨");
         }
     }
 
@@ -63,17 +67,42 @@ public class MRWristSummoner : MonoBehaviour
         Hand[] hands = FindObjectsByType<Hand>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
         foreach (var h in hands)
         {
-            if (h.Handedness == Handedness.Left) _leftHand = h;
-            else if (h.Handedness == Handedness.Right) _rightHand = h;
+            if (!h.IsTrackedDataValid) continue;
+            
+            if (h.Handedness == Handedness.Left) 
+            {
+                _leftHand = h;
+                if(debugLog)
+                    Debug.Log($"[MRWristSummoner] 왼손 바인딩: {h.gameObject.name}");
+            }
+            else if (h.Handedness == Handedness.Right) 
+            {
+                _rightHand = h;
+                if(debugLog)
+                    Debug.Log($"[MRWristSummoner] 오른손 바인딩: {h.gameObject.name}");
+            }
         }
     }
 
+    private float _logTimer = 0f;
+    private float _handSearchLogTimer = 0f;
+
     private void Update()
     {
-        if (_leftHand == null || _rightHand == null)
+        if (_leftHand == null || _rightHand == null || !_leftHand.IsTrackedDataValid || !_rightHand.IsTrackedDataValid)
         {
             FindHands();
-            if (_leftHand == null || _rightHand == null) return;
+            if (_leftHand == null || _rightHand == null)
+            {
+                _handSearchLogTimer += Time.deltaTime;
+                if (_handSearchLogTimer >= 2.0f)
+                {
+                    _handSearchLogTimer = 0f;
+                    if(debugLog)
+                        Debug.Log($"[MRWristSummoner] 유효한 트래킹 손을 찾는 중... (왼손: {_leftHand != null}, 오른손: {_rightHand != null})");
+                }
+                return;
+            }
         }
 
         if (!_leftHand.IsTrackedDataValid) return;
@@ -94,9 +123,15 @@ public class MRWristSummoner : MonoBehaviour
             {
                 hologramPortrait.gameObject.SetActive(false);
                 isHologramActive = false;
-                Debug.Log("[MRWristSummoner] 손목이 90도 이상 뒤집혀 홀로그램 해제");
+                if(debugLog)
+                    Debug.Log("[MRWristSummoner] 손목이 90도 이상 뒤집혀 홀로그램 해제");
             }
         }
+
+        // 로그 출력 (1초에 1번)
+        _logTimer += Time.deltaTime;
+        bool shouldLog = _logTimer >= 1.0f;
+        if (shouldLog) _logTimer = 0f;
 
         // 탭 소환 판정 (거리 및 Latch(눌림 상태) 활용)
         if (_rightHand.IsTrackedDataValid && wristAngle <= 90f)
@@ -105,6 +140,11 @@ public class MRWristSummoner : MonoBehaviour
             {
                 float distance = Vector3.Distance(leftWristPose.position, rightIndexTipPose.position);
                 
+                if (shouldLog&&debugLog)
+                {
+                    Debug.Log($"[MRWristSummoner] 손목(Angle:{wristAngle:F1}), 거리:{distance:F3}m (임계값:{tapDistanceThreshold}m), 왼쪽손목:{leftWristPose.position}, 오른쪽검지:{rightIndexTipPose.position}");
+                }
+
                 if (distance <= tapDistanceThreshold)
                 {
                     if (!_isTapping)
@@ -122,6 +162,10 @@ public class MRWristSummoner : MonoBehaviour
         }
         else
         {
+            if (shouldLog && wristAngle > 90f&&debugLog)
+            {
+                Debug.Log($"[MRWristSummoner] 손등이 아래를 향함 (Angle:{wristAngle:F1}) - 탭 무시");
+            }
             _isTapping = false;
         }
         
@@ -157,7 +201,8 @@ public class MRWristSummoner : MonoBehaviour
             hologramPortrait.transform.position = leftWristPose.position + (leftWristPose.rotation * localOffset);
             
             _lastTapTime = now;
-            Debug.Log("[MRWristSummoner] 탭 감지: 홀로그램 소환");
+            if(debugLog)
+                Debug.Log("[MRWristSummoner] 탭 감지: 홀로그램 소환");
         }
         else
         {
@@ -170,7 +215,8 @@ public class MRWristSummoner : MonoBehaviour
                 {
                     _router.SimulateCharacterDoubleTap();
                 }
-                Debug.Log("[MRWristSummoner] 손목 더블 탭 -> 캐릭터 메뉴 실행");
+                if(debugLog)
+                    Debug.Log("[MRWristSummoner] 손목 더블 탭 -> 캐릭터 메뉴 실행");
             }
             else
             {
@@ -180,7 +226,8 @@ public class MRWristSummoner : MonoBehaviour
                 {
                     _router.SimulateCharacterSingleTap();
                 }
-                Debug.Log("[MRWristSummoner] 손목 싱글 탭 -> 캐릭터 음성 대화 시작");
+                if(debugLog)
+                    Debug.Log("[MRWristSummoner] 손목 싱글 탭 -> 캐릭터 음성 대화 시작");
             }
         }
     }

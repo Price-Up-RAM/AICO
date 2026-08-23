@@ -50,6 +50,9 @@ public class MRCharacterContextMenu : MonoBehaviour
         {
             (LanguageData.Translate("New Chat", targetLang), delegate {
                 MemoryManager.Instance.ResetConversationMemoryAndGuide();
+                ChatBalloonManager.Instance.ShowChatBalloon();
+                MRCharacterContextMenu contextMenuInstance = FindFirstObjectByType<MRCharacterContextMenu>();
+                if (contextMenuInstance != null) contextMenuInstance.CloseAll();
             }),
             (LanguageData.Translate("Chat History", targetLang), delegate {
                 UIManager.Instance.ShowChatHistory();
@@ -57,6 +60,11 @@ public class MRCharacterContextMenu : MonoBehaviour
             (LanguageData.Translate("Idle Talk", targetLang), async delegate {
                 if (!await InstallStatusManager.Instance.CheckAndOperateFullAsync()) return;
                 APIManager.Instance.CallSmallTalkStream("잡담");
+            }),
+            (LanguageData.Translate("Show Voice Panel", targetLang), delegate { 
+                TalkMenuManager.Instance.ShowTalkMenu(); 
+                MRCharacterContextMenu contextMenuInstance = FindFirstObjectByType<MRCharacterContextMenu>();
+                if (contextMenuInstance != null) contextMenuInstance.CloseAll();
             }),
         });
 

@@ -235,6 +235,7 @@ public class ChatBalloonManager : MonoBehaviour
 
     public void ToggleChatBalloon()
     {
+        Debug.Log($"[ToggleChatBalloon] Clicked! isChatBlocked? {StatusManager.Instance.isChatBlocked}");
         if (chatBalloonMode == "char")
         {
             HideChatBalloon();
@@ -245,9 +246,10 @@ public class ChatBalloonManager : MonoBehaviour
         }
         else
         {
-            // 집중 모드 또는 AI 대화 불가 캐릭터는 채팅창을 새로 열지 않는다.
+            // 집중 모드 또는 AI 대화 불가 캐릭터는 채팅창을 아예 띄우지 않는다.
             if (StatusManager.Instance.isChatBlocked)
             {
+                Debug.LogWarning("[ToggleChatBalloon] Blocked because isChatBlocked is TRUE");
                 return;
             }
             SetModeTop(true);
@@ -293,9 +295,12 @@ public class ChatBalloonManager : MonoBehaviour
         }
     }
 
-    // chatBalloon의 위치를 캐릭터 바로 위로 조정하는 함수
     private void UpdateChatBalloonPosition()
     {
+        // MR 모드에서는 매 프레임 위치 강제 동기화를 중단한다!
+        // MRFloatingPanel이 '소환 시 1회 배치'를 담당하고, 이후에는 사용자가 자유롭게 잡고(Grab) 옮길 수 있게 둔다.
+        if (UnityEngine.Object.FindFirstObjectByType<MRCharacterWorldRoot>() != null) return;
+
         RectTransform targetTransform = characterTransform;
         // Aropla 모드일 때는 clickedCharacter의 RectTransform 사용
         if (ChatModeManager.Instance.IsAroplaMode() && clickedCharacter != null)

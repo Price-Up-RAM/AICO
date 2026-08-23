@@ -955,7 +955,7 @@ public class APIManager : MonoBehaviour
             string answerVoice = null;
             foreach (var reply in replyToken)
             {
-                string answerJp = reply["answer_jp"]?.ToString() ?? string.Empty;
+                string answerJp = (reply["answer_ja"] ?? reply["answer_jp"])?.ToString() ?? string.Empty;
                 string answerKo = reply["answer_ko"]?.ToString() ?? string.Empty;
                 string answerEn = reply["answer_en"]?.ToString() ?? string.Empty;
 
@@ -963,7 +963,7 @@ public class APIManager : MonoBehaviour
                 if (!string.IsNullOrEmpty(answerJp))
                 {
                     session.replyListJp.Add(answerJp);
-                    if (SettingManager.Instance.settings.sound_language == "jp")
+                    if (SettingManager.Instance.settings.sound_language == "jp" || SettingManager.Instance.settings.sound_language == "ja")
                     {
                         answerVoice = answerJp;
                     }
@@ -1343,14 +1343,14 @@ public class APIManager : MonoBehaviour
         string chatIdx = jsonObject["chat_idx"]?.ToString() ?? "-1";
         foreach (var reply in replyToken)
         {
-            string answerJp = reply["answer_jp"]?.ToString() ?? string.Empty;
+            string answerJp = (reply["answer_ja"] ?? reply["answer_jp"])?.ToString() ?? string.Empty;
             string answerKo = reply["answer_ko"]?.ToString() ?? string.Empty;
             string answerEn = reply["answer_en"]?.ToString() ?? string.Empty;
 
             if (!string.IsNullOrEmpty(answerJp))
             {
                 replyListJp.Add(answerJp);
-                if (SettingManager.Instance.settings.sound_language == "jp")
+                if (SettingManager.Instance.settings.sound_language == "jp" || SettingManager.Instance.settings.sound_language == "ja")
                 {
                     answerVoice = answerJp;
                 }
@@ -1750,7 +1750,9 @@ public class APIManager : MonoBehaviour
             // HttpWebRequest 객체를 사용하여 요청 생성
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = "POST";
+            request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
             request.ContentType = contentType;
+            request.Accept = "text/event-stream";
 
             using (MemoryStream memStream = new MemoryStream())
             using (StreamWriter writer = new StreamWriter(memStream, Encoding.UTF8, 1024, true))
@@ -1804,6 +1806,12 @@ public class APIManager : MonoBehaviour
                     {
                         if (!string.IsNullOrEmpty(line))
                         {
+                            if (line.StartsWith("data: "))
+                            {
+                                line = line.Substring("data: ".Length).Trim();
+                            }
+                            if (string.IsNullOrEmpty(line) || line == "[DONE]") continue;
+
                             try
                             {
                                 // 풍선기준 최신대화여야 함
@@ -1876,6 +1884,7 @@ public class APIManager : MonoBehaviour
                                         // 시스템 메시지로 저장
                                         currentMemoryType = "system";
                                     }
+                                    else if (replyType == "ping") { }
                                     else  // replyType == "reply"
                                     {
                                         // 최초 수신
@@ -2239,10 +2248,7 @@ public class APIManager : MonoBehaviour
         AnimationManager.Instance.Idle();
 
         // 일단 안드로이드판은 server_type sample로...
-#if UNITY_ANDROID
-            await CallConversationStreamGeminiDirect(query, chatIdx, ai_lang_in);
-            return;
-#endif
+/* Android Bypass Removed */
         // Test용 : 공개시점 0.8.0 + TODO : 외부제어로 끌 수 있는법 검토해야 함. 버전 업데이터와 함께 고민할 것.
         // if (true)
         // {

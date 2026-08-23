@@ -52,6 +52,13 @@ public class CharManager : MonoBehaviour
         // 선행작업 로딩
         SettingManager.Instance.LoadSettings();
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+        while (!MRStreamingAssetsInstaller.IsInstalled)
+        {
+            await Task.Yield();
+        }
+#endif
+
         // JSON 데이터 로드 후, 이미 다운로드된 DLC만 즉시 charList에 붙입니다.
         await LoadCharacterListFromJSON();
         await RegisterAlreadyDownloadedDlcPrefabsAsync();
@@ -69,7 +76,7 @@ public class CharManager : MonoBehaviour
 
     private Task LoadCharacterListFromJSON()
     {
-        string databaseFilePath = System.IO.Path.Combine(Application.streamingAssetsPath, "config", "character_database.json");
+        string databaseFilePath = System.IO.Path.Combine(MRDataPath.Root, "Config", "character_database.json");
         if (System.IO.File.Exists(databaseFilePath))
         {
             try

@@ -72,6 +72,10 @@ public class SubChatBalloonController : MonoBehaviour
 
     private void UpdatePosition()
     {
+        // MR 모드에서는 앵커 포지션 강제 업데이트를 중단
+        // MRFloatingPanel이 '소환 시 1회 배치'를 담당하고, 이후에는 사용자가 자유롭게 잡고(Grab) 옮길 수 있게 둔다.
+        if (UnityEngine.Object.FindFirstObjectByType<MRCharacterWorldRoot>() != null) return;
+
         if (balloonTransform == null || characterTransform == null) return;
 
         Vector2 charPosition = characterTransform.anchoredPosition;
