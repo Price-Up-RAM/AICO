@@ -159,9 +159,6 @@ public class CharManager : MonoBehaviour
         if (charList.Count == 0)
         {
             Debug.LogError("Character list is empty.");
-            // 진단(Phase 5): 이 조기 리턴이면 SettingCharManager.LoadSettingChar가 아예 실행되지 않는다.
-            // 그 경우 voiceId는 항상 빈 값이 되어 TTS ref_id가 누락된다.
-            Debug.Log("[SettingChar/load] 미실행 - charList.Count=0 조기리턴 (CharManager.InitCharacter) | 결과: voiceId 항상 빈 값 → ref_id 누락");
             return;
         }
 

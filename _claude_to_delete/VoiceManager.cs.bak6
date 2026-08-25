@@ -173,20 +173,6 @@ public class VoiceManager : MonoBehaviour
     // 오디오 클립을 Queue에 추가하는 함수
     public void AddToQueue(AudioClip clip)
     {
-        // 재생 계측(Phase 5): 큐 적재와 실제 출력은 다른 사실이다 (Kickoff Guide 4-58).
-        // clip이 null이거나 길이 0, 볼륨 0, mute면 '재생됐다'는 로그만 남고 소리는 안 난다.
-        string clipInfo = "clip=null";
-        if (clip != null)
-        {
-            clipInfo = $"clip='{clip.name}' {clip.length:F2}s ch={clip.channels} hz={clip.frequency}";
-        }
-        string srcInfo = "audioSource=null";
-        if (audioSource != null)
-        {
-            srcInfo = $"vol={audioSource.volume:F2} mute={audioSource.mute} enabled={audioSource.enabled} playing={audioSource.isPlaying} listener={AudioListener.volume:F2} pause={AudioListener.pause}";
-        }
-        Debug.Log($"[Voice/재생] 큐 적재 | {clipInfo} | {srcInfo} | 큐길이={clipQueue.Count}");
-
         clipQueue.Enqueue(clip); // 클립을 Queue에 추가
 
         // 만약 현재 아무것도 재생 중이지 않다면, 바로 재생 시작
@@ -204,13 +190,6 @@ public class VoiceManager : MonoBehaviour
             isQueuePlaying = true;
             audioSource.clip = clipQueue.Dequeue();  // Queue에서 클립을 가져옴
             audioSource.Play();  // AudioSource로 재생 시작
-            // 계측: Play() 직후 isPlaying이 false면 클립/볼륨/리스너 중 하나가 죽어 있다는 뜻
-            string playedName = "null";
-            if (audioSource.clip != null)
-            {
-                playedName = audioSource.clip.name;
-            }
-            Debug.Log($"[Voice/재생] Play 호출 | clip='{playedName}' isPlaying={audioSource.isPlaying} vol={audioSource.volume:F2} listener={AudioListener.volume:F2} | 남은큐={clipQueue.Count}");
         }
         else
         {

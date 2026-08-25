@@ -158,8 +158,6 @@ public class TTSManager : MonoBehaviour
             lastConsumedSeqWasSub = isSubSeq;
             ttsSession.stateBySeq[seq] = "played";
             Debug.Log($"[TTS_Flow] 4.TTS수락 seq={seq} → 재생큐 추가");
-            // '큐에 넣었다'와 '실제로 소리가 난다'는 다른 사실이다 (Kickoff Guide 4-58).
-            // 재생 단계 실측은 VoiceManager.AddToQueue의 [Voice/재생] 로그를 볼 것.
             ttsSession.nextSeqToPlay++;
 
             // 다음 seq의 타임아웃 카운트 시작 (이 시점부터 2초)

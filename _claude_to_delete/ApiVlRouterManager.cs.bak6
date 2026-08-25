@@ -41,7 +41,6 @@ public class ApiVlRouterManager : MonoBehaviour
     private string currentChatIdx = "-1";  // 현재 대화 번호
     private string currentIntentImage = "off";  // 이번 run의 이미지 전송 모드 (off/auto/force)
     private string currentSttLang = "";  // STT가 감지한 입력 언어. 비어 있으면 설정값을 쓴다
-    private float routerStartTime = 0f;  // 요청 시작 시각. 구간 경과 계측용 (7-1 C)
     private string routerActionChannel = "?";  // 액션이 어느 경로로 왔는지 (툴콜/envelope/planner) — 각 진입점이 직접 세팅한다
     private Action<JObject> currentOnEvent = null;  // 이벤트 콜백
     private Action<bool, string> currentOnComplete = null;  // 완료 콜백
@@ -72,7 +71,6 @@ public class ApiVlRouterManager : MonoBehaviour
         string sttLang = ""
     )
     {
-        routerStartTime = Time.realtimeSinceStartup;
         currentSttLang = sttLang;
         currentOnEvent = onEvent;
         currentOnComplete = onComplete;
@@ -890,9 +888,7 @@ public class ApiVlRouterManager : MonoBehaviour
         };
 
         BeginRouterConversationIfNeeded();
-        // 구간 계측: 발화 → 대사 도착까지 몇 초 걸렸는지, 대사가 몇 개로 쪼개져 왔는지 (7-1 C)
-        // conversation_stream은 문장마다 스트리밍했지만 라우터는 done에서 전문을 한 번에 준다.
-        Debug.Log($"[VlRouterRun/계측] 대사 도착 {Time.realtimeSinceStartup - routerStartTime:F2}s | reply 개수={((JArray)replyList).Count} | chatIdx={currentChatIdx}");
+        Debug.Log("[VlRouterRun] data.reply_list 표시 - /conversation_stream 재호출 없음");
         APIManager.Instance.ProcessConversationStreamEventFromRouter(conversationEvent, routerConversationSession);
         return true;
     }

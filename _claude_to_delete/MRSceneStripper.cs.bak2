@@ -93,9 +93,9 @@ public class MRSceneStripper : MonoBehaviour
         typeof(ApiVlEngineManager),
         typeof(ApiVlAgentManager),
         typeof(ApiVlPlannerManager),
-        // ApiVlRouterManager / ApiVlRouterResponseManager / ApiAgentFunctionManager는
-        // 2026-08-24 Phase 5에서 제외를 해제했다 (ReviewedKeepTypes로 이동).
-        // 이름의 Vl 접두사와 달리 화면 조작과 무관하고, 춤·일정·음원 스킬의 실행기다.
+        typeof(ApiVlRouterManager),
+        typeof(ApiVlRouterResponseManager),
+        typeof(ApiAgentFunctionManager),
 
         // --- 로컬 Python 서버 기동 (Android에서 Process.Start 불가) ---
         typeof(InstallStatusManager),           // JarvisServerManager/SampleServerManager를 호출하는 진입점
@@ -185,11 +185,6 @@ public class MRSceneStripper : MonoBehaviour
         typeof(APIManager), typeof(APIAroPlaManager), typeof(ApiGeminiMultiClient),
         typeof(ApiGeminiDirectClient), typeof(ApiGeminiCharacterDataManager),
         typeof(ChatModeManager), typeof(ChatHandler), typeof(ServerManager),
-        // 라우터 + 스킬 (2026-08-24 Phase 5에서 제외 해제).
-        // ApiVlRouterManager = /router/job/run 호출, ApiVlRouterResponseManager = 툴콜 디스패치,
-        // ApiAgentFunctionManager = character_dance / todo_* / play_sfx 실행기.
-        // 화면 캡처는 intent_image 가드 안에만 있고, MR에서는 손 프레임 주입분을 쓴다.
-        typeof(ApiVlRouterManager), typeof(ApiVlRouterResponseManager), typeof(ApiAgentFunctionManager),
 
         // --- 음성 (MR에서 오히려 1급 입력) ---
         typeof(WhisperSTTManager), typeof(MicrophoneManager), typeof(TTSManager),

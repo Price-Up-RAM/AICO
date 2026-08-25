@@ -209,146 +209,11 @@ public class ApiAgentFunctionManager : MonoBehaviour
                 P("date", "string", false, "날짜. yyyy-MM-dd 형식. 비우면 오늘")
             }),
 
-            // Alarm
-            F("alarm_set_timer", "alarm", "지금부터 지정한 시간 뒤에 울리는 타이머를 추가하고 즉시 시작합니다.", false, new JArray {
-                P("duration_seconds", "int", true, "몇 초 뒤에 울릴지 (초 단위 총합)"),
-                P("title", "string", false, "타이머 제목/메모")
-            }),
-
             // Debug
             F("test", "debug", "연결 테스트용. 항상 성공을 반환합니다.", false)
         };
 
-#if UNITY_ANDROID || UNITY_EDITOR
-        StripMRUnsupportedFunctions(_functionRegistry);
-#endif
-
         return _functionRegistry;
-    }
-
-#if UNITY_ANDROID || UNITY_EDITOR
-    // MR에서 실행 불가능한 함수를 레지스트리에서 제거한다.
-    // 목록은 unity_functions_list로 서버에 전달되므로, 여기서 빼면 서버가 애초에 지시하지 못한다.
-    // 실행부에서 막는 것보다 낫다 — 서버가 쓸모없는 함수를 골라 라운드를 낭비하지 않는다.
-    private static readonly string[] MRUnsupportedFunctions =
-    {
-        // 데스크톱 커서/WinAPI
-        "physical_click", "proxy_click", "physical_drag", "proxy_drag", "physical_scroll", "proxy_scroll",
-        // 데스크톱 입력 주입
-        "type_text", "send_hotkey",
-        // Android에서 Process.Start 불가
-        "run_process", "focus_process",
-        // ClipboardManager가 MR에서 비활성
-        "read_clipboard", "write_clipboard",
-        // ScreenshotManager 데스크톱 캡처 (MR 이미지는 MRHandFrameGesture가 담당)
-        "capture_screenshot",
-        // PhysicsManager가 MR에서 비활성이라 호출 시 NRE — Phase 2에서 되살릴 것
-        "character_walk_left", "character_walk_right", "character_stop"
-    };
-
-    private void StripMRUnsupportedFunctions(JArray registry)
-    {
-        if (registry == null)
-        {
-            return;
-        }
-
-        List<string> removed = new List<string>();
-        for (int i = registry.Count - 1; i >= 0; i--)
-        {
-            JObject func = registry[i] as JObject;
-            if (func == null)
-            {
-                continue;
-            }
-
-            string name = (string)func["name"];
-            if (string.IsNullOrEmpty(name))
-            {
-                continue;
-            }
-
-            if (Array.IndexOf(MRUnsupportedFunctions, name) >= 0)
-            {
-                removed.Add(name);
-                registry.RemoveAt(i);
-            }
-        }
-
-        // 조용히 줄이면 "전부 지원한다"로 읽힌다 — 무엇을 뺐는지 남긴다
-        UnityEngine.Debug.Log($"[AgentFunc/MR] 미지원 {removed.Count}종 제외, 남은 {registry.Count}종 전송 | 제외=[{string.Join(",", removed.ToArray())}]");
-    }
-#endif
-
-    // 상대 타이머 생성 후 즉시 시작한다. AlarmManager는 MR 씬에 존재한다(2026-08-24 GUID 실측 1개).
-    private void ExecuteAlarmSetTimer(int durationSeconds, string title, Action<bool, string> onComplete)
-    {
-        if (durationSeconds <= 0)
-        {
-            UnityEngine.Debug.LogWarning($"[AgentFunc/alarm] duration_seconds가 유효하지 않다: {durationSeconds}");
-            onComplete?.Invoke(false, "타이머 시간이 지정되지 않았습니다.");
-            return;
-        }
-
-        AlarmManager alarmManager = FindAlarmManager();
-        if (alarmManager == null)
-        {
-            UnityEngine.Debug.LogWarning("[AgentFunc/alarm] AlarmManager를 씬에서 찾지 못했다");
-            onComplete?.Invoke(false, "알람 기능을 사용할 수 없습니다.");
-            return;
-        }
-
-        string alarmTitle = title;
-        if (string.IsNullOrEmpty(alarmTitle))
-        {
-            alarmTitle = BuildDefaultAlarmTitle(durationSeconds);
-        }
-
-        AlarmItem alarm = alarmManager.AddRelativeTimer(alarmTitle, durationSeconds, "default_alarm");
-        alarmManager.StartRelativeTimer(alarm.id);
-        UIManager.Instance.ShowAlarmMini();
-
-        UnityEngine.Debug.Log($"[AgentFunc/alarm] 타이머 생성: id={alarm.id}, title={alarmTitle}, seconds={durationSeconds}");
-        onComplete?.Invoke(true, $"{alarmTitle} 타이머를 {durationSeconds}초 뒤로 설정했습니다.");
-    }
-
-    // 비활성 오브젝트에 붙어 있어도 찾는다 (알람 UI는 닫힌 상태로 저장돼 있다)
-    private AlarmManager FindAlarmManager()
-    {
-        AlarmManager[] components = Resources.FindObjectsOfTypeAll<AlarmManager>();
-        for (int i = 0; i < components.Length; i++)
-        {
-            AlarmManager component = components[i];
-            if (component == null || component.gameObject == null)
-            {
-                continue;
-            }
-
-            if (!component.gameObject.scene.IsValid())
-            {
-                continue;
-            }
-
-            return component;
-        }
-
-        return null;
-    }
-
-    private string BuildDefaultAlarmTitle(int durationSeconds)
-    {
-        int hours = durationSeconds / 3600;
-        int minutes = durationSeconds % 3600 / 60;
-        int seconds = durationSeconds % 60;
-        if (hours > 0)
-        {
-            return $"타이머 {hours}시간 {minutes}분";
-        }
-        if (minutes > 0)
-        {
-            return $"타이머 {minutes}분";
-        }
-        return $"타이머 {seconds}초";
     }
 
     // 함수 이름 목록만 JSON 배열로 반환
@@ -375,30 +240,10 @@ public class ApiAgentFunctionManager : MonoBehaviour
     {
         UnityEngine.Debug.Log($"[ApiAgentFunctionManager] ExecuteAction 호출됨: {functionName}");
 
-#if UNITY_ANDROID || UNITY_EDITOR
-        // 목록에서 빼는 것만으로는 부족하다 — planner 액션과 저장된 스킬은 unity_functions_list를
-        // 거치지 않고 이름으로 직접 들어온다. 실행부에서도 막아야 NRE로 라우터 세션이 죽지 않는다.
-        if (Array.IndexOf(MRUnsupportedFunctions, functionName) >= 0)
-        {
-            UnityEngine.Debug.LogWarning($"[AgentFunc/MR] '{functionName}'는 MR 미지원이라 실행하지 않는다");
-            onComplete?.Invoke(false, $"'{functionName}'은 MR 환경에서 지원하지 않는 기능입니다.");
-            return;
-        }
-#endif
-
         if (functionName == "test")
         {
             UnityEngine.Debug.Log("[ApiAgentFunctionManager] 테스트 기능 실행됨");
             onComplete?.Invoke(true, "테스트 성공");
-        }
-        else if (functionName == "alarm_set_timer")
-        {
-            // 서버가 unity_envelope로 보내는 상대 타이머. owner=unity라 클라이언트가 실행한다.
-            // ApiVlRouterResponseManager의 tool_alarm_maker 경로와 동작이 같다 —
-            // 그쪽은 toolTarget 기반이라 envelope 형식으로 오면 타지 않는다.
-            int durationSeconds = GetParam<int>(parameters, "duration_seconds", 0);
-            string title = GetParam<string>(parameters, "title", "");
-            ExecuteAlarmSetTimer(durationSeconds, title, onComplete);
         }
         else if (functionName == "physical_click")
         {

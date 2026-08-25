@@ -217,16 +217,8 @@ public class WhisperSTTManager : MonoBehaviour
         // 반드시 대화 시작 '전'에 호출 (대화 시작이 동기적으로 새 TTS 세션을 만들 수 있음)
         TTSManager.Instance.CancelTtsSession();
 
-        // chatIdx 증가 — 라우터는 GameManager.chatIdx를 '읽기만' 하므로 호출부가 올려야 한다.
-        // 서버 STT 경로(STTUtil.cs)는 자체적으로 올리지만 Whisper 경로에는 그게 없었다.
-        // conversation_stream 시절에는 response.chatIdx를 인자로 넘겨 써서 드러나지 않았다.
-        GameManager.Instance.chatIdx += 1;
-        GameManager.Instance.chatIdxRegenerateCount = 0;
-
-        // 대화 시작 — 라우터+스킬 경로 (Phase 5).
-        // 말풍선·TTS 출력은 ApiVlRouterManager 내부에서 처리되므로 호출부에 배선이 필요 없다.
-        Debug.Log($"[MRChat/whisper] 라우터 요청 시작 chatIdx={GameManager.Instance.chatIdx} lang={response.lang} len={query.Length}");
-        ApiVlRouterManager.Instance.ExecuteVlRouterRun(query, sttLang: response.lang);
+        // 대화 시작 - chatIdx는 string 타입
+        APIManager.Instance.CallConversationStream(query, response.chatIdx, response.lang);
 
         // dev : 발언 음성 재생
         if (query != "" && SettingManager.Instance.settings.isDevHowling)

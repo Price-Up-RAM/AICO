@@ -397,11 +397,8 @@ public static class STTUtil
         // 반드시 대화 시작 '전'에 호출 (대화 시작이 동기적으로 새 TTS 세션을 만들 수 있음)
         TTSManager.Instance.CancelTtsSession();
 
-        // 대화 시작 — 라우터+스킬 경로 (Phase 5).
-        // 말풍선·TTS 출력은 ApiVlRouterManager 내부에서 처리되므로 호출부에 배선이 필요 없다.
-        // chatIdx는 이 파일 상단에서 이미 증가시켰다 — 라우터는 GameManager.chatIdx를 읽기만 하므로
-        // 여기서 다시 올리면 이중 증가가 된다.
-        ApiVlRouterManager.Instance.ExecuteVlRouterRun(query, sttLang: lang);
+        // 대화 시작
+        APIManager.Instance.CallConversationStream(query, chatIdx, lang);
 
         // dev : 발언 음성 재생
         if (query != "" && SettingManager.Instance.settings.isDevHowling)
