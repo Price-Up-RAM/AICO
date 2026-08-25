@@ -256,11 +256,6 @@ public class ApiVlRouterManager : MonoBehaviour
 
         string unityFunctionsList = ApiAgentFunctionManager.Instance.GetFunctionsList();
         string unityFunctionsDetailList = ApiAgentFunctionManager.Instance.GetFunctionsDetailList();
-
-        // 계측: 서버로 '실제로' 나가는 함수 목록. 필터가 반영됐는지, 서버가 이걸 쓰는지 대조용.
-        // 목록을 만들었다는 것과 그 목록이 전송된다는 것은 다른 사실이다 (Kickoff Guide 4-58).
-        Debug.Log($"[AgentFunc/전송] unity_functions_list ({unityFunctionsList.Length}자) = {unityFunctionsList}");
-        Debug.Log($"[AgentFunc/전송] unity_functions_detail_list ({unityFunctionsDetailList.Length}자)");
         Dictionary<string, string> routerContextFields = BuildRouterContextFields();
 
         var eventQueue = new System.Collections.Concurrent.ConcurrentQueue<JObject>();
@@ -1047,13 +1042,8 @@ public class ApiVlRouterManager : MonoBehaviour
             }
             WriteFormField(writer, boundary, "ai_language_in", languageIn);
             WriteFormField(writer, boundary, "ai_language_out", SettingManager.Instance.settings.ai_language_out ?? "");
-            // 계측: 폼 필드에 실제로 실린 길이. 위 [AgentFunc/전송] 값과 일치해야 한다.
-            // 0이면 목록은 만들어졌는데 전송 직전에 사라졌다는 뜻이다.
-            string fieldList = unityFunctionsList ?? "";
-            string fieldDetail = unityFunctionsDetailList ?? "";
-            Debug.Log($"[AgentFunc/전송] 폼 필드 적재: list={fieldList.Length}자 detail={fieldDetail.Length}자");
-            WriteFormField(writer, boundary, "unity_functions_list", fieldList);
-            WriteFormField(writer, boundary, "unity_functions_detail_list", fieldDetail);
+            WriteFormField(writer, boundary, "unity_functions_list", unityFunctionsList ?? "");
+            WriteFormField(writer, boundary, "unity_functions_detail_list", unityFunctionsDetailList ?? "");
 
             foreach (KeyValuePair<string, string> field in routerContextFields)
             {
