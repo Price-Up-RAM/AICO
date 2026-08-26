@@ -94,9 +94,8 @@ public class MRBalloonWorldFollow : MonoBehaviour
     [Tooltip("홀로그램 모드일 때 위 오프셋들에 곱할 비율.")]
     [SerializeField] private float hologramOffsetScale = 0.3f;
 
-    [Tooltip("캐릭터를 손으로 들어올리는 중(StatusManager.IsPicking)일 때, 캐릭터가 가려지지 " +
-             "않도록 옆으로 비켜나는 추가 X 오프셋(m). 0이면 비켜나지 않는다.")]
-    [SerializeField] private float pickingSideOffset = 0.35f;
+    [Tooltip("캐릭터가 가려지지 않도록 항상 옆으로 비켜나는 오프셋(m). 0이면 비켜나지 않는다.")]
+    [SerializeField] private float sideOffset = 0.45f;
 
     [Header("빌보드")]
     [Tooltip("Y축만 회전해 사용자를 향하게 한다. 완전 빌보드(모든 축)는 어지러워서 쓰지 않는다 " +
@@ -390,17 +389,14 @@ public class MRBalloonWorldFollow : MonoBehaviour
         Vector3 offset = worldOffset * offsetMul;
         Vector3 newPos = targetPos + new Vector3(offset.x, 0f, offset.z);
 
-        // 캐릭터를 들어올리는 중이면 말풍선이 캐릭터를 가리지 않도록 눈 기준 오른쪽으로 비켜난다.
-        // (캐릭터 grab은 MRRayDragAdapter가 담당하고, 이 컴포넌트는 그 상태를 모르므로
-        // StatusManager.IsPicking을 통해서만 알 수 있다 — 두 시스템은 서로 참조하지 않는다.)
-        bool isPicking = StatusManager.Instance != null && StatusManager.Instance.IsPicking;
-        if (isPicking && pickingSideOffset != 0f && eye != null)
+        // 말풍선이 캐릭터를 가리지 않도록 눈 기준 오른쪽으로 항상 비켜난다.
+        if (sideOffset != 0f && eye != null)
         {
             Vector3 sideDir = Vector3.Cross(Vector3.up, eye.position - targetPos);
             sideDir.y = 0f;
             if (sideDir.sqrMagnitude > 0.0001f)
             {
-                newPos += sideDir.normalized * (pickingSideOffset * offsetMul);
+                newPos += sideDir.normalized * (sideOffset * offsetMul);
             }
         }
 
