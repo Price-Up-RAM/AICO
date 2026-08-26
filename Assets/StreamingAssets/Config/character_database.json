@@ -1229,6 +1229,26 @@
           "isSelectable": true
         }
       ]
+    },
+    {
+      "id": 31,
+      "name": "Kkum2",
+      "source": { "ko": "꿈씨패밀리", "ja": "クムシファミリー", "en": "Kkumssi Family" },
+      "clothesList": [
+        {
+          "name": "꿈돌이",
+          "tagAiChat": true,
+          "tagAffinity": true,
+          "tagEmotionExpression": false,
+          "tagEquip": false,
+          "tagSpecials": ["볼당기기"],
+          "text": "3D",
+          "spriteAddress": "kkum_sprite",
+          "prefabAddress": "kkum2",
+          "isLocal": true,
+          "isSelectable": true
+        }
+      ]
     }
   ]
 }

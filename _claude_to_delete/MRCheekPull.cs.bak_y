@@ -1,0 +1,290 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+// 볼당기기 — MR판. 캐릭터 루트에 런타임으로 붙는다 (MRCheekPullBinder가 붙인다).
+//
+// 데스크톱판 CheekPullHandler는 IDragHandler + 화면 좌표(ScreenPointToRay)를 썼다.
+// MR에는 의미 있는 화면 좌표가 없고, 3D 콜라이더에 uGUI 이벤트를 보내려면
+// PhysicsRaycaster가 있어야 하는데 MR 씬에는 0개다(2026-08-26 실측).
+// 그래서 입력은 Oculus Interaction(RayInteractable / HandGrabInteractable)으로 받고,
+// 이동은 이 스크립트가 LateUpdate에서 직접 적용한다.
+//
+// **LateUpdate여야 하는 이유**: Animator는 Update 이후에 본 포즈를 자기 값으로 되돌린다.
+// Update에서 본을 옮기면 그 프레임 안에 지워진다. 데스크톱판도 같은 이유로 LateUpdate였다.
+public class MRCheekPull : MonoBehaviour
+{
+    [Header("당기기")]
+    [Tooltip("본 기준 로컬 최대 이동 거리(m). 실측 로그의 '월드 반지름'을 보고 조정할 것.")]
+    [SerializeField] private float maxPullDistance = 0.06f;
+
+    [Tooltip("잡은 손을 따라가는 속도. 클수록 즉각적, 작을수록 부드럽다.")]
+    [SerializeField] private float followSpeed = 30f;
+
+    [Header("복귀")]
+    [Tooltip("놓았을 때 제자리로 돌아가는 시간(초).")]
+    [SerializeField] private float returnDuration = 0.25f;
+
+    [Tooltip("복귀할 때 반대쪽으로 살짝 넘어갔다 돌아온다(탱 하는 느낌). 0이면 그냥 미끄러져 돌아온다.")]
+    [SerializeField] private float overshoot = 1.7f;
+
+    [Header("연출")]
+    [SerializeField] private string pullEmotion = "><";
+    [SerializeField] private string releaseEmotion = "idle";
+    [SerializeField] private string animatorBoolName = "isCheekPull";
+
+    [Header("진단")]
+    [Tooltip("배선 직후 각 볼의 실제 월드 크기를 한 줄 찍는다. 정적 분석으로는 루트 스케일을 알 수 없어서다.")]
+    [SerializeField] private bool logMeasurementOnBind = true;
+
+    // 볼 하나의 상태.
+    private class Cheek
+    {
+        public string name;
+        public Transform bone;
+        public Vector3 restLocalPos;      // 본의 원래 로컬 위치(기준점)
+        public Vector3 currentOffset;     // 지금 적용 중인 로컬 오프셋
+        public Vector3 targetOffset;      // 손이 지시하는 목표 로컬 오프셋
+        public bool isPulling;
+        public Vector3 releaseOffset;     // 놓는 순간의 오프셋(복귀 보간 시작점)
+        public float releaseTimer;        // 복귀 경과 시간
+        public bool isReturning;
+    }
+
+    private readonly List<Cheek> _cheeks = new List<Cheek>();
+    private Animator _animator;
+    private bool _animatorHasBool;
+    private int _pullingCount;
+
+    // =========================================================
+    // 배선 (MRCheekPullBinder가 부른다)
+    // =========================================================
+    public int RegisterCheek(Transform bone, string label)
+    {
+        if (bone == null)
+        {
+            return -1;
+        }
+
+        Cheek c = new Cheek();
+        c.name = label;
+        c.bone = bone;
+        c.restLocalPos = bone.localPosition;
+        _cheeks.Add(c);
+
+        if (logMeasurementOnBind)
+        {
+            Vector3 ls = bone.lossyScale;
+            float worldRadius = 0f;
+            SphereCollider sphere = bone.GetComponent<SphereCollider>();
+            if (sphere != null)
+            {
+                worldRadius = sphere.radius * Mathf.Max(ls.x, Mathf.Max(ls.y, ls.z));
+            }
+            // 정적 분석에서는 루트 스케일이 중첩 프리팹이라 미해결이었다. 런타임 값이 유일한 진실이다.
+            Debug.Log($"[MRCheekPull/실측] {label} | lossyScale={ls.ToString("F4")} | " +
+                      $"콜라이더 월드 반지름={worldRadius:F4}m (지름 {worldRadius * 200f:F1}cm) | " +
+                      $"본 로컬 기준점={c.restLocalPos.ToString("F4")} | maxPullDistance={maxPullDistance:F3}m");
+        }
+
+        return _cheeks.Count - 1;
+    }
+
+    public void SetupAnimator(Animator animator)
+    {
+        _animator = animator;
+        _animatorHasBool = false;
+
+        if (_animator == null)
+        {
+            return;
+        }
+        if (string.IsNullOrEmpty(animatorBoolName))
+        {
+            return;
+        }
+
+        // 파라미터가 없는 애니메이터에 SetBool을 부르면 경고가 쏟아진다. 미리 확인한다.
+        for (int i = 0; i < _animator.parameterCount; i++)
+        {
+            AnimatorControllerParameter p = _animator.GetParameter(i);
+            if (p.type == AnimatorControllerParameterType.Bool && p.name == animatorBoolName)
+            {
+                _animatorHasBool = true;
+                break;
+            }
+        }
+    }
+
+    // =========================================================
+    // 트랜스포머가 부르는 입구
+    // =========================================================
+    public void BeginPull(int index, Vector3 grabWorldPos)
+    {
+        Cheek c = Get(index);
+        if (c == null)
+        {
+            return;
+        }
+
+        c.isPulling = true;
+        c.isReturning = false;
+        _pullingCount++;
+
+        ApplyPullPresentation(true);
+        Debug.Log($"[MRCheekPull] {c.name} 잡음 | 잡은 지점={grabWorldPos.ToString("F3")}");
+    }
+
+    public void UpdatePull(int index, Vector3 grabWorldPos)
+    {
+        Cheek c = Get(index);
+        if (c == null)
+        {
+            return;
+        }
+        if (!c.isPulling)
+        {
+            return;
+        }
+        if (c.bone.parent == null)
+        {
+            return;
+        }
+
+        // 본의 기준 월드 위치(머리가 움직여도 따라간다)
+        Vector3 restWorld = c.bone.parent.TransformPoint(c.restLocalPos);
+
+        // 기준점 대비 월드 오프셋 → 본 부모의 로컬 공간으로
+        Vector3 worldOffset = grabWorldPos - restWorld;
+        Vector3 localOffset = c.bone.parent.InverseTransformVector(worldOffset);
+
+        // 최대 거리로 제한
+        if (localOffset.magnitude > maxPullDistance)
+        {
+            localOffset = localOffset.normalized * maxPullDistance;
+        }
+
+        c.targetOffset = localOffset;
+    }
+
+    public void EndPull(int index)
+    {
+        Cheek c = Get(index);
+        if (c == null)
+        {
+            return;
+        }
+        if (!c.isPulling)
+        {
+            return;
+        }
+
+        c.isPulling = false;
+        c.isReturning = true;
+        c.releaseOffset = c.currentOffset;
+        c.releaseTimer = 0f;
+        c.targetOffset = Vector3.zero;
+
+        _pullingCount--;
+        if (_pullingCount < 0)
+        {
+            _pullingCount = 0;
+        }
+
+        Debug.Log($"[MRCheekPull] {c.name} 놓음 | 당긴 거리={c.releaseOffset.magnitude:F4}m (최대 {maxPullDistance:F3}m)");
+
+        if (_pullingCount == 0)
+        {
+            ApplyPullPresentation(false);
+        }
+    }
+
+    // =========================================================
+    // 적용 — Animator 뒤에서 돈다
+    // =========================================================
+    private void LateUpdate()
+    {
+        for (int i = 0; i < _cheeks.Count; i++)
+        {
+            Cheek c = _cheeks[i];
+            if (c.bone == null)
+            {
+                continue;
+            }
+
+            if (c.isPulling)
+            {
+                // 손을 부드럽게 따라간다
+                c.currentOffset = Vector3.Lerp(c.currentOffset, c.targetOffset,
+                                               1f - Mathf.Exp(-followSpeed * Time.deltaTime));
+            }
+            else if (c.isReturning)
+            {
+                c.releaseTimer += Time.deltaTime;
+                float t = 1f;
+                if (returnDuration > 0f)
+                {
+                    t = Mathf.Clamp01(c.releaseTimer / returnDuration);
+                }
+
+                // 1에서 0으로 가되 살짝 반대편으로 넘어갔다 돌아온다
+                float k = 1f - EaseOutBack(t);
+                c.currentOffset = c.releaseOffset * k;
+
+                if (t >= 1f)
+                {
+                    c.currentOffset = Vector3.zero;
+                    c.isReturning = false;
+                }
+            }
+
+            // Animator가 이미 본을 자기 포즈로 되돌린 뒤다. 여기서 오프셋을 다시 얹는다.
+            c.bone.localPosition = c.restLocalPos + c.currentOffset;
+        }
+    }
+
+    // 되돌아올 때 살짝 넘어가는 곡선. overshoot=0이면 평범한 감속이 된다.
+    private float EaseOutBack(float t)
+    {
+        float c1 = overshoot;
+        float c3 = c1 + 1f;
+        float u = t - 1f;
+        return 1f + c3 * u * u * u + c1 * u * u;
+    }
+
+    private void ApplyPullPresentation(bool pulling)
+    {
+        if (_animatorHasBool)
+        {
+            _animator.SetBool(animatorBoolName, pulling);
+        }
+
+        if (EmotionManager.Instance == null)
+        {
+            return;
+        }
+
+        string emotion = releaseEmotion;
+        if (pulling)
+        {
+            emotion = pullEmotion;
+        }
+        if (string.IsNullOrEmpty(emotion))
+        {
+            return;
+        }
+        EmotionManager.Instance.ShowEmotion(emotion, gameObject);
+    }
+
+    private Cheek Get(int index)
+    {
+        if (index < 0)
+        {
+            return null;
+        }
+        if (index >= _cheeks.Count)
+        {
+            return null;
+        }
+        return _cheeks[index];
+    }
+}

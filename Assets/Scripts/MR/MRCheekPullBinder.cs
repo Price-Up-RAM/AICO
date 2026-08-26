@@ -1,0 +1,268 @@
+using Oculus.Interaction;
+using Oculus.Interaction.Grab;        // GrabTypeFlags — 별도 네임스페이스다
+using Oculus.Interaction.HandGrab;
+using Oculus.Interaction.Surfaces;
+using UnityEngine;
+
+// 캐릭터가 스폰되면 볼당기기를 배선한다. 씬에 하나만 두면 된다.
+//
+// 왜 CharManager를 안 건드리나
+// ---------------------------
+// 캐릭터는 런타임 Instantiate라 씬에 미리 배선할 수 없다. CharManager의 스폰 지점 3곳
+// (244 / 303 / 486행)에 훅을 박을 수도 있지만, 공용 파일을 세 군데 고치는 것보다
+// MRFloorPlacement가 쓰는 방식 — "현재 캐릭터가 바뀌었는지 Update에서 본다" — 이 낫다.
+// 캐릭터 교체도 자동으로 따라온다.
+//
+// 왜 프록시 자식을 만드나
+// ----------------------
+// HandGrabInteractable은 Rigidbody를 필수로 요구한다(RelativeTo => _rigidbody.transform).
+// 그런데 볼은 Animator가 매 프레임 구동하는 **본**이라, 거기에 Rigidbody를 붙이면
+// 물리와 Animator가 같은 Transform을 두고 다툰다.
+// 그래서 본 아래에 빈 자식을 만들고 상호작용 부품을 전부 거기 올린다.
+// 프록시는 본의 자식이라 볼이 당겨지면 같이 따라온다 — 잡은 지점이 볼에 붙어 있는 게 맞다.
+public class MRCheekPullBinder : MonoBehaviour
+{
+    [Header("대상 판정")]
+    [Tooltip("CharAttributes.featureTags에 이 태그가 있는 캐릭터만 배선한다.")]
+    [SerializeField] private string requiredFeatureTag = "볼당기기";
+
+    [Tooltip("볼 본 이름. 이 이름으로 캐릭터 하위를 찾는다.")]
+    [SerializeField] private string[] cheekBoneNames = { "Character_Ball_L", "Character_Ball_R" };
+
+    [Header("당기기 튜닝 — Play 중에 바꿔도 바로 반영된다")]
+    [Tooltip("볼이 최대 몇 m까지 끌려오는지. 월드 기준이라 숫자가 곧 미터다. " +
+             "얼굴 폭의 1/3 정도가 자연스럽다. 기본 0.06m = 6cm.")]
+    [SerializeField] private float maxPullDistance = 0.06f;
+
+    [Tooltip("손을 따라가는 속도. 클수록 즉각적, 작을수록 부드럽다.")]
+    [SerializeField] private float followSpeed = 30f;
+
+    [Tooltip("놓았을 때 돌아가는 시간(초).")]
+    [SerializeField] private float returnDuration = 0.25f;
+
+    [Tooltip("복귀하는 동안 몇 번 왕복할지. 0.5=한 번 넘어갔다 복귀, 2=두 번 왕복, 3=세 번.")]
+    [SerializeField] private float bounceCount = 0.5f;
+
+    [Tooltip("진동이 잦아드는 속도. 클수록 빨리 멈춘다. 왕복을 여러 번 보이게 하려면 낮출 것(2~3).")]
+    [SerializeField] private float damping = 4f;
+
+    [Header("프록시")]
+    [Tooltip("본에 SphereCollider가 없을 때 프록시에 만들 콜라이더 반지름(본 로컬 단위).")]
+    [SerializeField] private float fallbackRadius = 0.2f;
+
+    [Tooltip("프록시 콜라이더 반지름 배수. 조준이 힘들면 키우고, 너무 잘 잡히면 줄인다.")]
+    [SerializeField] private float radiusScale = 1f;
+
+    [Tooltip("볼을 둘 다 이 레이어로 통일한다. 씬 실측상 좌우가 Default/Char로 달랐다.")]
+    [SerializeField] private string unifyLayerName = "Char";
+
+    private GameObject _boundCharacter;
+    private MRCheekPull _bound;
+
+    // 씬에서 만진 값을 실제 동작에 반영한다.
+    private void PushConfig()
+    {
+        if (_bound == null)
+        {
+            return;
+        }
+        _bound.Configure(maxPullDistance, followSpeed, returnDuration, bounceCount, damping);
+    }
+
+    private void Update()
+    {
+        if (CharManager.Instance == null)
+        {
+            return;
+        }
+
+        GameObject current = CharManager.Instance.GetCurrentCharacter();
+        if (current == _boundCharacter)
+        {
+            // 이미 배선된 캐릭터라도 튜닝 값은 계속 밀어 넣는다.
+            // MRCheekPull은 런타임 AddComponent라 인스펙터가 없어서,
+            // 씬에 있는 이 컴포넌트가 유일하게 조절 가능한 창구다.
+            PushConfig();
+            return;
+        }
+
+        _boundCharacter = current;
+        if (current == null)
+        {
+            return;
+        }
+
+        Bind(current);
+    }
+
+    private void Bind(GameObject character)
+    {
+        CharAttributes attrs = character.GetComponent<CharAttributes>();
+        if (!HasFeatureTag(attrs))
+        {
+            Debug.Log($"[MRCheekPull/배선] '{character.name}' — featureTags에 '{requiredFeatureTag}'가 없어 건너뜀");
+            return;
+        }
+
+        // 이미 붙어 있으면 다시 만들지 않는다(캐릭터 교체 후 되돌아온 경우).
+        MRCheekPull pull = character.GetComponent<MRCheekPull>();
+        if (pull != null)
+        {
+            _bound = pull;
+            PushConfig();
+            Debug.Log($"[MRCheekPull/배선] '{character.name}' — 이미 배선돼 있음 (튜닝 값만 갱신)");
+            return;
+        }
+
+        pull = character.AddComponent<MRCheekPull>();
+        _bound = pull;
+        PushConfig();
+
+        int wired = 0;
+        int missing = 0;
+        for (int i = 0; i < cheekBoneNames.Length; i++)
+        {
+            Transform bone = FindDeep(character.transform, cheekBoneNames[i]);
+            if (bone == null)
+            {
+                missing++;
+                Debug.LogWarning($"[MRCheekPull/배선] 본을 찾지 못했다: '{cheekBoneNames[i]}'");
+                continue;
+            }
+
+            int index = pull.RegisterCheek(bone, cheekBoneNames[i]);
+            if (index < 0)
+            {
+                missing++;
+                continue;
+            }
+
+            BuildProxy(bone, pull, index);
+            UnifyLayer(bone);
+            wired++;
+        }
+
+        // 연출(애니메이터) 배선은 **볼 배선이 끝난 뒤에** 한다.
+        // 2026-08-26: 여기서 예외가 나 Bind가 통째로 죽는 바람에 볼이 하나도 안 붙었다.
+        // 연출은 부가 기능이라 실패해도 당기기 자체는 살아야 한다 (Kickoff Guide 4-58 계열).
+        try
+        {
+            pull.SetupAnimator(character.GetComponent<Animator>());
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[MRCheekPull/배선] 애니메이터 배선 실패, 당기기는 계속 동작한다: {e.GetType().Name} {e.Message}");
+        }
+
+        Debug.Log($"[MRCheekPull/배선] '{character.name}' 완료 | 배선 {wired}개 / 실패 {missing}개 | " +
+                  $"태그='{requiredFeatureTag}' | 레이어통일='{unifyLayerName}'");
+    }
+
+    // 본 아래에 상호작용 프록시를 만든다.
+    private void BuildProxy(Transform bone, MRCheekPull pull, int index)
+    {
+        GameObject proxy = new GameObject("CheekPullTarget");
+        proxy.transform.SetParent(bone, false);
+        proxy.transform.localPosition = Vector3.zero;
+        proxy.transform.localRotation = Quaternion.identity;
+        proxy.transform.localScale = Vector3.one;
+        proxy.layer = bone.gameObject.layer;
+
+        // 콜라이더 — 본에 있는 것을 복사한다. 없으면 기본값.
+        float radius = fallbackRadius;
+        SphereCollider source = bone.GetComponent<SphereCollider>();
+        if (source != null)
+        {
+            radius = source.radius;
+        }
+        SphereCollider col = proxy.AddComponent<SphereCollider>();
+        col.radius = radius * radiusScale;
+        col.isTrigger = true;   // 캐릭터 몸통 물리와 부딪히지 않게
+
+        // HandGrabInteractable이 요구한다. 물리로 움직이면 안 되므로 kinematic.
+        Rigidbody rb = proxy.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity = false;
+
+        // 이 트랜스포머가 실제 이동을 담당한다 — Transform은 건드리지 않는다.
+        MRCheekPullTransformer transformer = proxy.AddComponent<MRCheekPullTransformer>();
+        transformer.Setup(pull, index);
+
+        Grabbable grabbable = proxy.AddComponent<Grabbable>();
+        grabbable.InjectOptionalOneGrabTransformer(transformer);
+
+        // 원거리 손 레이로 잡기
+        ColliderSurface surface = proxy.AddComponent<ColliderSurface>();
+        surface.InjectCollider(col);
+        RayInteractable ray = proxy.AddComponent<RayInteractable>();
+        ray.InjectSurface(surface);
+        ray.InjectOptionalPointableElement(grabbable);
+
+        // 손으로 직접 잡기. HandGrabPose는 선택이라 저작 없이도 동작한다.
+        HandGrabInteractable handGrab = proxy.AddComponent<HandGrabInteractable>();
+        handGrab.InjectRigidbody(rb);
+        handGrab.InjectSupportedGrabTypes(GrabTypeFlags.Pinch | GrabTypeFlags.Palm);
+        handGrab.InjectOptionalPointableElement(grabbable);
+    }
+
+    // 씬 실측(2026-08-26): Character_Ball_L=Default(0), Character_Ball_R=Char(3)로 달랐다.
+    // 좌우가 다르면 다른 시스템(카메라 컬링·물리 레이어 매트릭스)에서 한쪽만 사고가 난다.
+    private void UnifyLayer(Transform bone)
+    {
+        if (string.IsNullOrEmpty(unifyLayerName))
+        {
+            return;
+        }
+
+        int layer = LayerMask.NameToLayer(unifyLayerName);
+        if (layer < 0)
+        {
+            Debug.LogWarning($"[MRCheekPull/배선] 레이어 '{unifyLayerName}'가 없다. 레이어 통일을 건너뛴다.");
+            return;
+        }
+
+        if (bone.gameObject.layer == layer)
+        {
+            return;
+        }
+
+        Debug.Log($"[MRCheekPull/배선] '{bone.name}' 레이어 현재값={LayerMask.LayerToName(bone.gameObject.layer)}({bone.gameObject.layer}) " +
+                  $"→ 새값={unifyLayerName}({layer})");
+        bone.gameObject.layer = layer;
+    }
+
+    private bool HasFeatureTag(CharAttributes attrs)
+    {
+        if (string.IsNullOrEmpty(requiredFeatureTag))
+        {
+            return true;
+        }
+        if (attrs == null)
+        {
+            return false;
+        }
+        if (attrs.featureTags == null)
+        {
+            return false;
+        }
+        return attrs.featureTags.Contains(requiredFeatureTag);
+    }
+
+    // 이름으로 하위 전체를 훑는다. 본 계층이 깊어서(실측 9단) Find로는 못 찾는다.
+    private static Transform FindDeep(Transform root, string name)
+    {
+        if (root.name == name)
+        {
+            return root;
+        }
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform found = FindDeep(root.GetChild(i), name);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+}
