@@ -217,6 +217,22 @@ public class ApiAgentFunctionManager : MonoBehaviour
             F("jukebox_next", "audio", "주크박스의 다음 곡으로 넘어가 재생", false),
             F("jukebox_get_music_list", "audio", "주크박스에 등록된 곡 목록과 현재 재생 상태를 조회", false),
 
+            // Inventory / Currency
+            F("inventory_get_items", "inventory", "공용(MAIN) 인벤토리에 들어 있는 아이템 목록과 개수를 조회", false),
+            F("inventory_count_item", "inventory", "특정 아이템을 몇 개 갖고 있는지 조회", false, new JArray {
+                P("item_name", "string", true, "아이템 이름 (표시 이름 또는 키. 일부만 입력해도 매칭)")
+            }),
+            F("inventory_get_equip_list", "inventory", "장착 가능한 아이템 목록과 각각의 현재 착용 여부를 조회", false),
+            F("inventory_equip", "inventory", "아이템을 현재 캐릭터에게 장착", true, new JArray {
+                P("item_name", "string", true, "장착할 아이템 이름 (표시 이름 또는 키)")
+            }),
+            F("inventory_unequip", "inventory", "현재 캐릭터가 착용 중인 아이템을 벗김", true, new JArray {
+                P("item_name", "string", true, "벗길 아이템 이름 (표시 이름 또는 키)")
+            }),
+            F("inventory_show", "inventory", "인벤토리 창을 화면에 연다", true),
+            F("inventory_close", "inventory", "열려 있는 인벤토리 창을 닫는다", false),
+            F("currency_get_gold", "inventory", "보유 골드 잔액을 조회", false),
+
             // Alarm
             F("alarm_get_list", "alarm", "설정된 알람·타이머 목록을 남은 시간과 함께 조회", false),
             F("alarm_set", "alarm", "매일 지정한 시각에 울리는 알람을 추가 (예: 아침 7시에 깨워줘)", false, new JArray {
@@ -803,6 +819,512 @@ public class ApiAgentFunctionManager : MonoBehaviour
         onComplete?.Invoke(true, $"곡 {jukebox.Tracks.Count}개: {available} / 현재 {state}");
     }
 
+    #region Inventory / Currency
+
+    // 파라미터가 비어 들어오면 원본 JSON을 통째로 찍는다.
+    // 서버 카탈로그(61종)와 우리 목록이 어긋나 있어 이름이 다른 키로 오는 경우가 실측됐다.
+    private void LogInventoryParams(string functionName, string itemName, Dictionary<string, object> parameters)
+    {
+        if (string.IsNullOrWhiteSpace(itemName) == false)
+        {
+            return;
+        }
+
+        string raw = "(parameters=null)";
+        if (parameters != null)
+        {
+            raw = JObject.FromObject(parameters).ToString(Formatting.None);
+        }
+
+        UnityEngine.Debug.LogWarning($"[AgentFunc/inventory] '{functionName}' item_name이 비었다 — 원본 파라미터: {raw}");
+    }
+
+    // InventorySystemManager는 Instance 게터가 자가생성하지 않는다 (§4-64).
+    // 씬에 있지만 비활성이 되는 순간 즉시 null이라 호출부마다 확인한다.
+    private InventorySystemManager FindInventory()
+    {
+        InventorySystemManager inventory = InventorySystemManager.Instance;
+        if (inventory == null)
+        {
+            UnityEngine.Debug.LogWarning("[AgentFunc/inventory] InventorySystemManager를 씬에서 찾지 못했다 — 비활성일 수 있다");
+        }
+        return inventory;
+    }
+
+    // 아이템 표시 이름 (카탈로그 미등재면 key 그대로)
+    private string ItemDisplayName(string key)
+    {
+        ItemCatalog catalog = ItemCatalog.Default;
+        if (catalog == null)
+        {
+            return key;
+        }
+
+        ItemEntry entry = catalog.Get(key);
+        if (entry == null || string.IsNullOrWhiteSpace(entry.displayName))
+        {
+            return key;
+        }
+
+        return entry.displayName;
+    }
+
+    // 사용자/서버가 말한 이름 → 카탈로그 key. 정확 키 → 표시 이름 완전일치 → 부분일치 순.
+    // 못 찾으면 후보를 사유에 담아 돌려준다 (모델이 재시도할 수 있게).
+    private string ResolveItemKey(string itemName, out string reason)
+    {
+        reason = "";
+
+        if (string.IsNullOrWhiteSpace(itemName))
+        {
+            reason = "아이템 이름이 비어 있습니다.";
+            return null;
+        }
+
+        ItemCatalog catalog = ItemCatalog.Default;
+        if (catalog == null)
+        {
+            reason = "아이템 카탈로그를 불러오지 못했습니다.";
+            return null;
+        }
+
+        string needle = itemName.Trim();
+
+        // 1순위 — key 정확 일치
+        if (catalog.Contains(needle))
+        {
+            return needle;
+        }
+
+        // 카탈로그 전 엔트리 수집 (카테고리 등록 순)
+        List<ItemEntry> all = new List<ItemEntry>();
+        foreach (string category in catalog.Categories())
+        {
+            ItemCategoryCatalog child = catalog.CatalogForCategory(category);
+            if (child == null)
+            {
+                continue;
+            }
+
+            foreach (ItemEntry entry in child.BaseEntries)
+            {
+                if (entry != null && string.IsNullOrEmpty(entry.key) == false)
+                {
+                    all.Add(entry);
+                }
+            }
+        }
+
+        // 2순위 — 표시 이름 완전 일치 (대소문자 무시)
+        foreach (ItemEntry entry in all)
+        {
+            if (string.IsNullOrWhiteSpace(entry.displayName) == false &&
+                string.Equals(entry.displayName.Trim(), needle, StringComparison.OrdinalIgnoreCase))
+            {
+                return entry.key;
+            }
+        }
+
+        // 3순위 — 표시 이름/키 부분 일치
+        foreach (ItemEntry entry in all)
+        {
+            bool nameHit = string.IsNullOrWhiteSpace(entry.displayName) == false &&
+                           entry.displayName.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+            bool keyHit = entry.key.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+
+            if (nameHit || keyHit)
+            {
+                return entry.key;
+            }
+        }
+
+        reason = $"'{itemName}'에 해당하는 아이템을 찾지 못했습니다.";
+        return null;
+    }
+
+    // 인벤토리 목록 조회.
+    //
+    // ⚠ 용어 주의: 여기서 말하는 InvStore는 **인벤토리 보관함**이지 상점이 아니다.
+    //   이 프로젝트에는 Store라는 이름이 서로 다른 두 가지로 쓰인다 —
+    //   InvStore(인벤토리 칸) / StoreManager·StoreView(상점 UI, Assets/Prefabs/UI/Store).
+    //   사용자에게 답할 때는 "보관함"·"소지품"만 쓰고 "스토어"라고 말하지 않는다.
+    //
+    // 창은 1개(캐릭터 인벤토리)다 — 공용 보관함은 캐릭터 1명 확정으로 UI에서 걷어냈다
+    // (2026-08-26). 다만 예전 세이브에 공용 보관함 데이터가 남아 있을 수 있고, 그건 이제
+    // **어떤 UI로도 닿을 수 없다.** 조용히 빼면 "분명히 샀는데 없다"가 되므로 경고로 올린다.
+    private void ExecuteInventoryGetItems(Action<bool, string> onComplete)
+    {
+        InventorySystemManager inventory = FindInventory();
+        if (inventory == null)
+        {
+            onComplete?.Invoke(false, "인벤토리를 사용할 수 없습니다.");
+            return;
+        }
+
+        List<string> lines = DescribeStore(inventory.GetActiveCharStore());
+        WarnIfMainStoreHasItems(inventory);
+
+        UnityEngine.Debug.Log($"[AgentFunc/inventory] 목록 조회 {lines.Count}종 | charcode={inventory.ActiveCharcode}");
+
+        if (lines.Count == 0)
+        {
+            onComplete?.Invoke(true, "인벤토리가 비어 있습니다.");
+            return;
+        }
+
+        onComplete?.Invoke(true, $"인벤토리에 {lines.Count}종 있습니다: {string.Join(", ", lines)}");
+    }
+
+    // 닿을 수 없게 된 공용 보관함에 아이템이 남아 있으면 경고 (UI를 1창으로 줄인 뒤의 잔재)
+    private void WarnIfMainStoreHasItems(InventorySystemManager inventory)
+    {
+        InvStore main = inventory.GetMainStore();
+        if (main == null || main.stacks == null || main.stacks.Count == 0)
+        {
+            return;
+        }
+
+        UnityEngine.Debug.LogWarning($"[AgentFunc/inventory] 공용 보관함에 {main.stacks.Count}종이 남아 있다 — " +
+                                     "지금은 여는 UI가 없어 사용자가 닿을 수 없다. 캐릭터 소지품으로 이관이 필요하다");
+    }
+
+    // 보관함 한 개를 "이름 N개" 목록으로. 없거나 비면 빈 목록.
+    private List<string> DescribeStore(InvStore store)
+    {
+        List<string> lines = new List<string>();
+        if (store == null || store.stacks == null)
+        {
+            return lines;
+        }
+
+        foreach (InvItemStack stack in store.stacks)
+        {
+            if (stack == null || string.IsNullOrEmpty(stack.key))
+            {
+                continue;
+            }
+
+            lines.Add($"{ItemDisplayName(stack.key)} {stack.count}개");
+        }
+
+        return lines;
+    }
+
+
+    // 특정 아이템 보유 개수 조회
+    private void ExecuteInventoryCountItem(string itemName, Action<bool, string> onComplete)
+    {
+        InventorySystemManager inventory = FindInventory();
+        if (inventory == null)
+        {
+            onComplete?.Invoke(false, "인벤토리를 사용할 수 없습니다.");
+            return;
+        }
+
+        string reason;
+        string key = ResolveItemKey(itemName, out reason);
+        if (key == null)
+        {
+            UnityEngine.Debug.LogWarning($"[AgentFunc/inventory] 키 해석 실패: {reason}");
+            onComplete?.Invoke(false, reason);
+            return;
+        }
+
+        InvStore store = inventory.GetActiveCharStore();
+        int count = 0;
+        if (store != null)
+        {
+            count = store.CountOf(key);
+        }
+
+        WarnIfMainStoreHasItems(inventory);
+        UnityEngine.Debug.Log($"[AgentFunc/inventory] 개수 조회 '{itemName}' → key={key} count={count}");
+
+        if (count == 0)
+        {
+            onComplete?.Invoke(true, $"{ItemDisplayName(key)}은(는) 갖고 있지 않습니다.");
+            return;
+        }
+
+        onComplete?.Invoke(true, $"{ItemDisplayName(key)}을(를) {count}개 갖고 있습니다.");
+    }
+
+    // 장착 가능 아이템 + 현재 착용 여부
+    private void ExecuteInventoryGetEquipList(Action<bool, string> onComplete)
+    {
+        InventorySystemManager inventory = FindInventory();
+        if (inventory == null)
+        {
+            onComplete?.Invoke(false, "인벤토리를 사용할 수 없습니다.");
+            return;
+        }
+
+        InvStore store = inventory.GetActiveCharStore();
+        if (store == null || store.stacks == null)
+        {
+            onComplete?.Invoke(true, "장착할 수 있는 아이템이 없습니다.");
+            return;
+        }
+
+        List<string> lines = new List<string>();
+        int wornCount = 0;
+
+        foreach (InvItemStack stack in store.stacks)
+        {
+            if (stack == null || string.IsNullOrEmpty(stack.key))
+            {
+                continue;
+            }
+
+            if (inventory.IsEquippable(stack.key) == false)
+            {
+                continue;
+            }
+
+            bool worn = inventory.IsEquippedOnActive(stack.key);
+            string mark = "미착용";
+            if (worn)
+            {
+                mark = "착용 중";
+                wornCount = wornCount + 1;
+            }
+
+            lines.Add($"{ItemDisplayName(stack.key)}({mark})");
+        }
+
+        WarnIfMainStoreHasItems(inventory);
+
+        if (lines.Count == 0)
+        {
+            UnityEngine.Debug.Log("[AgentFunc/inventory] 장착 가능 아이템 0종");
+            onComplete?.Invoke(true, "장착할 수 있는 아이템이 없습니다.");
+            return;
+        }
+
+        // 장착 게이트가 막혀 있으면 목록은 나오는데 장착만 실패한다 — 미리 알려준다
+        string gate = "";
+        if (inventory.CanEquipOnActive() == false)
+        {
+            gate = " (지금 캐릭터는 장착이 불가합니다)";
+        }
+
+        UnityEngine.Debug.Log($"[AgentFunc/inventory] 장착 목록 {lines.Count}종 | 착용 {wornCount} | 장착가능={inventory.CanEquipOnActive()}");
+        onComplete?.Invoke(true, $"장착 가능 {lines.Count}종: {string.Join(", ", lines)}{gate}");
+    }
+
+    // 장착 — 호출 후 상태를 다시 읽어 성공을 판정한다 (§4-63: 예외가 안 났다는 것은 성공의 근거가 아니다)
+    private void ExecuteInventoryEquip(string itemName, Action<bool, string> onComplete)
+    {
+        InventorySystemManager inventory = FindInventory();
+        if (inventory == null)
+        {
+            onComplete?.Invoke(false, "인벤토리를 사용할 수 없습니다.");
+            return;
+        }
+
+        string reason;
+        string key = ResolveItemKey(itemName, out reason);
+        if (key == null)
+        {
+            UnityEngine.Debug.LogWarning($"[AgentFunc/inventory] 키 해석 실패: {reason}");
+            onComplete?.Invoke(false, reason);
+            return;
+        }
+
+        if (inventory.ActiveTarget == null)
+        {
+            UnityEngine.Debug.LogWarning("[AgentFunc/inventory] ActiveTarget이 없다 — CharManager가 아직 캐릭터를 넘기지 않았다");
+            onComplete?.Invoke(false, "장착할 캐릭터가 아직 준비되지 않았습니다.");
+            return;
+        }
+
+        if (inventory.CanEquipOnActive() == false)
+        {
+            UnityEngine.Debug.Log($"[AgentFunc/inventory] 장착 게이트 차단 charcode={inventory.ActiveCharcode}");
+            onComplete?.Invoke(false, "지금 캐릭터는 악세서리를 착용할 수 없습니다.");
+            return;
+        }
+
+        if (inventory.IsEquippedOnActive(key))
+        {
+            onComplete?.Invoke(true, $"{ItemDisplayName(key)}은(는) 이미 착용 중입니다.");
+            return;
+        }
+
+        bool returned = inventory.EquipKey(key);
+        bool worn = inventory.IsEquippedOnActive(key);   // 반환값이 아니라 이걸로 판정한다
+
+        UnityEngine.Debug.Log($"[AgentFunc/inventory] 장착 '{itemName}' → key={key} | EquipKey 반환={returned} 재확인={worn}");
+
+        if (worn == false)
+        {
+            onComplete?.Invoke(false, $"{ItemDisplayName(key)}을(를) 착용하지 못했습니다.");
+            return;
+        }
+
+        onComplete?.Invoke(true, $"{ItemDisplayName(key)}을(를) 착용했습니다.");
+    }
+
+    // 해제 — ToggleEquip은 미장착이면 오히려 장착한다. 착용 중일 때만 부른다 (§4-63)
+    private void ExecuteInventoryUnequip(string itemName, Action<bool, string> onComplete)
+    {
+        InventorySystemManager inventory = FindInventory();
+        if (inventory == null)
+        {
+            onComplete?.Invoke(false, "인벤토리를 사용할 수 없습니다.");
+            return;
+        }
+
+        string reason;
+        string key = ResolveItemKey(itemName, out reason);
+        if (key == null)
+        {
+            UnityEngine.Debug.LogWarning($"[AgentFunc/inventory] 키 해석 실패: {reason}");
+            onComplete?.Invoke(false, reason);
+            return;
+        }
+
+        if (inventory.IsEquippedOnActive(key) == false)
+        {
+            // 여기서 ToggleEquip을 부르면 해제 요청이 장착으로 뒤집힌다
+            UnityEngine.Debug.Log($"[AgentFunc/inventory] 해제 요청인데 미착용 — ToggleEquip 호출하지 않음 key={key}");
+            onComplete?.Invoke(true, $"{ItemDisplayName(key)}은(는) 착용 중이 아닙니다.");
+            return;
+        }
+
+        bool returned = inventory.ToggleEquip(key);
+        bool stillWorn = inventory.IsEquippedOnActive(key);
+
+        UnityEngine.Debug.Log($"[AgentFunc/inventory] 해제 '{itemName}' → key={key} | ToggleEquip 반환={returned} 재확인 착용={stillWorn}");
+
+        if (stillWorn)
+        {
+            onComplete?.Invoke(false, $"{ItemDisplayName(key)}을(를) 벗지 못했습니다.");
+            return;
+        }
+
+        onComplete?.Invoke(true, $"{ItemDisplayName(key)}을(를) 벗었습니다.");
+    }
+
+    // 인벤토리 창 열기 — 연 뒤 실제 활성 상태를 다시 읽어 판정한다 (§4-63).
+    // UIManager.ShowInventory()는 void라 반환값이 없고, 패널이 프리팹 배선이면
+    // 메인 Canvas 아래로 인스턴스화돼 눈에 안 보이는 채로 "성공"이 된다 (§4-18).
+    private void ExecuteInventoryShow(Action<bool, string> onComplete)
+    {
+        if (UIManager.Instance == null)
+        {
+            UnityEngine.Debug.LogWarning("[AgentFunc/inventory] UIManager.Instance가 없다");
+            onComplete?.Invoke(false, "인벤토리 창을 열 수 없습니다.");
+            return;
+        }
+
+        UIManager.Instance.ShowInventory();
+
+        GameObject main = UIManager.Instance.inventoryPanel;
+        bool inScene = main != null && main.scene.IsValid();
+        bool opened = IsInventoryViewOpen(main);
+
+        UnityEngine.Debug.Log($"[AgentFunc/inventory] 창 열기 | 패널={(main == null ? "null" : main.name)} " +
+                              $"씬오브젝트={inScene} 활성={(main != null && main.activeInHierarchy)} alpha열림={opened}");
+
+        if (main == null)
+        {
+            onComplete?.Invoke(false, "인벤토리 창이 배선되지 않았습니다.");
+            return;
+        }
+
+        if (inScene == false)
+        {
+            // 프리팹 배선 상태 — 열리긴 하지만 MR에서는 보이지 않는다. 성공으로 답하면 안 된다.
+            UnityEngine.Debug.LogWarning("[AgentFunc/inventory] 패널이 씬 오브젝트가 아니다 — " +
+                                         "Tools → MR → 인벤토리 패널 배치 필요 (§4-18)");
+            onComplete?.Invoke(false, "인벤토리 창이 아직 MR에 배치되지 않았습니다.");
+            return;
+        }
+
+        if (opened == false)
+        {
+            onComplete?.Invoke(false, "인벤토리 창을 열지 못했습니다.");
+            return;
+        }
+
+        onComplete?.Invoke(true, "인벤토리를 열었습니다.");
+    }
+
+    // 인벤토리 창 닫기 — 닫힌 것을 확인하고 답한다
+    private void ExecuteInventoryClose(Action<bool, string> onComplete)
+    {
+        if (UIManager.Instance == null)
+        {
+            UnityEngine.Debug.LogWarning("[AgentFunc/inventory] UIManager.Instance가 없다");
+            onComplete?.Invoke(false, "인벤토리 창을 닫을 수 없습니다.");
+            return;
+        }
+
+        GameObject main = UIManager.Instance.inventoryPanel;
+        if (IsInventoryViewOpen(main) == false)
+        {
+            UnityEngine.Debug.Log("[AgentFunc/inventory] 이미 닫혀 있음 (alpha 기준)");
+            onComplete?.Invoke(true, "인벤토리 창은 이미 닫혀 있습니다.");
+            return;
+        }
+
+        UIManager.Instance.CloseInventory();
+
+        // InventoryView는 SetActive가 아니라 CanvasGroup.alpha로 열고 닫는다 (§4-44).
+        // Hide()가 같은 프레임에 alpha를 0으로 내리므로 여기서 바로 재확인할 수 있다.
+        bool stillOpen = IsInventoryViewOpen(main);
+        UnityEngine.Debug.Log($"[AgentFunc/inventory] 창 닫기 | 재확인 alpha열림={stillOpen} " +
+                              $"활성={main.activeInHierarchy} (활성은 안 내려가는 게 정상)");
+
+        if (stillOpen)
+        {
+            onComplete?.Invoke(false, "인벤토리 창을 닫지 못했습니다.");
+            return;
+        }
+
+        onComplete?.Invoke(true, "인벤토리를 닫았습니다.");
+    }
+
+    // 인벤토리 창이 실제로 열려 있는가.
+    // InventoryView는 "표시·숨김은 반드시 CanvasGroup만 조작한다 (SetActive 금지)"가 규약이라
+    // activeInHierarchy로 판정하면 닫아도 계속 열린 것으로 보인다 (§4-44).
+    private bool IsInventoryViewOpen(GameObject panel)
+    {
+        if (panel == null || panel.activeInHierarchy == false)
+        {
+            return false;
+        }
+
+        InventoryView view = panel.GetComponent<InventoryView>();
+        if (view == null)
+        {
+            // 뷰가 없으면 활성 여부가 유일한 단서다
+            return true;
+        }
+
+        return view.IsVisible;
+    }
+
+    // 골드 잔액 조회 — CurrencyManager는 Instance 게터가 자가생성한다 (§4-64의 반대 패턴)
+    private void ExecuteCurrencyGetGold(Action<bool, string> onComplete)
+    {
+        CurrencyManager currency = CurrencyManager.Instance;
+        if (currency == null)
+        {
+            UnityEngine.Debug.LogWarning("[AgentFunc/inventory] CurrencyManager가 null — 플레이 중이 아닐 수 있다");
+            onComplete?.Invoke(false, "골드 정보를 불러오지 못했습니다.");
+            return;
+        }
+
+        int gold = currency.Gold;
+        UnityEngine.Debug.Log($"[AgentFunc/inventory] 골드 조회 {gold}");
+        onComplete?.Invoke(true, $"보유 골드는 {gold}입니다.");
+    }
+
+    #endregion
+
+
     // 상대 타이머 생성 후 즉시 시작한다. AlarmManager는 MR 씬에 존재한다(2026-08-24 GUID 실측 1개).
     private void ExecuteAlarmSetTimer(int durationSeconds, string title, Action<bool, string> onComplete)
     {
@@ -962,6 +1484,44 @@ public class ApiAgentFunctionManager : MonoBehaviour
         else if (functionName == "jukebox_get_music_list")
         {
             ExecuteJukeboxGetMusicList(onComplete);
+        }
+        else if (functionName == "inventory_get_items")
+        {
+            ExecuteInventoryGetItems(onComplete);
+        }
+        else if (functionName == "inventory_count_item")
+        {
+            string itemName = GetParam<string>(parameters, "item_name", "");
+            LogInventoryParams(functionName, itemName, parameters);
+            ExecuteInventoryCountItem(itemName, onComplete);
+        }
+        else if (functionName == "inventory_get_equip_list")
+        {
+            ExecuteInventoryGetEquipList(onComplete);
+        }
+        else if (functionName == "inventory_equip")
+        {
+            string itemName = GetParam<string>(parameters, "item_name", "");
+            LogInventoryParams(functionName, itemName, parameters);
+            ExecuteInventoryEquip(itemName, onComplete);
+        }
+        else if (functionName == "inventory_unequip")
+        {
+            string itemName = GetParam<string>(parameters, "item_name", "");
+            LogInventoryParams(functionName, itemName, parameters);
+            ExecuteInventoryUnequip(itemName, onComplete);
+        }
+        else if (functionName == "inventory_show")
+        {
+            ExecuteInventoryShow(onComplete);
+        }
+        else if (functionName == "inventory_close")
+        {
+            ExecuteInventoryClose(onComplete);
+        }
+        else if (functionName == "currency_get_gold")
+        {
+            ExecuteCurrencyGetGold(onComplete);
         }
         else if (functionName == "physical_click")
         {

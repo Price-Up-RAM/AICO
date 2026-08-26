@@ -210,9 +210,18 @@ public class InventorySystemManager : MonoBehaviour
         GetCharStore(charcode);
 
         // 저장된 착용 목록 재장착 (플레이 중에만 — 에디트 모드 Instantiate 방지, origin 주입과 동일 게이트)
+        //
+        // 2026-08-26: 즉시 부르지 않고 **캐릭터 트랜스폼이 자리를 잡을 때까지 기다린다.**
+        // 실측 로그가 원인을 짚었다 —
+        //   [MRInv/장착:부팅복원] 소켓월드=(-4.156,-5.029,0) 물건월드=(같음) 캐릭터 pos=(같음) lossyScale=0.00000
+        // 소켓 해석은 우선순위 2로 정상이었는데, 그 시점의 캐릭터는 **월드 스케일이 0이고
+        // 스켈레톤이 아직 포즈 전이라 모든 본이 루트 원점에 겹쳐 있었다.**
+        // 그 상태로 배치 수학(refDist × lossyScale)을 돌리면 값이 무너져 아이템이 발밑에 남고,
+        // 나중에 스케일·포즈가 확정돼도 이미 구워진 로컬 트랜스폼은 되돌아오지 않는다.
+        // 수동으로 다시 장착하면 제자리로 가던 이유가 이것이다.
         if (Application.isPlaying)
         {
-            RestoreEquips(charcode, target);
+            StartCoroutine(RestoreEquipsWhenReady(charcode, target));
         }
 
         InventoryEvents.OnActiveOwnerChanged?.Invoke(charcode);
@@ -221,6 +230,72 @@ public class InventorySystemManager : MonoBehaviour
     // 저장된 착용 목록(equippedKeys)을 재장착 — 슬롯은 저장하지 않았으므로 EquipManager의
     // 해석 사다리가 현재 소켓 구성 기준으로 재해석한다 (소켓 리네임/재저작 내성).
     // EquipKey를 거치지 않고 Equip 직접 호출 — 토글 판정·저장 재기록과 섞이지 않는 전용 경로.
+    // 캐릭터 트랜스폼이 안정될 때까지 기다렸다가 복원한다.
+    //
+    // 조건 두 가지 — 둘 다 "측정 가능한 상태"이지 프레임 수 같은 주술이 아니다.
+    //   ① 월드 스케일이 퇴화하지 않았다 (lossyScale > 임계)
+    //   ② 그 스케일이 연속 두 프레임 같다 (= 더 이상 바뀌지 않는다)
+    // MRCharacterWorldRoot의 픽셀 공간 래퍼가 스케일을 나중에 잡아주므로 ①이 핵심이고,
+    // ②는 잡는 도중의 중간값을 물지 않기 위한 것이다.
+    // 타임아웃을 두어 조건이 영영 안 맞아도 복원을 포기하지 않는다 — 잘못 붙는 것보다
+    // 안 붙는 것이 더 나쁘고, 그때는 경고가 원인을 말해준다.
+    private System.Collections.IEnumerator RestoreEquipsWhenReady(string charcode, GameObject target)
+    {
+        const float MinScale = 1e-4f;      // 이 아래는 퇴화로 본다
+        const float TimeoutSec = 10f;
+
+        float started = Time.realtimeSinceStartup;
+        float lastScale = -1f;
+        int stableFrames = 0;
+
+        while (true)
+        {
+            if (target == null)
+            {
+                Debug.LogWarning($"[InventorySystemManager] 착용 복원 취소 — 대상이 사라졌다 ({charcode})");
+                yield break;
+            }
+
+            // 그 사이 다른 캐릭터로 전환됐으면 이 복원은 낡았다
+            if (ActiveTarget != target)
+            {
+                Debug.Log($"[InventorySystemManager] 착용 복원 취소 — 활성 대상이 바뀌었다 ({charcode})");
+                yield break;
+            }
+
+            float scale = target.transform.lossyScale.x;
+            float waited = Time.realtimeSinceStartup - started;
+
+            if (scale > MinScale && Mathf.Approximately(scale, lastScale))
+            {
+                stableFrames = stableFrames + 1;
+                if (stableFrames >= 2)
+                {
+                    Debug.Log($"[MRInv/장착:대기] 캐릭터 안정 — lossyScale={scale:F5} 대기={waited:F2}초 (임계 {MinScale}) → 복원 시작");
+                    break;
+                }
+            }
+            else
+            {
+                stableFrames = 0;
+            }
+
+            lastScale = scale;
+
+            if (waited > TimeoutSec)
+            {
+                Debug.LogWarning($"[MRInv/장착:대기] {TimeoutSec}초 동안 캐릭터 스케일이 안정되지 않았다 " +
+                                 $"(현재 lossyScale={scale:F5}, 임계 {MinScale}) → 그대로 복원한다. " +
+                                 "아이템이 발밑에 붙으면 이 줄이 원인이다");
+                break;
+            }
+
+            yield return null;
+        }
+
+        RestoreEquips(charcode, target);
+    }
+
     private void RestoreEquips(string charcode, GameObject target)
     {
         // 미러 초기화가 먼저 — 새로 스폰된 인스턴스의 진실은 "무장착"이다. 이전 세션/이전 인스턴스의
@@ -266,6 +341,7 @@ public class InventorySystemManager : MonoBehaviour
 
             string reason;
             bool ok = EquipManager.Instance.Equip(target, key, out reason);
+            LogEquipPlacement("부팅복원", target, key, ok);
             if (ok == false)
             {
                 // 기록은 유지 — 소켓을 저작하고 나면 다음 전환/재시작 때 자연 복원된다
@@ -833,6 +909,7 @@ public class InventorySystemManager : MonoBehaviour
         // 장착 (같은 슬롯 기존 장착물은 EquipManager가 교체). 실패 시 미러 오염 방지
         string reason;
         bool equipped = EquipManager.Instance.Equip(ActiveTarget, key, out reason);
+        LogEquipPlacement("수동장착", ActiveTarget, key, equipped);
         if (equipped == false)
         {
             Debug.LogWarning($"[InventorySystemManager] EquipKey: 장착 실패 — {reason}");
@@ -1038,6 +1115,57 @@ public class InventorySystemManager : MonoBehaviour
         }
 
         return false;
+    }
+
+    // 장착 직후 배치 결과를 한 줄로 찍는다 (경로 태그 포함 — §7-1 D).
+    //
+    // "처음 켤 때는 발밑에 붙고 다시 장착하면 제자리로 간다"의 원인을 가르기 위한 계측이다.
+    // 부팅 복원과 수동 장착을 **같은 형식**으로 찍어 두 줄을 나란히 비교할 수 있게 한다.
+    // 후보: ① 소켓 해석이 부팅 시엔 실패해 origin으로 감 ② 캐릭터 스케일이 아직 확정 전이라
+    // refDist 환산이 틀어짐 ③ 부착 자체는 맞는데 본 포즈가 아직 T-pose/원점.
+    // 소켓 이름·우선순위·부모 본·월드 위치·캐릭터 lossyScale을 같이 찍으면 셋이 갈린다.
+    private void LogEquipPlacement(string channel, GameObject target, string key, bool ok)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        string slotId = "-";
+        int priority = 0;
+        EquipSocket socket = null;
+
+        EquipEntry entry = equipCatalog != null ? equipCatalog.Get(key) : null;
+        if (entry != null)
+        {
+            socket = EquipSlotResolver.Resolve(target, entry, out slotId, out priority);
+        }
+
+        string socketName = socket != null ? socket.gameObject.name : "없음";
+        string boneName = "-";
+        string socketWorld = "-";
+        if (socket != null)
+        {
+            boneName = socket.transform.parent != null ? socket.transform.parent.name : "(부모없음)";
+            socketWorld = socket.transform.position.ToString("F3");
+        }
+
+        // 실제로 붙은 물건의 위치 — 소켓 위치와 다르면 배치 수학이 틀어진 것이다
+        string markerWorld = "-";
+        EquipMarker[] markers = target.GetComponentsInChildren<EquipMarker>(true);
+        foreach (EquipMarker marker in markers)
+        {
+            if (marker != null && marker.key == key)
+            {
+                markerWorld = marker.transform.position.ToString("F3");
+                break;
+            }
+        }
+
+        Debug.Log($"[MRInv/장착:{channel}] key={key} 성공={ok} | 소켓={socketName}(slot={slotId}, 우선순위={priority}, 본={boneName}) " +
+                  $"| 소켓월드={socketWorld} 물건월드={markerWorld} " +
+                  $"| 캐릭터 pos={target.transform.position.ToString("F3")} lossyScale={target.transform.lossyScale.x:F5} " +
+                  $"| 우선순위 4 = origin(발밑)");
     }
 
     // 스토어 1개를 JSON 파일로 저장

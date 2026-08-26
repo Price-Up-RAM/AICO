@@ -1200,6 +1200,9 @@ public class CharManager : MonoBehaviour
 
         // InventorySystem은 독립 패키지이므로 캐릭터 DB 태그 판정을 앱 계층에서 주입한다.
         InventorySystemManager.Instance.equipPermissionResolver = CharacterFeatureTags.IsEquipAllowed;
+        // A0 진단 — origin 임시 소켓 주입 전에 정식 소켓 저작 현황을 찍는다 (Kickoff Guide §7-1 B/C)
+        MRInventoryDiagnostics.ReportSocketState(charObj);
+
         InventorySystemManager.Instance.SetActiveOwner(charcode, charObj);
     }
     public void setEmotionFaceController(GameObject charObj)

@@ -161,6 +161,36 @@ public class MRSystemContextMenu : MonoBehaviour
                       "JukeboxView 프리팹을 씬에 배치하고 Tools → MR → 9로 전환한 뒤 배선하세요.");
         }
 
+        // 인벤토리 / 상점 — 한 항목으로 둘 다 연다 (2026-08-26).
+        //
+        // **두 창은 런타임에 결합돼 있지 않다.** 각각 잡아 옮기고 각각 닫는다.
+        // 묶여 있는 것은 "함께 소환된다"는 것뿐이고, 나란히 서는 것은
+        // MRFloatingPanel.spawnLateralOffset(인벤토리 -0.24 / 상점 +0.24)이 처리한다.
+        // (한때 팔로워+동반열기로 묶었다가 되돌렸다 — 따로 옮기고 싶다는 요구가 우선이었다.)
+        //
+        // 상점은 Toggle이 아니라 OpenStore를 쓴다. Toggle이면 이미 열려 있을 때 닫혀버려
+        // "둘 다 열기"가 성립하지 않는다 (§4-63: 토글을 단방향 명령에 매핑하지 말 것).
+        //
+        // 씬 오브젝트 게이트를 남겨두는 이유: 프리팹 배선 상태로 열면 ResolveManagedUI가
+        // 메인 Canvas(월드 1920 m) 아래로 인스턴스화해 §4-18에 걸린다. 조용히 깨지는 대신
+        // 항목이 사라지고 로그가 뜨게 한다 (§4-51).
+        if (IsSceneObject(UIManager.Instance.inventoryPanel))
+        {
+            bool hasStore = IsSceneObject(FindSceneStorePanel());
+            items.Add((GetInventoryLabel(targetLang, hasStore), delegate {
+                UIManager.Instance.ShowInventory();
+                if (hasStore)
+                {
+                    KAIManager.OpenStore();
+                }
+            }));
+        }
+        else if (logSkippedItems)
+        {
+            Debug.Log("[MRSystemContextMenu] UIManager.inventoryPanel이 씬 오브젝트로 배선되지 않아 '인벤토리'를 건너뜁니다. " +
+                      "Tools → MR → 인벤토리 패널 배치 를 실행하세요.");
+        }
+
         // 설정 — 메서드 이름의 s가 소문자다(UIWidget 경로).
         items.Add((LanguageData.Translate("Settings", targetLang), delegate {
             UIManager.Instance.showSettings();
@@ -268,6 +298,43 @@ public class MRSystemContextMenu : MonoBehaviour
         if (go == null) return false;
 
         return go.scene.IsValid();
+    }
+
+    // 씬에 놓인 StorePanel (비활성 포함). 없으면 null.
+    private GameObject FindSceneStorePanel()
+    {
+        StoreView[] views = Resources.FindObjectsOfTypeAll<StoreView>();
+        for (int i = 0; i < views.Length; i++)
+        {
+            if (views[i] == null || views[i].gameObject == null) continue;
+            if (views[i].gameObject.scene.IsValid() == false) continue;
+
+            return views[i].gameObject;
+        }
+
+        return null;
+    }
+
+    // 메뉴 라벨. 상점이 씬에 있으면 "인벤토리/상점", 없으면 "인벤토리".
+    //
+    // 항목이 실제로 무엇을 여는지 라벨이 그대로 말하게 한다 — 상점이 배치 안 된 상태에서
+    // "인벤토리/상점"이라고 써두면 눌렀는데 절반만 뜨는 이유를 알 수 없다.
+    // "Store"는 LanguageData 미등록 라벨이라 MenuTriggerKAI L354와 같이 파일 내에서 처리한다
+    // (LanguageData 무수정 원칙).
+    private static string GetInventoryLabel(string language, bool withStore)
+    {
+        string inventory = LanguageData.Translate("Inventory", language);
+        if (withStore == false)
+        {
+            return inventory;
+        }
+
+        switch (language)
+        {
+            case "ko": return inventory + "/상점";
+            case "jp": return inventory + "/ショップ";
+            default: return inventory + "/Store";
+        }
     }
 
     // 이 메뉴를 닫는다. MRIntentRouter의 "빈 공간 + 더블탭 = 전부 닫기"가 부른다.

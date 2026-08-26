@@ -114,6 +114,7 @@ public class MRFloorPlacement : MonoBehaviour
         if (!isPicking && _wasPicking)
         {
             SavePosition();
+            LogReleaseDecision();
         }
         _wasPicking = isPicking;
 
@@ -260,6 +261,34 @@ public class MRFloorPlacement : MonoBehaviour
     // =========================================================
     // 복원 (3단)
     // =========================================================
+    // 놓는 순간 낙하 판정에 필요한 값을 전부 한 줄에 찍는다 (§7-1 C).
+    //
+    // "놓아도 안 떨어진다"의 원인 후보가 여럿이다 —
+    //   ① isPicking이 안 내려감 (그러면 이 줄 자체가 안 뜬다)
+    //   ② _hasPlacedInitially가 false라 낙하 블록에 도달하지 못함
+    //   ③ 발 높이와 표면 높이 차이가 임계 이하 (= 바닥으로 인식됨)
+    //   ④ GetSurfaceY가 캐릭터 현재 높이를 그대로 돌려줌 (레이가 캐릭터 자신을 맞춤 등)
+    // 이 한 줄이면 Play 한 번으로 넷 중 무엇인지 갈린다.
+    private void LogReleaseDecision()
+    {
+        Bounds b;
+        if (!MRCharacterBounds.TryGet(characterRoot, out b))
+        {
+            Debug.LogWarning("[MRFloor/놓기] bounds를 못 구했다 — 낙하 판정 불가");
+            return;
+        }
+
+        Vector3 foot = new Vector3(b.center.x, b.min.y, b.center.z);
+        float surface = GetSurfaceY(foot);
+        float gap = foot.y - surface;
+        bool willFall = _hasPlacedInitially && gap > FallStartThreshold;
+
+        Debug.Log($"[MRFloor/놓기] 발Y={foot.y:F4} 표면Y={surface:F4} 차이={gap:F4}m (임계 {FallStartThreshold}m) " +
+                  $"| 초기배치완료={_hasPlacedInitially} 낙하중={_isFalling} " +
+                  $"→ 낙하시작={willFall}" +
+                  (willFall ? "" : "  ※ 안 떨어진다: " + (_hasPlacedInitially ? "차이가 임계 이하 — 표면Y가 캐릭터를 따라 올라갔는지 확인" : "초기 배치가 아직 안 끝남")));
+    }
+
     private async void BeginRestore()
     {
         float t0 = Time.realtimeSinceStartup;

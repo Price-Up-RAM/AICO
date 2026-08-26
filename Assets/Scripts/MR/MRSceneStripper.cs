@@ -146,6 +146,12 @@ public class MRSceneStripper : MonoBehaviour
         typeof(DragHandler),
         typeof(SubDragHandler),
 
+        // InventoryPanel 루트에 붙은 "창 아무 데나 잡고 끌기" 핸들러 (2026-08-26 추가).
+        // 위 4개와 같은 IBeginDragHandler/IDragHandler 구현이고, 인벤토리 패널은 MR에서
+        // ISDK grab(GrabFrame)으로 옮긴다. 켜두면 슬롯을 누르려던 드래그가 창 이동으로
+        // 새고, 창 이동은 grab과 이중으로 처리된다.
+        typeof(InventoryWindowDragHandler),
+
         // --- XR Interaction Toolkit의 중복 UI 레이캐스터 ---
         // PointableCanvasModule(_exclusiveMode)이 XRUIInputModule은 비활성화하지만,
         // TrackedDeviceGraphicRaycaster 자체는 BaseRaycaster라 RaycasterManager에 남아있는 한
@@ -193,6 +199,20 @@ public class MRSceneStripper : MonoBehaviour
 
         // --- 음성 (MR에서 오히려 1급 입력) ---
         typeof(WhisperSTTManager), typeof(MicrophoneManager), typeof(TTSManager),
+
+        // --- 인벤토리 (2026-08-26 씬 배치) ---
+        // 데이터 계층은 원래 씬에 있었고, 표시 계층이 이번에 InventoryPanel ×2로 들어왔다.
+        // InventoryGoldInfoHover는 hover 기반이라 §4-54 후보지만, 실기에서 루프가 확인되기
+        // 전에는 끄지 않는다 — 대신 재진입 간격 진단 로그를 넣어 뒀다.
+        typeof(InventorySystemManager), typeof(EquipManager),
+        typeof(InventoryView), typeof(InventorySlotView), typeof(InventoryGoldInfoHover),
+
+        // --- 상점 (2026-08-26 씬 배치) ---
+        // StoreManager는 Instance 게터가 자가생성하므로 씬에 없어도 된다.
+        // StoreSellZone은 IDropHandler/IPointerEnter라 §4-15 계열로 보이지만, 드래그를 가로채는
+        // 쪽이 아니라 **받는** 쪽이다 — 끄면 판매가 아예 불가능해지므로 유지한다.
+        typeof(StoreView), typeof(StoreSellZone), typeof(StoreConfirmView),
+        typeof(MRStorePanelCompanion),   // 폐기 예정 — 씬에서 제거될 때까지만 분류 유지
 
         // --- 캐릭터 / 애니메이션 ---
         typeof(AnimationManager), typeof(AnimationPlayerManager), typeof(EmotionManager),

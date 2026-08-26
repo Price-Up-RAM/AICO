@@ -69,15 +69,25 @@ public class StoreSellZone : MonoBehaviour, IDropHandler, IPointerEnterHandler, 
             return;
         }
 
-        // 3. MAIN 인벤토리만 판매 허용 (CHAR 스토어 판매는 장착 꼬임 방지를 위해 금지)
+        // 3. 활성 캐릭터 소지품만 판매 허용.
+        //
+        // 2026-08-26까지는 "MAIN 인벤토리만 허용"이었고, 그 금지 사유가
+        // **"CHAR 보관함 판매는 장착 꼬임 방지"**였다. 공용 창을 걷어내 캐릭터 소지품이
+        // 유일한 보관함이 됐으므로 대상은 바꾸되, 그 사유는 그대로 살려서
+        // **착용 중인 아이템은 아래에서 따로 막는다.** 규칙을 옮기면서 이유까지 버리면 안 된다.
         string sourceOwnerId = slot.Owner != null ? slot.Owner.OwnerId() : null;
-        if (sourceOwnerId != InventorySystemManager.MainOwnerId)
+        string activeOwnerId = InventorySystemManager.Instance != null
+            ? InventorySystemManager.Instance.ActiveCharcode
+            : null;
+
+        if (string.IsNullOrEmpty(activeOwnerId) || sourceOwnerId != activeOwnerId)
         {
             if (owner != null)
             {
-                owner.ShowToast("메인 인벤토리 아이템만 판매할 수 있습니다");
+                owner.ShowToast("이 인벤토리의 아이템만 판매할 수 있습니다");
             }
 
+            Debug.LogWarning($"[Store][StoreSellZone] 판매 거부 — 출처={sourceOwnerId} 활성={activeOwnerId}");
             InventorySlotView.DropConsumed = true;
             return;
         }
@@ -89,10 +99,27 @@ public class StoreSellZone : MonoBehaviour, IDropHandler, IPointerEnterHandler, 
         }
 
         // 4. 슬롯 인덱스로 실제 스택 조회
-        InvStore store = InventorySystemManager.Instance.GetMainStore();
+        InvStore store = InventorySystemManager.Instance.GetActiveCharStore();
         InvItemStack stack = store != null ? store.FindBySlot(slot.SlotIndex) : null;
         if (stack == null)
         {
+            return;
+        }
+
+        // 4-1. 착용 중인 아이템은 팔 수 없다.
+        //
+        // 옛 규칙이 캐릭터 보관함 판매를 통째로 막아 이 경우를 덮고 있었다.
+        // 이제 캐릭터 소지품이 판매원이 됐으므로 여기서 직접 막는다 —
+        // 팔린 뒤에도 소켓에 모델이 남아 "없는 물건을 쓰고 있는" 상태가 된다.
+        if (InventorySystemManager.Instance.IsEquippedOnActive(stack.key))
+        {
+            if (owner != null)
+            {
+                owner.ShowToast("착용 중인 아이템은 벗은 뒤에 판매할 수 있습니다");
+            }
+
+            Debug.Log($"[Store][StoreSellZone] 판매 거부 — 착용 중: {stack.key}");
+            InventorySlotView.DropConsumed = true;
             return;
         }
 

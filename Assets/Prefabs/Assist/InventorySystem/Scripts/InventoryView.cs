@@ -259,33 +259,26 @@ public class InventoryView : MonoBehaviour
             return;
         }
 
-        bool isMain = section == InventorySection.Main;
+        // 크롬(타이틀·골드 영역)은 **섹션과 분리한다** (2026-08-26).
+        //
+        // 원래는 섹션이 스토어와 크롬을 동시에 결정했다 — Main이면 "INVENTORY" + 골드 영역,
+        // Char면 "INVENTORY (aico)" + 골드 영역 없음. 창이 두 개일 때 서로 구분하려던 규칙이다.
+        // 이 프로젝트는 캐릭터 1명으로 확정돼 창을 **캐릭터 것 하나**로 줄였고, 그러면
+        // 그 하나가 골드도 보여줘야 하고 제목에 charcode를 붙일 이유도 없다.
+        // 스토어 선택(아래 GetActiveCharStore)만 섹션이 계속 담당한다.
         if (mainCurrencyArea != null)
         {
-            mainCurrencyArea.SetActive(isMain);
+            mainCurrencyArea.SetActive(true);
         }
 
-        // 타이틀 갱신
+        // 타이틀 갱신 — 창이 하나뿐이라 항상 "INVENTORY" + 골드 영역을 비우는 오른쪽 여백
         if (headerText != null)
         {
             RectTransform titleRect = headerText.rectTransform;
-            if (isMain)
-            {
-                headerText.text = TranslateUi("INVENTORY");
-                headerText.alignment = TextAlignmentOptions.MidlineLeft;
-                titleRect.offsetMin = new Vector2(40f, 0f);
-                titleRect.offsetMax = new Vector2(-310f, 0f);
-            }
-            else
-            {
-                string charcode = manager.ActiveCharcode;
-                headerText.text = string.IsNullOrEmpty(charcode)
-                    ? TranslateUi("INVENTORY")
-                    : string.Format(TranslateUi("INVENTORY ({0})"), charcode);
-                headerText.alignment = TextAlignmentOptions.Center;
-                titleRect.offsetMin = Vector2.zero;
-                titleRect.offsetMax = Vector2.zero;
-            }
+            headerText.text = TranslateUi("INVENTORY");
+            headerText.alignment = TextAlignmentOptions.MidlineLeft;
+            titleRect.offsetMin = new Vector2(40f, 0f);
+            titleRect.offsetMax = new Vector2(-310f, 0f);
         }
 
         RefreshGoldBalance();
@@ -902,11 +895,12 @@ public class InventoryView : MonoBehaviour
 
     private void OnDebugGoldClicked()
     {
-        if (section != InventorySection.Main)
-        {
-            return;
-        }
-
+        // 2026-08-26: section == Main 게이트를 제거했다.
+        //
+        // 골드는 CurrencyManager의 전역 지갑이라 보관함(MAIN/CHAR)과 아무 상관이 없다.
+        // 원래 게이트는 "이 버튼이 MAIN 창에만 있다"는 배치 사실을 코드로 한 번 더 적은 것이었는데,
+        // 창을 캐릭터 것 하나로 줄이면서 버튼은 보이는데 눌러도 아무 일이 없는 상태가 됐다.
+        // 널 가드도 예외도 없어서 "고장"으로 보이지 않았다 (§4-51 계열).
         CurrencyManager wallet = CurrencyManager.Instance;
         if (wallet != null)
         {
