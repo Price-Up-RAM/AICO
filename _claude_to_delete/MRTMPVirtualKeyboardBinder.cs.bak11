@@ -43,67 +43,13 @@ public class MRTMPVirtualKeyboardBinder : MonoBehaviour
     /// </summary>
     public bool IsOpen => _keyboard != null && _keyboard.status == TouchScreenKeyboard.Status.Visible;
 
-    [Header("자동 등록")]
-    [Tooltip("켜면 fields가 비어 있을 때 씬 전체(비활성 포함)에서 TMP_InputField를 찾아 등록한다. " +
-             "수동 배선 없이 동작시키기 위한 옵션이다.")]
-    [SerializeField] private bool autoRegisterAllFields = true;
-
-    [Tooltip("런타임에 생성되는 InputField를 주기적으로 다시 찾는 간격(초). 0이면 재탐색하지 않는다.")]
-    [SerializeField] private float rescanInterval = 3f;
-
-    private float _nextRescanTime;
-
     private void Awake()
     {
-        // 인스펙터에 등록된 것이 없으면 씬에서 자동으로 찾는다.
-        // 이 컴포넌트가 씬에 아예 없어서 키보드가 안 떴던 것이 2026-08-25에 실측됐고,
-        // 붙이더라도 fields 수동 배선을 잊으면 같은 증상이라 자동 등록을 기본으로 뒀다.
-        if (autoRegisterAllFields && (fields == null || fields.Count == 0))
-        {
-            RegisterAllFieldsInScene();
-        }
-
-        // 인스펙터/자동 등록된 모든 필드 후킹
+        // 인스펙터에 등록된 모든 필드 자동 후킹
         foreach (var f in fields)
         {
             if (f != null) HookField(f);
         }
-
-        Debug.Log($"[MRKeyboardBinder] 초기화 | 등록 {fields.Count}개 | TouchScreenKeyboard.isSupported={TouchScreenKeyboard.isSupported} | 자동등록={autoRegisterAllFields}");
-        if (!TouchScreenKeyboard.isSupported)
-        {
-            Debug.Log("[MRKeyboardBinder] 이 플랫폼은 시스템 키보드를 지원하지 않는다(Editor 등). 물리 키보드로 InputField에 직접 입력해야 한다.");
-        }
-    }
-
-    // 씬 전체(비활성 포함)에서 TMP_InputField를 찾아 등록한다.
-    private void RegisterAllFieldsInScene()
-    {
-        TMP_InputField[] found = FindObjectsByType<TMP_InputField>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        for (int i = 0; i < found.Length; i++)
-        {
-            TMP_InputField f = found[i];
-            if (f == null || fields.Contains(f))
-            {
-                continue;
-            }
-            fields.Add(f);
-            Debug.Log($"[MRKeyboardBinder] 자동 등록: '{GetFieldPath(f)}'");
-        }
-    }
-
-    private static string GetFieldPath(TMP_InputField f)
-    {
-        string path = f.gameObject.name;
-        Transform t = f.transform.parent;
-        int depth = 0;
-        while (t != null && depth < 3)
-        {
-            path = t.name + "/" + path;
-            t = t.parent;
-            depth++;
-        }
-        return path;
     }
 
     private void OnDestroy()
@@ -152,23 +98,6 @@ public class MRTMPVirtualKeyboardBinder : MonoBehaviour
     {
         _activeField = field;
 
-        // 이 플랫폼이 시스템 키보드를 지원하지 않으면 Open을 부르지 않는다.
-        //
-        // 2026-08-26 실측: Editor(+Quest Link)는 isSupported=False인데
-        // TouchScreenKeyboard.Open()이 null이 아닌 '껍데기'를 돌려준다.
-        // 그걸 Update에서 .text로 읽는 순간 네이티브 핸들이 없어 NRE가 나고,
-        // Update는 매 프레임 도니까 로그가 초당 수십 줄씩 쌓인다.
-        // '호출이 성공했다'와 '쓸 수 있는 객체다'는 다른 사실이다 (Kickoff Guide 4-58).
-        if (!TouchScreenKeyboard.isSupported)
-        {
-            _keyboard = null;
-            _lastSyncedText = field.text ?? "";
-            Debug.Log($"[MRKeyboardBinder] '{field.name}' 선택 — 이 플랫폼은 시스템 키보드 미지원(isSupported=False), " +
-                      "Open 생략. 물리 키보드나 Tools → MR → 질문 보내기 창을 쓸 것");
-            KeyboardOpened?.Invoke(field);
-            return;
-        }
-
         // 시스템 키보드 호출 (Quest에서는 시스템 가상 키보드가 떠오름)
         // 두 번째 인자는 keyboardType, 나머지: autocorrection, multiline, secure, alert, placeholder
         _keyboard = TouchScreenKeyboard.Open(
@@ -184,13 +113,7 @@ public class MRTMPVirtualKeyboardBinder : MonoBehaviour
 
         _lastSyncedText = field.text ?? "";
 
-        // 호출했다는 것과 실제로 떴다는 것은 다른 사실이다 (Kickoff Guide 4-58).
-        string status = "(null)";
-        if (_keyboard != null)
-        {
-            status = _keyboard.status.ToString();
-        }
-        Debug.Log($"[MRKeyboardBinder] 시스템 키보드 호출: '{field.name}' | keyboard={( _keyboard == null ? "null" : "생성됨")} status={status} isSupported={TouchScreenKeyboard.isSupported} active={TouchScreenKeyboard.visible}");
+        Debug.Log($"[MRKeyboardBinder] 시스템 키보드 호출: {field.name}");
         KeyboardOpened?.Invoke(field);
     }
 
@@ -227,48 +150,10 @@ public class MRTMPVirtualKeyboardBinder : MonoBehaviour
     // =============================================
     private void Update()
     {
-        // 런타임에 생성된 InputField(패널이 나중에 열리는 경우 등)를 주기적으로 잡는다.
-        if (autoRegisterAllFields && rescanInterval > 0f && Time.unscaledTime >= _nextRescanTime)
-        {
-            _nextRescanTime = Time.unscaledTime + rescanInterval;
-            int before = fields.Count;
-            TMP_InputField[] found = FindObjectsByType<TMP_InputField>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            for (int i = 0; i < found.Length; i++)
-            {
-                TMP_InputField f = found[i];
-                if (f == null || fields.Contains(f))
-                {
-                    continue;
-                }
-                fields.Add(f);
-                HookField(f);
-                Debug.Log($"[MRKeyboardBinder] 런타임 등록: '{GetFieldPath(f)}'");
-            }
-            if (fields.Count != before)
-            {
-                Debug.Log($"[MRKeyboardBinder] 재탐색: {before}개 → {fields.Count}개");
-            }
-        }
-
         if (_keyboard == null || _activeField == null) return;
 
-        // 네이티브 핸들이 죽은 껍데기일 수 있다. 한 번 실패하면 참조를 버리고 조용히 끝낸다.
-        // 여기서 잡지 않으면 매 프레임 예외가 나 로그가 폭발하고 프레임이 떨어진다.
-        string currentText;
-        TouchScreenKeyboard.Status status;
-        try
-        {
-            currentText = _keyboard.text ?? "";
-            status = _keyboard.status;
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogWarning($"[MRKeyboardBinder] 시스템 키보드 접근 실패 — 참조를 버린다: {e.GetType().Name} {e.Message}");
-            _keyboard = null;
-            return;
-        }
-
         // 1. 텍스트 동기화 (사용자가 키보드에서 친 글자를 InputField에 반영)
+        string currentText = _keyboard.text ?? "";
         if (currentText != _lastSyncedText)
         {
             _activeField.text = currentText;
@@ -276,7 +161,7 @@ public class MRTMPVirtualKeyboardBinder : MonoBehaviour
         }
 
         // 2. 상태 처리
-        switch (status)
+        switch (_keyboard.status)
         {
             case TouchScreenKeyboard.Status.Done:
                 if (submitOnDone)

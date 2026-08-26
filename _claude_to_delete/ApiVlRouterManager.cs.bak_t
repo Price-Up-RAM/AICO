@@ -1073,8 +1073,6 @@ public class ApiVlRouterManager : MonoBehaviour
                 WriteFormField(writer, boundary, field.Key, field.Value ?? "");
             }
 
-            long beforeImage = memStream.Length;
-            bool imageWritten = false;
             if (imageBytes != null && imageBytes.Length > 0)
             {
                 writer.WriteLine($"--{boundary}");
@@ -1084,24 +1082,7 @@ public class ApiVlRouterManager : MonoBehaviour
                 writer.Flush();
                 memStream.Write(imageBytes, 0, imageBytes.Length);
                 writer.WriteLine();
-                imageWritten = true;
             }
-            writer.Flush();
-
-            // 요청 본문에 image 파트가 실제로 들어갔는지 계측한다.
-            int imageLen = 0;
-            if (imageBytes != null)
-            {
-                imageLen = imageBytes.Length;
-            }
-            string imageState = "없음";
-            if (imageWritten)
-            {
-                imageState = "기록됨";
-            }
-            Debug.Log($"[VlRouterRun/계측] image 파트 {imageState} | imageBytes={imageLen}바이트 | " +
-                      $"본문 {beforeImage}바이트 → {memStream.Length}바이트 | " +
-                      $"intent_image={currentIntentImage}");
 
             writer.WriteLine($"--{boundary}--");
             writer.Flush();

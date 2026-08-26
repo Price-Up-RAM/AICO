@@ -893,19 +893,6 @@ public class ApiVlRouterManager : MonoBehaviour
             ["origin"] = currentQuery,
             ["text"] = currentQuery
         };
-        // ai_info가 없으면 APIManager.PrepareConversationReplyUiFromRouter가 NRE를 낸다.
-        // try/catch 안이라 동작에는 지장이 없지만 catch가 스택 전체를 찍어 로그를 오염시킨다
-        // (2026-08-25 실측: 한 세션에 21건). 빈 값으로 채워 조용히 통과시킨다.
-        conversationEvent["ai_info"] = new JObject
-        {
-            ["server_type"] = "",
-            ["model"] = "",
-            ["prompt"] = "",
-            ["lang_used"] = "",
-            ["translator"] = "",
-            ["time"] = "",
-            ["emotion"] = ""
-        };
 
         BeginRouterConversationIfNeeded();
         // 구간 계측: 발화 → 대사 도착까지 몇 초 걸렸는지, 대사가 몇 개로 쪼개져 왔는지 (7-1 C)
@@ -1073,8 +1060,6 @@ public class ApiVlRouterManager : MonoBehaviour
                 WriteFormField(writer, boundary, field.Key, field.Value ?? "");
             }
 
-            long beforeImage = memStream.Length;
-            bool imageWritten = false;
             if (imageBytes != null && imageBytes.Length > 0)
             {
                 writer.WriteLine($"--{boundary}");
@@ -1084,24 +1069,7 @@ public class ApiVlRouterManager : MonoBehaviour
                 writer.Flush();
                 memStream.Write(imageBytes, 0, imageBytes.Length);
                 writer.WriteLine();
-                imageWritten = true;
             }
-            writer.Flush();
-
-            // 요청 본문에 image 파트가 실제로 들어갔는지 계측한다.
-            int imageLen = 0;
-            if (imageBytes != null)
-            {
-                imageLen = imageBytes.Length;
-            }
-            string imageState = "없음";
-            if (imageWritten)
-            {
-                imageState = "기록됨";
-            }
-            Debug.Log($"[VlRouterRun/계측] image 파트 {imageState} | imageBytes={imageLen}바이트 | " +
-                      $"본문 {beforeImage}바이트 → {memStream.Length}바이트 | " +
-                      $"intent_image={currentIntentImage}");
 
             writer.WriteLine($"--{boundary}--");
             writer.Flush();
