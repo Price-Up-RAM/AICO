@@ -1648,7 +1648,7 @@ public class SettingManager : MonoBehaviour
 
         settings.server_type_idx = 10;
         settings.server_type = "Server";
-        settings.server_id = "arona614sd";
+        settings.server_id = "arona655";
         settings.api_key_gemini = "";
         settings.api_key_openRouter = "";
         settings.server_local_mode_idx = 1;  // 0: CPU, 1: GPU

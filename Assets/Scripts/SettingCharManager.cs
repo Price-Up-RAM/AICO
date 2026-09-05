@@ -125,13 +125,14 @@ public class SettingCharManager : MonoBehaviour
                 settingsCharData = JsonUtility.FromJson<SettingsCharData>(json);
                 settingsCharData.SyncDictionaries();
             }
-            else
+
+            // KAI 이슈: aico의 기본 음성을 보장한다.
+            // 판정 기준은 '파일 존재 여부'가 아니라 'voiceId가 비었는지'다 —
+            // GetCharCodeSetting은 조회만으로 빈 엔트리를 만들고(voiceId=""),
+            // 무관한 SaveToFile이 그 엔트리를 파일에 굳히면 '파일 없음' 조건이 영영 성립하지 않는다.
+            // 그 상태에서 TTS ref_id는 옵셔널 필드라 조용히 누락된다(경고도 안 남는다).
+            if (EnsureDefaultVoiceId("aico", "woman_01"))
             {
-                // KAI 이슈
-                settingsCharData.char_code_info_dict["aico"] = new CharCodeSetting
-                {
-                    voiceId = "woman_01"
-                };
                 SaveToFile();
             }
         }
@@ -140,8 +141,58 @@ public class SettingCharManager : MonoBehaviour
             Debug.LogWarning("LoadSettingChar 실패: " + e.Message);
         }
 
+        // 진단(Phase 5): 로드 결과를 실측해 한 줄로 남긴다 (Kickoff Guide 7-1 C/D)
+        int diagEntryCount = 0;
+        string diagKeys = "";
+        string diagAicoVoice = "(엔트리없음)";
+        if (settingsCharData != null && settingsCharData.char_code_info_dict != null)
+        {
+            diagEntryCount = settingsCharData.char_code_info_dict.Count;
+            diagKeys = string.Join(",", new List<string>(settingsCharData.char_code_info_dict.Keys).ToArray());
+            if (settingsCharData.char_code_info_dict.ContainsKey("aico"))
+            {
+                diagAicoVoice = "'" + settingsCharData.char_code_info_dict["aico"].voiceId + "'";
+            }
+        }
+        Debug.Log($"[SettingChar/load] 파일존재={File.Exists(configFilePath)} 엔트리수={diagEntryCount} keys=[{diagKeys}] | aico.voiceId={diagAicoVoice} | path={configFilePath}");
+
         isLoaded = true;
         OnSettingsLoaded?.Invoke();
+    }
+
+    // charCode의 voiceId가 비어 있으면 기본값을 채운다. 실제로 채웠을 때만 true를 반환한다.
+    // 사용자가 캐릭터 상세 패널에서 고른 값은 절대 덮어쓰지 않는다.
+    private bool EnsureDefaultVoiceId(string charCode, string defaultVoiceId)
+    {
+        if (settingsCharData == null)
+        {
+            return false;
+        }
+        if (settingsCharData.char_code_info_dict == null)
+        {
+            return false;
+        }
+
+        CharCodeSetting setting = null;
+        if (settingsCharData.char_code_info_dict.ContainsKey(charCode))
+        {
+            setting = settingsCharData.char_code_info_dict[charCode];
+        }
+
+        if (setting == null)
+        {
+            setting = new CharCodeSetting();
+            settingsCharData.char_code_info_dict[charCode] = setting;
+        }
+
+        if (!string.IsNullOrEmpty(setting.voiceId))
+        {
+            return false;
+        }
+
+        setting.voiceId = defaultVoiceId;
+        Debug.Log($"[SettingChar/seed] charcode='{charCode}' voiceId가 비어 있어 기본값 '{defaultVoiceId}'으로 보정");
+        return true;
     }
 
     private void SaveToFile()
@@ -212,9 +263,17 @@ public class SettingCharManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(charCode)) return null;
         // 로드 전 조회 금지 — 빈 settingsCharData 위에 엔트리를 만들며 저장하면 기존 파일이 통째로 덮어써진다
-        if (!isLoaded) return null;
+        if (!isLoaded)
+        {
+            // 진단(Phase 5): LoadSettingChar 미실행 상태의 조회 (Kickoff Guide 7-1 C)
+            Debug.Log($"[SettingChar/miss] charcode='{charCode}' 조회 실패 - isLoaded=false | 원인: LoadSettingChar 미실행 → 제안: CharManager.InitCharacter 조기리턴 경로 확인");
+            return null;
+        }
         if (!settingsCharData.char_code_info_dict.ContainsKey(charCode))
         {
+            // 진단(Phase 5): 엔트리 결손이 여기서 조용히 빈 값으로 메워진다.
+            // 사후 조회로는 이 순간을 알 수 없어(엔트리가 생겨 버림) 생성 시점에 찍는다.
+            Debug.Log($"[SettingChar/miss] charcode='{charCode}' 엔트리 없어 빈 값 생성 → voiceId 빈 값 (ref_id 누락) | 제안: LoadSettingChar 시딩 조건을 '파일없음'에서 '엔트리없음'으로 확장하면 woman_01");
             // 조회만으로는 저장하지 않는다 — 실제 변경(AddAffinityPoints/SetVoice 등)이 SaveToFile을 수행
             settingsCharData.char_code_info_dict[charCode] = new CharCodeSetting();
         }

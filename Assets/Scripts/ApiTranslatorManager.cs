@@ -28,13 +28,26 @@ public class ApiTranslatorManager : MonoBehaviour
             return _instance;
         }
     }
-    
+    [Header("Translators")]
+    [Tooltip("수동으로 할당할 ApiGeminiTranslator (비워두면 자동 부착됨)")]
+    [SerializeField] private ApiGeminiTranslator _geminiTranslator;
+
     void Awake()
     {
         if (_instance == null)
         {
             _instance = this;
             DontDestroyOnLoad(gameObject);
+
+            // 수동 할당이 안 되어있으면 자신에게 붙어있는지 확인하고 없으면 추가
+            if (_geminiTranslator == null)
+            {
+                _geminiTranslator = GetComponent<ApiGeminiTranslator>();
+                if (_geminiTranslator == null)
+                {
+                    _geminiTranslator = gameObject.AddComponent<ApiGeminiTranslator>();
+                }
+            }
         }
         else if (_instance != this)
         {

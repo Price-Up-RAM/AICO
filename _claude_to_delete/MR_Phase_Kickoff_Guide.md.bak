@@ -1,0 +1,1993 @@
+# MR 포팅 — Phase별 대화 시작 지침서
+
+> **이 문서의 목적**
+> AICO의 MR 포팅을 Phase 단위로 나눠 **각 Phase마다 새 대화**로 진행하기 위한 안내서다.
+> 한 대화에서 전부 하면 컨텍스트가 비대해져 토큰이 낭비되고, 오래된 정보가 판단을 흐린다.
+>
+> **사용법**: 새 대화를 열고 아래 §2의 템플릿을 복사해 Phase 번호만 바꿔 붙여넣는다.
+
+---
+
+## 1. 왜 이렇게 하는가
+
+긴 대화는 두 가지 문제를 만든다.
+
+1. **토큰 낭비** — 매 응답마다 이전 대화 전체가 다시 읽힌다.
+2. **오래된 정보** — 초반에 내렸다가 나중에 뒤집은 판단이 그대로 남아 재발한다.
+   (실제 사례: Operator 모드를 "제외"로 분류했다가 번복 → 그 사이에 Portrait 오브젝트를 삭제해 복구 작업 발생)
+
+대신 **문서를 진실의 원천으로 삼는다.** 대화는 짧게 쓰고 버리며, 결론은 문서에 남긴다.
+
+---
+
+## 2. 대화 시작 템플릿 (복사해서 사용)
+
+```
+AICO의 Meta Quest MR 포팅 작업이야. Phase [N]을 진행할 거야.
+
+먼저 아래 문서를 읽고 현재 상태를 파악해줘:
+- Assets/Scripts/Plan/MR_Phase_Kickoff_Guide.md   ← 작업 원칙과 함정 목록. 반드시 먼저.
+- Assets/Scripts/Plan/SampleSceneKAI_MR_Port_Plan.md   ← 전체 계획
+- Assets/Scripts/Plan/MR_Feature_Inventory.md   ← 기능별 포팅 분류
+
+작업 씬은 Assets/Scenes/SampleSceneKAI-MR.unity 하나야.
+별 말 없으면 이 씬만 봐줘. SampleScene / SampleSceneKAI(데스크톱)는 보지 마.
+
+[여기에 이번 Phase에서 하고 싶은 것을 한두 줄로]
+```
+
+Phase별로 추가할 문서는 §5 표의 "읽을 문서" 열을 참고한다.
+
+> **⚠ 지침을 등록할 수 없는 도구(Antigravity 등)로 작업할 때**
+> 그런 도구는 이 문서의 §7-1 수칙을 물려받지 못한다. **규칙을 본문에 복사해 넣은
+> 자립 인계 문서**를 만들어 그것부터 읽히는 방식으로 간다.
+> 첫 사례이자 서식 참고: **`MR_Phase4C_Handoff.md`** (§1에 수칙 전문, §5에 실측값,
+> §6에 다음 작업 명세, §7에 손대면 안 되는 목록).
+> 새 Phase를 그런 도구로 넘길 때는 이 서식을 복제할 것.
+
+### 대화를 끝낼 때
+
+```
+이번 대화에서 확정된 것들을 해당 Plan 문서에 기록해줘.
+특히 새로 발견한 함정은 MR_Phase_Kickoff_Guide.md §4에 추가해줘.
+```
+
+**이걸 빼먹으면 다음 대화가 같은 삽질을 반복한다.** 가장 중요한 마무리 단계다.
+
+---
+
+## 3. 고정 컨텍스트
+
+새 대화가 매번 알아야 하는 사실들. 문서를 읽으면 나오지만, 요약해두면 탐색이 빨라진다.
+
+### 환경
+
+| 항목 | 값 |
+|---|---|
+| Unity | 6000.3.15f1 (URP) |
+| Meta XR SDK | 201.0.0 |
+| OpenXR / XRI | 1.16.1 / 3.3.2 |
+| 테스트 기기 | **Quest 3S** |
+| 작업 씬 | `Assets/Scenes/SampleSceneKAI-MR.unity` |
+| 원본 씬 | `SampleSceneKAI.unity` (데스크톱, **건드리지 않음**) |
+
+### 프로젝트 구조
+
+AICO는 2계층이다. **Unity 클라이언트**(3D VRM 아바타 + UI) + **Python AI 백엔드**.
+MR 포팅은 Unity 클라이언트만 다룬다. 백엔드는 그대로 쓴다.
+
+### 분리 정책 — **이 프로젝트는 MR 100%다 (2026-08-18 변경)**
+
+데스크톱 팀과 프로젝트가 완전히 갈라졌다. **이 저장소는 더 이상 데스크톱 빌드를 만들지 않는다.**
+
+그래서 정책이 바뀌었다:
+
+| | 이전 | 현재 |
+|---|---|---|
+| 공용 스크립트 수정 | 데스크톱 회귀를 확인해야 함 | **확인 불필요** — 데스크톱 빌드가 없다 |
+| MR 동작 분기 | `#if UNITY_ANDROID && !UNITY_EDITOR` | **`#if UNITY_ANDROID \|\| UNITY_EDITOR`** |
+| 실기 검증 | 빌드 → APK 설치 → Quest | **Quest Link + Play 모드로 즉시** |
+
+**왜 조건을 바꿨나**: `&& !UNITY_EDITOR`가 붙어 있으면 에디터는 항상 데스크톱 경로를 타므로
+**MR 동작을 에디터에서 검증할 수 없다.** 그게 개발 사이클을 "고치고 → 빌드 → 실기 → 로그"로
+묶어놓은 원인이었다 (2026-08-18 하루에 이 루프를 10회 이상 돌았다).
+
+#### ⚠ 왜 `#if UNITY_ANDROID` 만으로는 안 되는가 — Quest Link는 **Standalone 빌드 타겟**을 쓴다
+
+처음에는 "`UNITY_ANDROID`는 빌드 타겟이 Android면 에디터에서도 true"라는 이유로
+`&& !UNITY_EDITOR`만 떼려 했다. **틀렸다.**
+
+에디터 Play 모드는 **활성 빌드 타겟의 XR 설정**을 쓴다. 이 프로젝트의 XR 구성은:
+
+| 빌드 타겟 | XR 로더 |
+|---|---|
+| Android | OpenXR (Quest 기기용) |
+| **Standalone** | OpenXR (**PC — Quest Link가 쓰는 것**) |
+
+빌드 타겟이 Android인 채로 Play를 누르면 에디터가 **Android용 로더**를 초기화하려다 실패해
+XR이 붙지 않는다. 증상: **캐릭터는 보이고 애니메이션도 도는데 카메라가 머리 움직임을 따라오지
+않는다**(일시정지처럼 보임). 2026-08-18 실측.
+
+**그래서 Link로 테스트하려면 빌드 타겟을 Windows/Standalone으로 바꿔야 하고, 그 순간
+`UNITY_ANDROID`는 false가 된다.** 조건에 `|| UNITY_EDITOR`가 반드시 있어야 하는 이유다.
+
+| 상황 | `UNITY_ANDROID` | `UNITY_EDITOR` | MR 경로? |
+|---|---|---|---|
+| Quest 실기 (APK) | ✅ | ❌ | ✅ |
+| 에디터 + Link (타겟 Standalone) | ❌ | ✅ | ✅ |
+| 에디터 (타겟 Android) | ✅ | ✅ | ✅ |
+
+**작업 흐름**: 평소 개발은 빌드 타겟 **Windows/Standalone** + Quest Link.
+APK를 뽑을 때만 Android로 스위치한다.
+
+#### ⚠ Standalone용 OpenXR 기능을 따로 켜야 한다 (2026-08-18 실측)
+
+빌드 타겟만 바꾸면 안 된다. **OpenXR 기능은 빌드 타겟별로 따로 켜고 끈다.**
+이 프로젝트는 Android만 설정돼 있고 Standalone은 사실상 미설정이었다:
+
+| Feature | Android | Standalone (변경 전) |
+|---|---|---|
+| **Meta XR Feature** | ✅ | ❌ |
+| **Hand Interaction Profile** | ✅ | ❌ |
+| MetaQuest Touch Plus / Pro Profile | ✅ | ❌ |
+| Oculus Touch Controller Profile | ✅ | ✅ |
+
+**증상**: `MetaXRFeature`가 꺼져 있으면 OpenXR은 초기화되지만 Meta 트래킹 계층이 붙지 않아
+`OVRCameraRig`/`OVRManager`가 포즈를 받지 못한다. → **캐릭터는 보이고 애니메이션도 도는데
+카메라가 머리를 안 따라온다**(일시정지처럼 보임). 렌더링은 되니 원인을 카메라/씬에서
+찾게 되지만, 실제 원인은 XR 설정이다.
+
+**Edit → Project Settings → XR Plug-in Management → OpenXR → PC(Windows) 탭**에서 켤 것:
+`Meta XR Feature` · `Hand Interaction Profile` · (컨트롤러를 쓴다면) `Meta Quest Touch Plus/Pro Controller Profile`
+
+**켜지 말 것**: `MetaXRFoveationFeature` / `MetaXRSubsampledLayout` — Quest 하드웨어 전용.
+
+> **교훈**: "XR 로더가 할당돼 있다"는 것과 "그 플랫폼에서 XR이 동작한다"는 다르다.
+> 로더 존재만 확인하고 결론 내지 말 것 — **기능(feature) 목록까지 봐야 한다.**
+
+#### ⚠ 두 종류의 가드를 구분할 것
+
+`#if UNITY_ANDROID && !UNITY_EDITOR`가 전부 같은 뜻이 아니다. **일괄 치환하면 안 된다.**
+
+| 종류 | 뜻 | 조치 |
+|---|---|---|
+| **MR 동작 분기** | "MR에서는 이렇게, 데스크톱에서는 저렇게" | ✅ `#if UNITY_ANDROID`로 **완화** |
+| **Android 네이티브** | `AndroidJavaClass` / `Permission` / JNI | ❌ **그대로 유지** — 에디터에서 실행하면 예외 |
+
+**2026-08-18 적용 결과 (17곳을 `#if UNITY_ANDROID || UNITY_EDITOR`로 완화)**:
+`ContextMenu`(3) `RadialMenu`(5) `Tooltip`(1) `UICursor`(1) `UIWidget`(3)
+`UIManager`(2) `UIPositionManager`(2)
+
+**유지한 것 (Android 네이티브)**:
+`BackgroundService` `PIPManager` `ServerQrScanManager` `SettingManager` `Legacy/*`
+
+**보류한 것 (MR과 무관한 축)**:
+- `CharManager` / `DialogueManager` / `DialogueCacheManager` / `TTSManager` —
+  StreamingAssets 로딩 방식 분기. **Phase 5의 이관 작업에서 함께 정리한다**(§4-11).
+- `ClickHandler` / `PortraitClickHandler` / `SubClickHandler` — 터치 vs 마우스 버튼 분기.
+  MR에서 캐릭터 클릭은 Phase 4-A 진리표가 담당하므로 **그때 어느 경로를 쓸지 결정한다.**
+
+#### 앞으로 새 분기를 쓸 때
+
+MR 동작 분기는 **`#if UNITY_ANDROID || UNITY_EDITOR`** 를 쓴다.
+사실 이 프로젝트에서는 항상 참이므로 **대부분의 경우 분기 자체가 불필요하다** —
+새 코드는 그냥 MR 동작만 쓰면 된다.
+`#else` 데스크톱 분기는 기록으로 남겨뒀을 뿐 실행되지 않는다.
+
+Android 네이티브 가드는 계속 `#if UNITY_ANDROID && !UNITY_EDITOR`를 쓴다 — 여기서는
+`!UNITY_EDITOR`가 "에디터에서 JNI를 부르지 마라"라는 **정확한 뜻**이다.
+
+프리팹 언팩·스크립트 포크는 계속 자유롭게 허용된다.
+
+Win32 P/Invoke는 이미 전부 처리됨: `#if UNITY_STANDALONE_WIN`으로 `extern` 선언만 감싸고
+`#else`에 같은 시그니처의 빈 스텁을 둔다. **호출부는 수정하지 않는다.**
+프로젝트 전체의 가드 없는 `DllImport` 개수는 **0**이다.
+
+### 제외 결정
+
+- **포모도로** — MR에서 쓸모없음 (성능 때문이 아니라 용도가 없음)
+- **Spine 2D 캐릭터** — MR은 VRM만
+- **화면 OCR / 스크린샷 / 핫키** — MR에 "대상 화면"이 없음
+
+### 유지 결정 (헷갈리기 쉬움)
+
+- **Operator 모드 ✅ 유지** — "3D 캐릭터 대신 얼굴 창으로 대화하는 UI 모드"다.
+  화면 인식·조작(VL 에이전트)과 **무관**하다. 아이언맨-자비스식 원격 대화가 목적.
+  `RouterBtn` / `JobBtn`이 같은 말풍선에 있다는 이유로 VL 기능과 묶어 제외하면 안 된다.
+- **인벤토리 / 상점 / 캐릭터 악세서리 ✅ 유지** — DevionGames가 아니라 자체 구현이다.
+  `Assets/Prefabs/Assist/{InventorySystem,EquipSystem,ItemSystem,AnchorSystem}/`
+
+### 코드 규약
+
+- 주석은 `//` (한국어)
+- 싱글톤은 지연 초기화
+- **삼항 연산자 금지**
+- 새 MR 전용 코드는 `Assets/Scripts/MR/`, 에디터 도구는 `Assets/Scripts/MR/Editor/`
+
+---
+
+## 4. 함정 목록 — 반복해서 당한 것들
+
+> **새 대화는 이 섹션을 반드시 읽어야 한다.** 대부분 한 번씩 실제로 당한 것들이다.
+
+### 4-1. 좌표계 — 대상이 아니라 래퍼를 스케일한다 ⭐
+
+데스크톱 코드는 **캔버스 픽셀** 단위로 동작한다.
+캐릭터 `localScale = 120`, 캔버스 깊이 `z = -70`, `PhysicsManager.moveSpeed = 120`(px/s).
+
+캐릭터를 직접 스케일하면 이 값들이 **미터로 해석**된다 → 초속 120m로 날아가고 카메라 70m 뒤에 놓인다.
+
+**해결**: 부모 래퍼를 `1/120`로 스케일하면 좌표계 자체가 변환된다.
+`z = -70` → `-0.583m`, `moveSpeed 120` → `1.0 m/s`. 내부 코드는 한 줄도 안 고친다.
+
+같은 발상이 ISDK 상호작용에도 적용된다 (`MRWorldUIInteraction`의 `HandInteraction` 자식이
+`localScale = 1000`인 이유 — 캔버스 0.001 스케일을 상쇄해 world scale을 1로 되돌린다.
+ISDK의 Poke 판정 거리는 **월드 미터** 기준이라 0.001 밑에 두면 1000배로 왜곡된다).
+
+### 4-2. `Awake()`는 컴포넌트를 비활성화해도 실행된다 ⭐
+
+Unity가 `enabled`를 보는 것은 `OnEnable` / `Start` / `Update` 뿐이다.
+GameObject가 활성이면 `Awake()`는 무조건 호출된다.
+
+대부분의 UI 패널이 `Awake()`에서 스스로를 숨긴다.
+예: `ChatBalloonManager.Awake()` → `HideChatBalloon()` → `chatBalloon.SetActive(false)`
+
+게다가 외부에서도 `ChatBalloonManager.Instance.HideChatBalloon()`을 호출한다
+(`ChatHandler`, `AnswerBalloonSimpleManager`). 체크박스로는 막을 수 없다.
+
+> **월드 스페이스로 옮긴 UI가 안 보이면, 레이어·컬링 마스크·위치보다 먼저**
+> **"원래 숨어 있어야 하는 패널 아닌가"를 의심한다.**
+> 렌더링만 검증하려면 패널을 **복제**해서 넣으면 된다.
+> 복제본은 어떤 매니저도 참조하지 않으므로 `SetActive(false)`를 당하지 않는다.
+
+### 4-3. 계층 드래그 시 Unity가 월드 스케일을 보존한다
+
+0.001 스케일 캔버스로 UI를 끌어다 놓으면 자식 `localScale`이 자동으로 **1000배**가 된다
+(관측값 450). 겉보기 크기는 같지만 이후 계산이 전부 어긋난다.
+**옮긴 직후 Scale을 1로 리셋할 것.**
+
+### 4-4. 트래킹 원점은 **바닥**이다
+
+`y = 0`은 발밑이다. 월드 UI를 `(0,0,0)`에 두면 바닥에 눕는다.
+사람이 볼 위치는 대략 `y = 1.2`, `z = 1.0`.
+
+### 4-5. `Texture2D.ReadPixels`는 MR에서 동작하지 않는다
+
+패스스루는 OS 언더레이라 앱 프레임버퍼에 없다.
+카메라 영상이 필요하면 **Passthrough Camera Access API**
+(`Meta.XR.MRUtilityKit.PassthroughCameraAccess`)를 쓴다.
+`horizonos.permission.HEADSET_CAMERA` 권한 + `isPassthroughCameraAccessEnabled` 필요. Quest 3/3S 전용.
+
+> **2026-08-21 보강**: 이 셋은 **씬에 `PassthroughCameraAccess` 컴포넌트가 있어야**
+> Project Setup Tool이 검사한다 — **§4-56**. 매니페스트 권한은 손으로 넣지 말고
+> 체크박스를 켠 뒤 `Meta → Tools → **Android Manifest Tool**` →
+> `Update AndroidManifest.xml for Store Compatibility`를 돌린다
+> (`OVRManifestPreprocessor.cs:1031`). SDK 201 API 실측과 현재 설정값은
+> `MR_HandFrame_ImageInput_Plan.md` §3 · §11.
+>
+> **OVRManager 인스펙터에서 권한 체크박스가 안 보이면 §4-57을 볼 것.**
+
+### 4-6. `OVRInput.Button.Start`는 **비주력 손**에서만 발생한다
+
+주력 손의 손바닥 제스처는 OS가 가져간다.
+v66→v67 회귀는 "simultaneous hands and controllers" 때문인데,
+이 프로젝트는 이미 꺼져 있다 (`SimultaneousHandsAndControllersEnabled: 0`).
+
+### 4-7. Interactable만으로는 아무 일도 안 일어난다
+
+`RayInteractable` / `PokeInteractable`은 "만질 수 있는 것"이고,
+`RayInteractor` / `PokeInteractor`는 "만지는 손"이다.
+**Building Blocks에서 Ray Interaction / Poke Interaction을 추가해야 손이 생긴다.**
+
+또한 월드 캔버스에는 `GraphicRaycaster`가 있어야 하고,
+씬에는 `PointableCanvasModule`이 **하나만** 있어야 한다
+(데스크톱 `StandaloneInputModule`과 공존하면 충돌).
+
+### 4-8. `#if` 가드는 `DllImport`만 막지 로직은 안 막는다
+
+`TransparentWindow`는 가드가 있었는데도 `PickColorCoroutine`의 GPU 리드백이
+프레임의 60%(14.9ms)를 먹고 있었다. **가드가 있다고 안심하지 말 것.**
+
+### 4-9. 씬 파일을 직접 파싱하기 전에 저장 여부를 확인한다
+
+에디터가 미저장 변경을 들고 있으면 파일 분석 결과가 낡은 정보다.
+분석 전에 "Ctrl+S 했어?"를 확인한다.
+프리팹(`Root260616.prefab`)이 아니라 **언팩된 씬**을 봐야 한다.
+
+### 4-10. `grep`이 조용히 타임아웃될 수 있다
+
+빈 결과를 "없음"으로 단정하지 않는다.
+실제로 Vault Inventory가 "존재하지 않는다"고 잘못 보고한 적이 있다.
+큰 디렉터리(`Library/`)를 훑을 때는 범위를 좁히고 타임아웃을 명시한다.
+
+### 4-11. StreamingAssets 대소문자 버그 (미수정)
+
+폴더는 `Config`인데 코드는 `"config"`를 쓴다.
+`CharManager.cs:72`, `ChangeCharManager.cs:147`.
+Android는 대소문자를 구분하므로 **접근 방식과 무관하게 깨진다.** Phase 5에서 처리.
+
+### 4-12. 커스텀 asmdef는 Assembly-CSharp을 참조할 수 없다 ⭐
+
+`Assets/Devion Games/UI Widgets/...`처럼 자체 `.asmdef`가 있는 폴더는 독립 어셈블리다.
+컴파일 순서상 커스텀 asmdef가 **먼저** 컴파일되고 Assembly-CSharp(대부분의 MR 스크립트가
+속한 기본 어셈블리)이 **나중에** 컴파일된다. 그래서 asmdef 쪽 코드에서 Assembly-CSharp의
+타입을 직접 참조하면 컴파일이 원천적으로 불가능하다(순서가 뒤바뀐 게 아니라 불가능).
+
+**해결**: 참조해야 하는 코드만 의존성이 없는 별도의 작은 asmdef로 분리하고, 그 asmdef를
+필요한 쪽 asmdef의 `references`에 이름으로 추가한다. GUID를 손으로 지어내지 말 것 —
+asmdef 이름 문자열 참조도 Unity가 정상적으로 지원한다.
+
+실제 사례: DevionGames `ContextMenu.cs`/`RadialMenu.cs`(3-2-D)에서 ISDK 포인터 상태가
+필요해 `MRPointerBridge`를 만들었는데, 처음에 `Assets/Scripts/MR/`(Assembly-CSharp)에
+둬서 컴파일이 안 됐다. `Assets/Scripts/MR/Bridge/AICO.MR.PointerBridge.asmdef`로 분리하고
+`DevionGames.UIWidgets.asmdef`의 `references`에 이름을 추가해 해결했다.
+**MR 스크립트 폴더 전체를 asmdef로 묶지 말 것** — `CharManager`/`UIManager` 등 Assembly-CSharp
+게임 타입을 참조하는 수백 곳이 한 번에 깨진다. 옮기는 파일은 최소한으로.
+
+### 4-13. `PointableCanvasModule`에는 전역 "마우스 좌표"가 없다
+
+ISDK는 포인터(손)마다 임시 가상 카메라를 만들어 **캔버스마다 다른 스크린 좌표계**를 쓴다
+(`PointableCanvasModule.UpdateRaycasts`). `Input.mousePosition`을 그냥 대체할 단일 값이
+없다는 뜻이다. "메뉴 밖을 클릭하면 닫는다"류의 폴링 로직은 좌표를 흉내 내지 말고
+`PointableCanvasModule.WhenSelected`/`WhenUnselected` 정적 이벤트(어떤 캔버스든 선택이
+발생했다는 신호)로 우회한다. 완전한 등가가 필요하면 닫기 버튼이나 타임아웃을 병행한다.
+
+> **✅ 실기 확인 (2026-08-18)**: 이 한계가 실제로 물었다. 컨텍스트 메뉴를 열고 **허공을
+> 눌러도 메뉴가 닫히지 않는다.** 로그에 이벤트 자체가 없다 — `MRPointerBridge`가 받을
+> 신호가 아예 발생하지 않는 것이라 배선 문제가 아니다.
+> (같은 로그에서 캔버스 위 클릭은 `선택됨(클릭): canvas=Radial Menu Characters
+> target=Item(Clone)_ChangeChars`로 정상 발생했다 — 즉 UI 위에서는 잘 되고 허공만 안 된다.)
+>
+> **확정 해법 (2026-08-18): 위젯 쪽 경로를 제거하고 Phase 4-A의 `MRIntentRouter`에 위임한다.**
+> 진리표(Port Plan §2-1)가 이미 "빈 공간 + 탭"을 판정하므로 **허공 판정을 거기 한 벌만 둔다.**
+>
+> **`ContextMenu.Update()` / `RadialMenu.Update()`의 MR 분기는 비워뒀다.** 그냥 안 되는
+> 정도가 아니라 **적극적으로 해로웠다** — 손 레이가 다른 캔버스를 스치기만 해도 "바깥 선택"으로
+> 잡혀 메뉴가 열리자마자 반복해서 닫혔다(실측: 콜스택 `RadialMenu:Update() → Close()`).
+>
+> **⚠ 이 항목에서 실제로 낭비한 것**: "위임한다"고 결정하고 문서에 적어놓고도 **코드를
+> 제거하지 않은 채** `MRPointerBridge.Flush()`와 유예 시간으로 그 기능을 살리려 두 번 더
+> 시도했다. 둘 다 실패했고 빌드 두 번을 태웠다.
+> **결정을 내렸으면 그 결정대로 코드를 바꿀 것** — 결정과 반대 방향의 수정을 쌓지 말 것.
+> (§4-17이 "결정 번복을 문서에 전파하라"였다면, 이건 "결정을 코드에 전파하라"다.)
+
+### 4-14. `MRSpineCharacterController`/`MRCharacterMenu`/`MRHandInteractionRouter`는 `MRSampleScene`(Spine 2D) 전용이다 ⭐
+
+`Assets/Scripts/MR/`에 있다고 SampleSceneKAI-MR(VRM 전용)에 바로 쓸 수 있는 게 아니다.
+`MRSpineCharacterController`는 `Spine.Unity` 네임스페이스를 쓰는 **별개 프로토타입**(`MRSampleScene`)의
+캐릭터 컨트롤러다 — Feature Inventory에서 제외 확정한 바로 그 Spine 2D 캐릭터용이다.
+`MRCharacterMenu`도 이 컨트롤러를 참조하므로 그대로 갖다 쓸 수 없다. Port Plan이
+"`MRSampleScene`의 `MRCharacterMenu`가 참조 구현"이라고 한 것은 **패턴을 복제**하라는
+뜻이지 컴포넌트를 재사용하라는 뜻이 아니다.
+
+VRM 캐릭터(우리 씬의 실제 캐릭터)의 월드 트랜스폼이 필요하면
+`MRCharacterWorldRoot.CurrentCharacter`를 쓴다. 새로 만드는 MR 컴포넌트가 캐릭터를
+참조해야 하면 이 프로퍼티를 통할 것 — `MRSpineCharacterController.Instances`가 아니다.
+
+**추가 발견 (2026-08-18, Phase 4-A 착수 시)**: `MRHandInteractionRouter`도 같은 부류다.
+`HandState.lockedCharacter`가 `MRSpineCharacterController` 타입이고 `StartInteraction` /
+`FindClosestCharacterCollider` / `IsHandNearCollider`가 전부 이 타입을 받는다. 게다가
+`interactionHands`가 인스펙터 드래그용 `Hand[]` 직렬화 필드라 §4-19에 걸려 런타임에
+비어 있다. **씬 참조 수 실측 0** — SampleSceneKAI-MR에는 스킨십 4종(볼 당기기·쓰다듬기·
+간지럽히기·꿀밤)이 **아예 구현돼 있지 않다.**
+
+이게 중요한 이유: Port Plan §1-1이 "핀치 채널이 이미 스킨십 4종에 소진됐다"를 전제로
+거리 레이어를 나누고 "접촉 시 스킨십 우선"을 최우선 규칙으로 삼는다. 그 전제가 이 씬에서는
+성립하지 않는다. **규칙은 지우지 말고 유지하되, 제공자(`IMRSkinshipContactProvider`)가
+없으면 통과시킨다** — 나중에 VRM 스킨십을 붙일 때 우선순위 규칙을 다시 설계하지 않기 위해서다
+(`MR_Phase4A_Input_Plan.md` §2-1).
+
+> **일반화**: `Assets/Scripts/MR/`에 있는 파일을 재사용하기 전에 **`MRSpineCharacterController`를
+> 참조하는지 먼저 grep할 것.** 이 폴더는 VRM 씬과 Spine 프로토타입의 코드가 섞여 있다.
+
+**재발 (2026-08-19, Phase 4-A 시스템 메뉴)** — grep으로는 안 걸리는 형태로 다시 당했다.
+
+`MRSystemMenuController`는 `MRSpineCharacterController`를 **참조하지 않는다.** 대신
+그 컨트롤러의 **`PlayerPrefs` 키**(`IdleRerollDelayAfterVoice` / `IdleRerollChance` /
+`IdleRerollInterval`)를 복제했다. 타입 참조가 없으니 위 일반화의 grep을 통과한다.
+그런데 그 키를 읽는 코드는 `MRSpineCharacterController` 하나뿐이고, 그것은
+**`MRSampleScene`을 포함해 어느 씬에도 없다.** 슬라이더 3개가 아무도 읽지 않는
+`PlayerPrefs`에 값을 쓰고 있었다.
+
+경로는 §4-14 그대로다. `MRSystemMenuController` 헤더 주석이 스스로 밝힌다 —
+*"`MRCharacterMenu`(MRSampleScene 참조 구현)가 검증한 슬라이더 배선 패턴을 그대로 따른다."*
+**패턴만 따라야 했는데 Spine 전용 항목까지 따라왔다.**
+
+> ⚠ **오해하지 말 것 — `MRSampleScene`에서 가져오는 것 자체는 정상이다.**
+> 거기는 **MR 기능의 참조 구현이 사는 곳**이고, 같은 메뉴의 `MRJukebox`(주크박스)와
+> `MRSpatialAnchorEditor`(공간 앵커)는 **가져오면 그대로 동작한다** — Spine 비의존이다.
+> 문제가 되는 것은 `MRSpineCharacterController` 계열, 즉 **§4-14가 지목한 그 셋뿐**이다.
+> 데스크톱 전용인 `SampleScene` / `SampleSceneKAI`와 헷갈리지 말 것.
+> (2026-08-19에 이 구분을 잃고 "MRSampleScene을 참조하는 것 자체가 잘못"이라고
+> 문서를 고쳤다가 철회했다.)
+
+> **일반화 보강 — 결합이 타입이 아닐 때는 "키를 읽는 쪽"을 grep할 것.**
+> `PlayerPrefs` 키·문자열 이름·이벤트 채널로 붙어 있으면 타입 grep이 놓친다.
+> 소비자를 찾은 다음, 그 소비자가 **어느 씬에 인스턴스로 존재하는지**를 GUID로 확인한다:
+>
+> ```bash
+> g=$(grep -m1 '^guid:' "$(find Assets/Scripts -name '<타입>.cs').meta" | cut -d' ' -f2)
+> for s in Assets/Scenes/*.unity; do echo "$s: $(grep -c "guid: $g" "$s")"; done
+> ```
+>
+> **KAI-MR만 0 = 이관하면 되는 것.** 세 씬 모두 0 = **가져올 원본이 없는 것.**
+> 이 둘은 대응이 완전히 다르다.
+
+### 4-15. 표준 `IDragHandler`를 구현한 데스크톱 전용 컴포넌트는 ISDK가 그대로 오발동시킨다 ⭐
+
+**실측(Quest 3S, 2026-08-10)**: `Image_ChatBalloon`을 손으로 잡아 옮기려 했더니
+① 화면이 멈추며 프레임이 30fps대로 떨어지고 ② 손 모형이 표면에 붙은 것처럼 고정되고
+③ 옮기려던 동작이 **크기 조절**로 바뀌는 문제가 있었다.
+
+원인은 `UIResizeHandler`(`Assets/Scripts/UIResizeHandler.cs`) — 데스크톱에서 마우스로 채팅창
+가장자리를 드래그해 리사이즈하던 컴포넌트가 `Image_ChatBalloon`에 그대로 남아 있었던 것이다.
+`IBeginDragHandler`/`IDragHandler`를 **표준 uGUI 인터페이스로** 구현하고 있어서,
+`PointableCanvasModule`이 손 포크/레이 드래그를 표준 `ExecuteEvents` 경로로 배달하는 순간
+**아무 수정 없이 그대로 반응한다.** `Input.mousePosition`을 쓰지 않는 컴포넌트라 3-2-D 점검
+(§Devion Games 5개 파일)에서도 걸리지 않았다 — `PointerEventData` 기반이면 이미 MR에서도
+"정상 동작"하기 때문에, 오히려 **그게 문제**인 사례다.
+
+- 프레임 드롭: 매 프레임 `sizeDelta` 변경 → RectTransform 레이아웃 리빌드 비용
+- 손 고정처럼 보임: `BoundsClipper`(Tools → MR → 5가 만든 포크/레이 판정 면)의 크기는
+  실행 시점에 고정되는데, 리사이즈로 실제 rect가 계속 바뀌면서 판정 면과 시각적 rect가 어긋남
+- 크기 조절로 바뀜: `GetResizeDirection()`이 로컬 좌표 기준 `borderThickness`(24) 이내를
+  판정하는데, 축소된 월드 스페이스 캔버스에서는 거의 모든 지점이 "가장자리 근처"가 된다
+
+**교훈**: "표준 uGUI 인터페이스(`IPointerXxxHandler`/`IDragHandler`)를 구현했으니 ISDK와
+호환된다"는 **필요조건이지 충분조건이 아니다.** 그 컴포넌트가애초에 MR에서 원하는 동작인지도
+같이 봐야 한다. 캔버스를 변환(Tools → MR → 6/7)하고 손 상호작용(Tools → MR → 5)을 붙이기 전에,
+**그 오브젝트에 데스크톱 전용 드래그/리사이즈/클릭 로직이 남아있지 않은지** 컴포넌트 목록을
+훑어볼 것 — 3-2-D는 "포인터 좌표 소스"만 고쳤지 "이 상호작용이 MR에 필요한가"는 다루지 않았다.
+
+**조치**: `UIResizeHandler`와 (겸사겸사 발견한) 중복·비활성 `TrackedDeviceGraphicRaycaster`를
+`MRSceneStripper.DesktopOnlyTypes`에 추가해 런타임에 끔(2026-08-10). 재빌드해야 반영된다.
+
+### 4-16. `requiresSystemKeyboard`가 꺼져 있으면 입력창을 건드릴 때마다 앱이 멈춘다 ⭐
+
+**실측(Quest 3S, 2026-08-10)**: `Image_ChatBalloon`의 입력창을 손으로 건드릴 때마다
+0.4~1.3초씩 앱 전체가 멈추고(logcat: `Timeout while waiting for keyboard to become visible`,
+5회 반복), 그 사이 손 모형이 화면에 붙은 것처럼 보였다(§4-15 UIResizeHandler 수정 이후에도
+재발). §4-15와 다른 원인이었다 — `Image_ChatBalloon`은 데스크톱 전용 컴포넌트가 문제가
+아니라, **`TMP_InputField`가 클릭되면 표준 동작으로 `TouchScreenKeyboard.Open()`을 호출**하고,
+그게 Quest에서 timeout으로 실패하는 것이었다.
+
+원인: `Assets/Oculus/OculusProjectConfig.asset`의 `requiresSystemKeyboard: 0` — OVR Manager의
+**Quest Features → Require System Keyboard**가 꺼져 있었다. 이게 꺼져 있으면 앱 매니페스트에
+시스템 키보드 오버레이 권한이 선언되지 않아 `TouchScreenKeyboard.Open()`이 계속 실패·재시도
+하다 타임아웃한다. **`1`로 켜고 재빌드해야 반영된다**(런타임 토글 불가 — 빌드 타임 매니페스트
+값). Meta 공식 문서와 커뮤니티에도 Quest+OpenXR 조합에서 흔한 이슈로 보고돼 있다.
+
+> `MRTMPVirtualKeyboardBinder`(`Assets/Scripts/MR/`)가 이미 이 상황을 위해 작성돼 있지만
+> **씬 어디에도 붙어 있지 않다** — `[MRKeyboardBinder]` 로그가 한 번도 안 찍혔다. 즉 지금 나는
+> "Timeout" 로그는 이 바인더가 아니라 `TMP_InputField` 자체의 기본 클릭 동작에서 온 것이다.
+> `requiresSystemKeyboard: 1`만으로 해결 안 되면, 이 바인더를 각 입력창에 실제로 연결해서
+> 재시도·상태 확인 로직(§검색 결과의 "delay 후 TouchScreenKeyboard.visible 확인" 패턴)을
+> 태울 차례다.
+
+**디버깅 팁**: `Tee-Object`로 저장한 adb logcat 파일은 PowerShell 기본 인코딩(UTF-16LE) 이라
+grep으로 직접 검색하면 글자 사이에 널 바이트가 껴서 매칭이 안 된다(§4-10와 같은 함정).
+`iconv -f UTF-16LE -t UTF-8`로 변환한 뒤 검색할 것.
+
+참고: [Enable Keyboard Overlay — Meta Horizon OS Developers](https://developers.meta.com/horizon/documentation/unity/unity-keyboard-overlay/),
+[System keyboard not opening every time — Meta Community Forums](https://communityforums.atmeta.com/t5/Unity-Development/System-keyboard-not-opening-every-time-in-Meta-quest-3-device/td-p/1179306)
+
+### 4-17. 결정 번복은 관련 문서 전부에 전파해야 한다
+
+Operator/Portrait 유지 결정(§3, 4-B)은 Feature Inventory와 Kickoff Guide에는 반영됐지만
+`MR_Phase3-2_Canvas_Plan.md` §1 표와 §3-2-A 삭제 목록에는 **옛 삭제 대상으로 그대로 남아 있었다**
+(2026-08-09 발견·수정). 다행히 코드(`MRSceneSetup.DeleteTargets`)는 이미 올바르게 Portrait를
+제외하고 있어 실제 삭제 사고로 이어지진 않았지만, 문서만 보고 판단했다면 §4-2 사고가
+재발할 뻔했다. **결정을 뒤집을 때는 관련 문서를 grep해서 전부 찾아 고칠 것** — 한 문서만
+고치고 넘어가면 다른 문서가 낡은 채로 남아 다음 대화를 오도한다.
+
+### 4-18. 월드 스페이스 캔버스를 다른 캔버스 **안에** 두면 버튼도 텍스트도 깨진다 ⭐⭐
+
+**증상 (2026-08-15, Quest 3S 실기 · 반나절 소요)**
+
+`Image_ChatBalloon`을 Tools→MR→7/5로 전용 캔버스 + HandInteraction까지 정상 변환했는데도:
+
+1. **버튼이 전혀 안 눌린다.** 포크 반응(하이라이트)조차 없다.
+2. **텍스트가 특정 각도에서 부분적으로 사라진다.** 뭔가에 가려진 것처럼 잘려 보인다.
+
+`MRPokeDebugProbe`(`PointableCanvasModule`의 정적 이벤트 전부 구독)로 찍어보니 결정적이었다 —
+50초간 패널 전체를 두들겼는데:
+
+- `WhenSelected`는 **계속** 발생 (`canvas=Image_ChatBalloon (1)`) → 포크가 캔버스에는 도달하고 있다
+- 그런데 `target`은 **항상 `null`**, `WhenSelectableHovered`는 **단 한 번도** 발생 안 함
+  → `GraphicRaycaster`가 버튼(Selectable)을 단 하나도 못 찾고 있다
+
+**원인**
+
+말풍선이 부모 `ChatBalloonCanvas`(자체 Canvas, localScale 0.001) **안에 중첩된 자식**이었다.
+월드 스페이스 캔버스를 다른 캔버스 안에 넣으면 그래픽 등록·레이캐스트 대상·마스킹/컬링
+계산이 부모 캔버스 기준으로 엉킨다. `ChatBalloonCanvas` **밖으로 빼내자마자 버튼 반응과
+텍스트 사라짐이 둘 다 한 번에 해결**됐다(`Image_AskBalloon` 복제본으로 교차 검증 완료).
+
+**교훈**
+
+- **각 월드 스페이스 UI는 다른 캔버스의 자식이 아니라 독립적으로 배치한다** (WorldUI 직속 등).
+  "패널마다 전용 캔버스"는 맞았지만, 그 전용 캔버스가 **부모 캔버스 밖에 있어야** 의미가 있다.
+- 부모 캔버스에서 GraphicRaycaster만 제거하는 걸로는 부족하다 — 계층 자체를 빼내야 한다.
+- 이 증상 조합("캔버스 select는 되는데 target이 항상 null" + "텍스트가 각도에 따라 잘림")이
+  보이면 **제일 먼저 부모 계층에 다른 Canvas가 있는지 확인할 것.** 자식 쪽(BoundsClipper 크기,
+  PlaneSurface facing, GraphicRaycaster 옵션, RectMask2D, TMP 머티리얼 컬링 등)을 아무리 파도
+  안 나온다 — 실제로 이번에 그 전부를 순서대로 의심하다 반나절을 썼다.
+
+### 4-19. 순수 핸드트래킹에서 `OVRInput` 트리거 축은 항상 0이다 ⭐
+
+`OVRInput.Get(OVRInput.Axis1D.Primary/SecondaryIndexTrigger)`는 컨트롤러가 연결되지 않은
+순수 핸드트래킹 상태에서 **핀치를 해도 항상 0**을 반환한다(실기 로그로 확인:
+`connected(L/R)=False/False activeController=Hands`, 트리거 값 `0.00` 고정).
+
+`MRFloatingPanel`/`MRCharacterMenu`가 이 방식을 쓰고 있으므로, **순수 핸드트래킹 환경에서는
+그 드래그 기능들이 동작하지 않을 가능성이 높다**(Phase 3-2-C 검증 시 확인 필요).
+
+대신 Interaction SDK의 `Oculus.Interaction.Input.Hand`를 쓴다 —
+`GetFingerIsPinching(HandFinger.Index)` + `GetJointPose(HandJointId.HandIndexTip, ...)`.
+`MRSpatialAnchorEditor.cs`가 이미 쓰고 있던 검증된 패턴이며 `MRPinchDraggable.cs`도 이 방식이다.
+
+주의점 두 가지 (실기에서 둘 다 회귀로 겪음):
+
+- **핀치 판정과 관절 포즈 조회를 분리할 것.** 관절 포즈 조회만 실패해도 핀치 판정까지
+  통째로 OVRInput 폴백으로 넘기면(항상 0이므로) 드래그가 아예 안 된다.
+- **`Hand` 컴포넌트는 씬에 정적으로 존재하지 않는다.** Meta Building Block 리그가 런타임에
+  구성하므로 인스펙터에 미리 드래그해둘 수 없다 — `FindObjectsByType<Hand>()`로 런타임에
+  찾아 `Handedness`로 좌/우를 매칭해야 한다.
+
+### 4-20. 월드 스페이스 캔버스의 정면은 `-Z`(Backward)다 ⭐
+
+`PlaneSurface.NormalFacing`을 `Forward`로 넣으면 **포크 방향이 앞뒤로 뒤집힌다** —
+정면에서 누르면 손이 그냥 통과하고, 패널 뒤로 돌아가야 눌린다.
+
+SDK 소스가 이 관례를 하드코딩하고 있다 (`PointableCanvasModule.cs` UpdateRaycasts):
+
+```csharp
+var plane = new Plane(-1f * canvas.transform.forward, canvas.transform.position);
+_pointerEventCamera.transform.position = pointerPosition3D - canvas.transform.forward;
+```
+
+즉 **포인터(사용자)가 캔버스의 `-forward` 쪽에 있다고 전제**한다. 이미 동작하던
+`MRBalloonWorldFollow`의 빌보드 공식(`Quaternion.LookRotation(pos - camPos)`)도 같은 전제다.
+
+`MRWorldUIInteraction.cs`가 예전에 `Forward`를 넣고 있었고 2026-08-15에 `Backward`로 수정했다.
+그 이전에 Tools→MR→5로 변환한 오브젝트들은 **수동으로 Facing을 확인해야 한다.**
+
+### 4-21. 씬 값을 고쳤으면 관련 Editor 툴을 **다시** 돌려야 한다
+
+스케일 버그로 `Image_ChatBalloon`이 `0.001`로 쪼그라들었던 시점에 Tools→MR→5를 실행했더니,
+`BoundsClipper` 크기가 그 잘못된 스케일 기준(`0.00072m × 0.00048m` — 사실상 핀 끝)으로
+계산돼 저장됐다. 이후 스케일만 `0.45`로 되돌리고 툴을 다시 안 돌려서, 손이 닿을 수 없는
+크기의 히트 영역이 그대로 남아 "포크 반응이 아예 없는" 증상을 한동안 유발했다.
+
+**Tools→MR→5(HandInteraction 셋업)는 캔버스 스케일·크기에 의존한다.** 스케일/크기/피벗을
+바꿨다면 반드시 다시 실행할 것. 순서도 중요하다 — 스케일을 **먼저** 고치고 툴을 **나중에** 돌린다.
+
+### 4-22. 패널 잡기(Grab)는 ISDK 정식 컴포넌트로 — 손 관절 휴리스틱은 실패한다 ⭐
+
+처음에는 `Oculus.Interaction.Input.Hand`의 관절 위치로 "주먹 쥠"을 직접 판정하는 자체 구현
+(`MRPinchDraggable`)을 썼다. 계속 실패했다:
+
+- 손가락 끝~손목 거리로 판정 → **버튼 누르려고 검지만 편 손**이 주먹으로 오인됨
+  (가리키는 손도 중지·약지·소지는 말려 있다). 검지까지 포함해 네 손가락 전부를 봐도
+  경계값 튜닝이 끝나지 않았다.
+- 이미 쥔 채로 영역에 들어와도 잡히는 문제 → 상승 엣지 판정을 따로 붙여야 했다.
+
+**결론: ISDK의 `HandGrabInteractable`을 쓴다.** grab 판정·손 붙임·놓기를 전부 SDK가 처리한다.
+처음에 이를 피했던 이유(§4-15 충돌 우려)는 과했다 — §4-15는 uGUI `IDragHandler`가
+`PointableCanvasModule`의 **UI 포인터 이벤트**를 가로챈 것이고, `HandGrabInteractable`은
+`HandGrabInteractor`라는 별개 인터랙터가 처리해 경로가 겹치지 않는다.
+
+**레시피는 씬의 `[BuildingBlock] Cube`를 그대로 따른다** (Grab 빌딩 블록 샘플):
+
+```
+패널 루트  : Rigidbody(kinematic, gravity off) + Grabbable + MRPanelGrabTransformer
+  └ GrabFrame : MRGrabFrameFitter + GrabInteractable + HandGrabInteractable
+                + MRRayDistanceMovementProvider
+      └ Bar_Top / Bar_Bottom / Bar_Left / Bar_Right
+          각각: BoxCollider(trigger) + ColliderSurface + RayInteractable
+```
+
+인터랙터(손 쪽)는 `[BuildingBlock] OVRInteractionComprehensive` 프리팹이 이미 제공하므로
+**리그는 건드리지 않는다.** 새 Interactable은 ISDK 레지스트리를 통해 자동 인식된다.
+
+주의: `HandGrabInteractable`만 네임스페이스가 다르다 (`Oculus.Interaction.HandGrab`).
+
+### 4-23. 원거리 잡기 — `DistanceHandGrab`은 쓰지 말고 직선 레이로 한다 ⭐
+
+`DistanceHandGrabInteractable`을 붙이면 두 가지가 깨진다 (실기 확인 2026-08-15):
+
+1. DistanceHandGrab 전용 레이는 잡을 후보를 찾아 **휘어지는 곡선**이라, UI 조준용 직선
+   레이를 밀어내고 **버튼을 겨눌 수 없게** 만든다.
+2. 손 정렬(`HandAlignType.AlignOnGrab`) 때문에 패널이 오는 게 아니라 **손 모델이 패널 쪽으로
+   딸려간다.**
+
+**대신 `RayInteractable`에 `_pointableElement`(Grabbable)와 `_movementProvider`를 연결한다.**
+평소 UI 조준에 쓰는 그 직선 레이가 그대로 패널 이동에도 쓰여 곡선 문제가 없다.
+
+단, `ColliderSurface`는 콜라이더를 **하나만** 참조하므로, 테두리 콜라이더를 4개 쓰려면
+바마다 독립 자식 오브젝트 + 자기 `ColliderSurface` + `RayInteractable`이 필요하다.
+(근접 grab은 `Rigidbody` 기준으로 자식 콜라이더를 전부 훑으므로 이 분리에 영향받지 않는다.)
+
+> **✅ 2026-08-18: 테두리 4바 → 뒤판 1개(`GrabPlate`)로 단순화.**
+> 4개였던 이유는 기능이 아니라 위의 `ColliderSurface` 제약이었다. 패널은 어차피 평면이고
+> 잡기 영역은 그 뒤에 있으므로, **캔버스보다 조금 큰 얇은 판 하나**로 대체된다 —
+> 오브젝트가 1/4로 줄고 모서리 틈도 사라진다.
+>
+> **단, 깊이가 중요하다.** 근접 grab은 `Rigidbody` 기준으로 자식 콜라이더를 전부 훑으므로,
+> 판을 얕게 두면 **패널 정면 전체가 grab 근접 영역**이 되어 버튼을 포크하려는 손과
+> 경쟁한다(§4-15 계열). `MRGrabFrameFitter`가 판의 **앞면**을 패널 평면보다
+> `backClearance`(기본 3 cm)만큼 뒤로 민다. 직선 레이 grab은 빈 공간을 통과해 닿으므로
+> 이 깊이에 영향받지 않는다.
+>
+> **패널 배경에 따라 체감이 다르다** (실측): 배경 Graphic이 raycastTarget인 패널
+> (`Image_ChatBalloon` `CharacterDetail` `CalendarPicker` `Alarm`)은 레이가 UI에 먼저 막혀
+> 예전 테두리와 동일하게 동작한다. 배경이 없는 패널(`ChatHistory` `Tab Window_Settings`
+> `CharChange` `TODOList`)은 **내부 빈 공간에서도 잡히게** 된다 — 6 cm 띠를 조준할 필요가
+> 없어져 오히려 편하다. 버튼을 겨누면 버튼이 앞에 있으므로 여전히 버튼이 이긴다.
+
+### 4-24. `_movementProvider`를 비워두면 패널이 손으로 날아온다
+
+SDK가 런타임에 `MoveTowardsTargetProvider`("Snaps the selected interactable to your
+interactor")를 자동 생성한다. UI 패널에는 맞지 않으므로 **반드시 명시**할 것.
+
+`MoveFromTargetProvider`(손 이동량과 1:1)도 패널에는 부적합하다 — 멀리 있는 패널을 레이로
+잡으면 레이는 크게 휘두르는데 패널은 손이 움직인 만큼만 따라와 **"레이 이동의 절반만
+움직이는" 느낌**을 준다. 레이 끝을 따라오지 않기 때문이다.
+
+그래서 `MRRayDistanceMovementProvider`를 만들었다:
+- **각도(rho, phi)**: 패널을 항상 레이 위에 둬서 레이 회전을 1:1로 따라감
+- **거리(r)**: 손 앞뒤 이동량 × `(잡은 순간 카메라~패널 거리) / (잡은 순간 카메라~손 거리)`
+
+멀수록 배율이 커져 손을 조금만 당겨도 앞으로 오고, 가까우면 배율이 1에 가까워 세밀해진다.
+배율 상한과 카메라 최소 거리로 손 떨림에 튀는 것을 막는다.
+
+### 4-25. 잡기 콜라이더는 UI 평면보다 **뒤**에 둔다
+
+콜라이더가 패널 면보다 앞으로 튀어나오면, 비스듬히 볼 때 레이가 UI보다 콜라이더를 먼저
+맞혀 **뒤에 있는 버튼을 조준할 수 없다.** 깊이를 얇게(8mm) 하고 Z를 뒤로 밀어
+(`깊이/2 + 여유`) 콜라이더 앞면이 패널 평면보다 확실히 뒤에 오게 한다.
+
+ISDK `RayInteractor`는 이미 최근접 후보를 고르므로, **지오메트리만 정리하면 "제일 앞에
+있는 것이 선택된다"가 저절로 성립한다** — 별도 우선순위 로직(raycast all 후 UI 우선 등)을
+새로 짤 필요가 없다.
+
+### 4-26. Editor 툴이 스케일을 "구워" 넣으면 나중에 크기를 바꿀 때 조용히 깨진다 ⭐
+
+Tools → MR → 8이 실행 시점의 `lossyScale`을 읽어 GrabFrame 보정 스케일과 콜라이더 크기(m)를
+저장했더니, 나중에 말풍선들을 `0.001 → 0.0005`로 줄였을 때 GrabFrame이 옛 값(1000)으로 남아
+**잡기 띠만 두 배로 어긋났다.** (`Image_ChatBalloon`의 2222는 자기 스케일 0.00045에 맞는
+정상값이었고, 오히려 나머지가 낡은 값이었다 — 진단을 반대로 하기 쉬우니 주의.)
+
+**해결**: `MRGrabFrameFitter`(`[ExecuteAlways]`)가 `OnEnable`마다 현재 rect·스케일로 다시
+계산한다. 이제 패널 크기를 바꿔도 툴을 다시 실행할 필요가 없다.
+
+**교훈**: 크기·스케일에 의존하는 Editor 툴 결과물은 런타임에 자기 보정하게 만들거나,
+최소한 "스케일 바꾸면 툴 재실행"을 문서에 못박을 것 (§4-21과 같은 계열의 함정).
+
+### 4-27. 자동 배치 컴포넌트는 "사용자가 옮겼는지"를 기억해야 한다
+
+`MRBalloonWorldFollow`가 매 `LateUpdate`마다 캐릭터 기준으로 위치·회전을 덮어써서
+grab이 전혀 먹히지 않았다(옮겨도 같은 프레임에 되돌아감). 상시 Y 빌보드의 정체도 이것이었다.
+
+가드를 "잡는 동안만 멈춤"으로 만들면 → **놓는 순간 원래 자리로 팅 하고 돌아간다.**
+그래서 잡힌 적이 있는지를 영구 플래그(`_userTookOver`)로 기억하고, `OnEnable`에서
+초기화한다. 결과 동작: **열면 캐릭터 옆에 뜨고, 내가 옮기면 그 자리에 남고, 닫았다 열면
+다시 캐릭터 옆.**
+
+### 4-28. `MainCamera` 태그가 두 개면 `Camera.main`이 좌안을 집는다 ⭐
+
+이 씬은 `LeftEyeAnchor`와 `CenterEyeAnchor`가 **둘 다** `MainCamera` 태그였다.
+`Camera.main`은 조건에 맞는 첫 카메라를 주므로 좌안이 잡히는 경우가 생기고, 그러면
+빌보드가 **살짝 왼쪽을 향해 비뚤어진다.** 서드파티 코드(`UIWidget` 등)도 `Camera.main`을
+쓰므로 태그 자체를 정리하는 게 근본 해결이다 — `LeftEyeAnchor`는 `Untagged`로.
+
+MR 코드에서는 `Camera.main`을 직접 쓰지 말고 **`CenterEyeAnchor`를 이름으로 먼저 찾는**
+resolve 함수를 쓴다(`MRFloatingPanel.ResolveEye`, `MRLazyFollowHUD.ResolveEye`,
+`MRPanelGrabTransformer` 참고). `Camera.main`이 **null**인 프레임도 있으므로
+"카메라를 못 찾으면 그냥 return"하는 코드는 위험하다 — §4-29 참고.
+
+> **⚠ 정정 (2026-08-18) — 위에 적힌 메커니즘은 이 씬에서 성립하지 않는다.**
+> 씬 실측: `LeftEyeAnchor`의 Camera 컴포넌트는 **enabled = 0**이고
+> `m_StereoRenderingPath: 2`(Single Pass Instanced) + OpenXR `m_renderMode: 1`이라
+> 런타임에도 켜지지 않는다. `Camera.main`은 **활성 카메라**만 후보로 삼으므로
+> **좌안을 집을 수 없다.** 태그가 중복돼 있는 것은 사실이지만 그 자체로는 무해하다
+> (Multi Pass로 바꾸면 그때는 진짜 문제가 된다).
+>
+> **그러면 관찰된 증상(빌보드가 왼쪽으로 비뚤어짐)의 원인은 따로 있다.** 유력한 후보는
+> `ResolveEye()`의 마지막 폴백 `FindFirstObjectByType<Camera>()`다 — 이 API는 컴포넌트가
+> disabled여도 반환하므로 좌안 카메라나 `PortraitCamera` 계열을 집을 수 있다.
+> 조준·빌보드가 미묘하게 어긋나면 태그가 아니라 **이 폴백 경로**부터 의심할 것.
+>
+> `ResolveEye()` 자체는 여전히 옳다(`Camera.main`이 null인 프레임이 실재하므로).
+> 다만 마지막 폴백을 `FindFirstObjectByType<Camera>()`로 두는 것은 재검토 대상이다.
+>
+> **교훈**: "태그가 둘이면 `Camera.main`이 엉뚱한 걸 집는다"는 조건이 하나 빠진 서술이었다.
+> **활성화된 카메라여야 후보가 된다.** 증상과 그럴듯한 원인을 이어 붙이기 전에
+> 그 원인이 실제로 성립하는 조건인지 확인할 것.
+
+### 4-29. "카메라 없으면 return"은 패널을 영영 안 보이게 만든다
+
+`MRFloatingPanel.Open()`이 `if (_cam == null) return;`으로 시작해서, `Camera.main`이 null인
+프레임에 호출되면 **캔버스를 켜지도 못하고** 빠져나갔다. 위치를 못 잡는 정도가 아니라
+패널이 아예 표시되지 않는다. 지금은 카메라가 없어도 캔버스는 켜고 위치만 포기한다.
+
+**교훈**: 표시(visibility)와 배치(placement)는 실패 경로를 분리할 것.
+
+### 4-30. DevionGames `UIWidget`은 표시할 때 스케일을 1로 되돌린다 ⭐⭐
+
+`UIWidget.Show()`:
+
+```csharp
+TweenTransformScale(Vector3.ClampMagnitude(m_RectTransform.localScale, 1.9f), Vector3.one);
+```
+
+월드 스페이스 패널의 정상 스케일은 `0.0005` 수준이라 이걸 그대로 부르면 **2000배로 부풀어
+화면을 뒤덮는다.** `Close()`도 스케일을 0으로 트윈해 다시 열 때 꼬인다.
+
+또한 `UIWidget.Awake()`는 `CanvasGroup.alpha != 1`이면 **`localScale`을 0으로 만든다.**
+그래서 `SetActive(true)` + 캔버스 enable만으로는 패널이 보이지 않는다
+(Tab Window_Settings / ChatHistory / CharChange가 토글해도 안 뜨던 원인).
+
+**해결**: `Show()/Close()`를 부르지 않고, 표시에 실제로 쓰이는 상태값만 직접 세팅한다 —
+`CanvasGroup`의 `alpha` / `interactable` / `blocksRaycasts`. **스케일은 건드리지 않는다.**
+(`MRFloatingPanel.ShowUIWidgetIfPresent` 참고. 트윈·사운드·포커스는 MR에서 포기.)
+
+### 4-31. 껍데기 부모에 붙은 매니저 스크립트 — 승격시키면 이름 탐색이 깨진다
+
+`Calendar`(rect 100×100 껍데기)의 실제 UI는 자식 `CalendarPicker`에 있었다. 껍데기 기준으로
+잡기 띠·판정 면이 만들어져 엉망이라 `CalendarPicker`를 패널로 승격시켰더니, 부모에 있던
+`JarvisCalendarUI`가 깨졌다:
+
+```csharp
+gameObject.name = "Calendar";                                 // ① 자기 이름을 바꾸고
+calendarPicker = FindDeepChild(transform, "CalendarPicker");  // ② 자식에서 찾음 → null
+```
+
+`FindDeepChild`는 **자기 이름부터 비교**하므로(`parent.name == childName` → 자기 반환),
+이름만 안 바꾸면 자기 자신에 붙어도 동작한다. 그 외에 `expandedSize`가 0이 되어
+`sizeDelta = (0,0)`이 대입되고, `GridLayoutGroup`이 `Flexible`이라 열 수를 `폭/셀폭`으로
+계산하는 바람에 날짜 42개가 한 줄로 늘어섰다.
+
+**대응**: 원본을 건드리지 않고 `MRJarvisCalendarUI`로 포크 (이름 변경 제거, 원점 이동 제거,
+데스크톱 드래그 핸들러 부착 제거, 0 크기 대입 가드, 크기 변경 시 `MRGrabFrameFitter.Fit()` 호출).
+`GridLayoutGroup`은 `Fixed Column Count = 7`로 고정해 폭 의존을 끊었다.
+
+**일반화**: "실제 UI가 자식에 있는 껍데기 패널"은 승격 후 **매니저 스크립트의 이름/계층
+가정**을 반드시 확인할 것. 껍데기를 지우면 그 위의 컴포넌트도 같이 사라진다.
+
+### 4-32. 스크롤 뷰 내용물을 "삐져나온 버튼"으로 오인하지 말 것
+
+rect 밖으로 나온 버튼(닫기 X 등)에 판정 조각을 만들어주는 기능(§4-25 계열)이,
+**스크롤 뷰 안에서 현재 뷰포트 밖에 있던 항목들**까지 대상으로 삼았다. 도구를 돌린 시점의
+스크롤 위치가 그대로 구워져서, `Tab Window_Settings`에 패널 위/아래 허공으로 9개의 조각이
+생겼다. 이 조각들은 UI 우선권을 갖도록 앞으로 나와 있어 **보이지도 않으면서 레이 이동을
+막는 유령 콜라이더**가 됐다.
+
+**해결**: 조각 생성 시 `RectMask2D`/`Mask` 아래의 그래픽은 제외한다. 마스크 안 내용물은
+정의상 뷰포트로 잘리므로 패널 밖으로 나갈 수 없고, 진짜 삐져나온 버튼은 마스크 밖에 있다.
+
+### 4-33. 레거시 UI의 열기 경로는 MR 패널을 못 연다 — ✅ 해결 (2026-08-18 실기 검증)
+
+`UIManager`를 비롯한 기존 코드는 `SetActive(true)`로 UI를 연다. 그런데 `MRFloatingPanel`은
+캔버스를 꺼둔 상태로 시작하므로 활성화만으로는 보이지 않는다 — 캘린더에서 날짜를 눌러도
+TODOList가 안 뜨는 이유가 이것이다.
+
+**✅ 해법 확정 (2026-08-18, Phase 4-A)**: `OnEnable()`은 **표시만** 담당하고, 위치 재배치는
+최초 소환 때만 한다. 그래야 레거시 `SetActive(true)` 경로가 살아나면서도 §4-27의
+"내가 옮기면 그 자리에 남는다"가 지켜진다.
+
+| 메서드 | 표시 | 배치 |
+|---|---|---|
+| `Show()` | ✅ | ❌ |
+| `Open()` | ✅ | 최초 1회만 (`_hasBeenPlaced`) |
+| `OpenAt(pos)` | ✅ | ✅ 명시 위치 |
+| `PlaceInFront()` | ❌ | ✅ 강제 재배치 (시야 밖 패널 회수용) |
+
+**⚠ 실제 경로를 따라가 보니 문제가 하나 더 있었다 (2026-08-18).**
+"안 보인다"가 전부가 아니라 **닫았다 열면 패널이 수백 m 밖으로 날아간다.**
+
+```csharp
+// UIManager.ShowSimpleUI()
+if (!target.activeSelf)
+    targetRect.position = UIPositionManager.Instance.GetMenuPosition(menuName);
+target.SetActive(true);
+```
+
+`GetMenuPosition`은 **메인 Canvas 기준 픽셀 좌표**를 월드로 변환한다
+(`canvas.transform.TransformPoint(new Vector3(700f, 150f, 0f))`). 메인 Canvas의 lossyScale이
+0.75이므로 700px → **525 m**다 (§4-36).
+
+**해결이 되는 지점**: 좌표 대입이 **`SetActive(true)`보다 먼저**다. 즉 좌표를 덮어쓸 때
+패널은 아직 비활성이고, `OnEnable`은 그 뒤에 돈다. 그래서
+**`OnDisable`에서 월드 포즈를 기억하고 `OnEnable`에서 되돌리면** 레거시 코드를 한 줄도
+고치지 않고 무력화된다. grab으로 옮긴 위치도 같은 경로로 자동 보존된다 —
+옮긴 결과가 곧 비활성 직전의 포즈이기 때문이다.
+
+**최초 소환 위치는 별도로 고쳤다.** `UIPositionManager.GetMenuPosition`을
+`GetMenuOffsetPixels`(공유되는 배치 의도) + 플랫폼 분기로 나누고, MR 분기에서
+픽셀 오프셋을 사용자 정면 기준 미터 좌표로 환산한다(`#if UNITY_ANDROID && !UNITY_EDITOR`).
+데스크톱 경로는 22개 케이스 좌표를 자동 대조해 **완전히 동일**함을 확인했다.
+
+역할 분담이 핵심이다 — **`UIPositionManager`는 "어디에 처음 띄울지"만 알고,
+"그 값을 쓸지 말지"는 `MRFloatingPanel`이 정한다.** 이렇게 나누지 않으면 열 때마다
+기본 위치로 되돌아가 §4-27과 충돌한다.
+
+**그리고 씬 로드 시 자동 표시를 막아야 한다 — §4-34 참고.**
+활성 패널 12개가 전부 `active=1`이라 그대로 두면 앱 시작 순간 전부 떠버린다.
+
+상세 설계는 `MR_Phase4A_Input_Plan.md` §3.
+
+
+### 4-34. 자동 표시 경로는 **씬 로드 시의 최초 `OnEnable`을 걸러야** 한다 ⭐
+
+§4-33을 "`OnEnable()`에서 자동으로 열기"로 풀 때 바로 걸리는 함정이다.
+
+씬 실측(2026-08-18): `MRFloatingPanel`이 붙은 활성 패널 **12개가 전부 `active=1`**이다.
+닫힌 상태는 GameObject 비활성이 아니라 **캔버스 비활성**으로만 표현돼 있다
+(`Awake()`의 `panelCanvas.enabled = false`). 따라서 `OnEnable`이 곧 표시라면
+**앱을 켜는 순간 패널 12개가 전부 화면에 뜬다.**
+
+**게다가 반대 방향의 함정이 같이 있다**: 이미 `active=1`인 오브젝트에 레거시가
+`SetActive(true)`를 부르면 **no-op이라 `OnEnable`이 아예 발화하지 않는다.**
+즉 한 번 닫히기 전까지는 어떤 수를 써도 열리지 않는다.
+
+두 문제를 한 번에 푸는 답은 **닫힌 패널을 씬에서 GameObject 비활성으로 저장하는 것**이다.
+그러면 ① 시작 시 아무것도 안 뜨고 ② 레거시의 첫 `SetActive(true)`가 정상적으로
+`Awake` → `OnEnable`을 발화시킨다. 별도의 "최초 `OnEnable` 필터" 같은 잔재주가 필요 없다.
+`MR_Phase3-2_Canvas_Plan.md` §4의 성능 항목("닫힌 패널은 GameObject 비활성")도 같이 달성된다.
+
+**단, 캐릭터 부착 말풍선에는 적용하지 않는다.** 말풍선의 매니저들은 `Awake()`에서 스스로를
+숨기므로(§4-2) 이미 같은 효과가 나고, 비활성으로 저장하면 매니저 싱글턴이 씬 로드 시
+초기화되지 않아 다른 코드가 `Instance`를 못 찾는다.
+
+**그리고 표시(visibility)와 배치(placement)를 반드시 분리한다.** `Open()`이 위치 재배치까지
+하므로 그대로 자동화하면, 무언가가 패널을 재활성화할 때마다 패널이 눈앞으로 끌려와
+§4-27에서 확정한 "내가 옮기면 그 자리에 남는다"와 정면 충돌한다.
+`OnEnable`은 표시만, 배치는 최초 소환 1회만(`_hasBeenPlaced`), 강제 재배치는 별도 API로.
+
+> 말풍선(`MRBalloonWorldFollow`)과 규칙을 통일하려 하지 말 것. 캐릭터 부착 말풍선은
+> "닫았다 열면 다시 캐릭터 옆"이 맞고, 공간 고정 패널은 "둔 자리에 남는다"가 맞다.
+
+### 4-35. 런타임에 크기가 정해지는 위젯은 판정 면도 런타임에 다시 맞춰야 한다 ⭐
+
+씬 실측(2026-08-18)한 DevionGames 위젯의 저장된 크기:
+
+| 위젯 | `sizeDelta` |
+|---|---|
+| `Context Menu` / `Context Menu Sub` | 160 × **4** |
+| `Radial Menu Action` / `Radial Menu Characters` | **0 × 0** (scale 1.6) |
+| `Tooltip` | 260 × 93 |
+
+**항목이 채워질 때 비로소 크기가 생긴다.** 즉 에디터 타임에 구운 잡기 띠와 판정 면이
+확정적으로 어긋난다 — §4-21/§4-26과 같은 계열이지만, 이쪽은 "사람이 스케일을 바꿔서"가
+아니라 **매번 열 때마다** 어긋난다는 점이 다르다.
+
+- 잡기 띠: `MRGrabFrameFitter`가 이미 `OnEnable`마다 `Fit()`을 돈다. 다만 `OnEnable` 시점엔
+  아직 항목이 없으므로 **항목을 채운 뒤 `Fit()`을 한 번 더** 불러야 한다.
+- 판정 면(`BoundsClipper`/`PlaneSurface`): **현재 `Tools → MR → 5` 에디터 타임 전용이라
+  런타임 재계산 수단이 없다.** `MRGrabFrameFitter`와 같은 패턴의 런타임 피터가 새로 필요하다.
+
+호출은 `ContextMenu.Show()`/`RadialMenu.Show()`의 MR 분기 끝에서 하되, `DevionGames.UIWidgets.asmdef`가
+Assembly-CSharp을 참조할 수 없으므로(§4-12) `MRPointerBridge`와 같은 브리지 asmdef를 통해 내보낸다.
+
+### 4-36. 메인 `Canvas`는 월드에서 1920 m다 — 살려 쓸 수 없다
+
+`Root260616/Canvases/Canvas`는 `renderMode = World Space`, 2560×1440, lossyScale **0.75**다.
+즉 켜는 순간 **1920 m × 1080 m** 짜리 판이 생긴다. 게다가 부모 `Canvases`는 `active=0`
+(Phase 1 성능 테스트로 꺼둔 상태 그대로).
+
+Tooltip/ContextMenu/RadialMenu가 아직 이 밑에 남아 있었는데, "메인 캔버스를 오버레이 전용으로
+유지"하는 안은 크기·스케일을 전부 다시 잡아야 해서 "구조가 단순하다"는 장점이 사라진다.
+**2026-08-18 결정: 위젯마다 독립 월드 패널로 분리한다**(`MR/WorldUI/Widgets/` 직속, §4-18 준수).
+
+### 4-37. 디버그 트리거가 정식 경로를 우회하면 그건 검증이 아니다 ⭐
+
+`MRWorldUIDebugToggle`은 `MRFloatingPanel.Open()`을 **직접** 호출해 패널을 띄웠다.
+`UIManager`를 통째로 건너뛴 것이다. 그래서 §4-33의 두 문제
+(① `ShowSimpleUI`가 데스크톱 캔버스 좌표를 대입해 패널이 수백 m 밖으로 날아감,
+② 이미 `active=1`인 오브젝트에는 `SetActive(true)`가 no-op이라 `OnEnable`이 안 뜸)를
+**한 번도 드러내지 못했다.** "패널이 잘 뜬다"는 확인이 계속 나오는데도 실제 사용 경로는
+망가져 있었던 셈이다.
+
+**교훈**: 임시 트리거를 만들 때 편하다고 말단 API를 직접 부르면, 그 트리거로 아무리
+테스트해도 **정식 경로의 버그는 영원히 안 보인다.** 디버그 트리거는 정식 경로의
+**진입점**을 불러야 한다 — 여기서는 `UIManager.ShowXxx()`.
+
+대체품으로 `MRLegacyOpenDebugTrigger`(`Scripts/MR/Debug/`)를 만들었다. 반드시
+`UIManager`를 통해서만 열고, 연 뒤 패널의 월드 위치와 눈으로부터의 거리를 로그로 남겨
+좌표 텔레포트를 즉시 잡는다.
+
+**부수 효과**: 이 트리거를 붙이려고 `MRWorldUIDebugToggle`을 껐더니 캘린더를 열 수단이
+하나도 없다는 것이 드러났다. 정식 트리거(Phase 4-A)가 생기기 전까지 이 프로젝트에는
+**레거시 UI를 여는 손 입력이 존재하지 않는다.** 검증 계획을 세울 때
+"그래서 그걸 무엇으로 여는가"를 먼저 확인할 것.
+
+### 4-38. `anchoredPosition` 산술은 월드 스페이스에서 **미터**가 된다 ⭐
+
+`UIManager.RepositionTODOListBesideCalendar()`가 이렇게 되어 있었다:
+
+```csharp
+rootRect.anchoredPosition = calendarRect.anchoredPosition + new Vector2(340f, -10f);
+```
+
+데스크톱에서는 "캘린더 오른쪽 340px"이라는 뜻이다. 그런데 월드 스페이스로 전환한 패널들은
+각자 독립 캔버스라 부모가 `MR/WorldUI/Panels`(평범한 Transform, scale 1)다. 이때
+`anchoredPosition`은 사실상 그 부모 기준 로컬 위치이고, **1 단위 = 1 m**가 된다.
+
+**실측(2026-08-18)**: 캘린더에서 날짜를 누르면 TODOList가 눈에서 **339.65 m**에 놓였다.
+
+§4-36(캔버스 `TransformPoint`)과 원인이 **다르다**. 저쪽은 캔버스 스케일을 곱한 값이고,
+이쪽은 캔버스를 아예 거치지 않는 순수 로컬 좌표 산술이다. §4-36만 고치면 이건 그대로 남는다.
+
+> **일반화**: 월드 스페이스 전환 후에는 `anchoredPosition` / `localPosition` /
+> `sizeDelta`에 **픽셀 상수를 더하는 코드 전부**가 잠재적 폭탄이다. `TransformPoint`만
+> 찾아서는 안 되고, 패널 간 상대 배치를 계산하는 코드를 따로 훑어야 한다.
+
+**증상의 형태도 기억할 것**: "패널이 안 뜬다"로 보인다. 실제로는 떴는데 수백 m 밖이라
+안 보이는 것이다. `MRLegacyOpenDebugTrigger`가 열린 패널의 눈-거리를 로그로 남기는 이유다.
+
+### 4-39. `UIWidget.Show()`의 스케일 트윈은 호출부가 아니라 **위젯 자체**에서 막는다
+
+§4-30에서 `MRFloatingPanel.ShowUIWidgetIfPresent`가 `Show()`를 우회하도록 만들었지만,
+`UIManager`에는 **`uIWidget.Show()`를 직접 부르는 경로가 따로 있었다** —
+`ShowChatHistory()`, `ShowCharChange()`. 이들은 `ShowSimpleUI`조차 타지 않는다.
+그래서 실기에서 ChatHistory와 CharChange만 **화면을 뒤덮을 만큼 거대하게** 떴다
+(0.0005 → 1, 약 2000배).
+
+호출부를 하나씩 고치는 대신 `UIWidget.Show()`/`Close()` 안에서 `#if UNITY_ANDROID && !UNITY_EDITOR`로
+**스케일 트윈만 제외**했다. 표시/숨김은 `CanvasGroup.alpha`가 이미 담당하므로 기능 손실이 없고,
+앞으로 새로 생기는 호출부도 자동으로 안전해진다.
+
+> **교훈**: "래퍼에서 우회한다"는 대응은 **래퍼를 거치지 않는 경로**를 놓친다.
+> 문제의 원인이 서드파티 컴포넌트 안에 있으면, 가능한 한 그 안에서 막는 편이 새는 곳이 없다.
+
+> **⚠ 후속 (2026-08-18) — 스케일을 만지는 곳은 셋이다.** `Show()`의 트윈만 막았더니
+> 이번엔 위젯이 **영구히 보이지 않았다.** `UIWidget.Awake()`(184행)가
+> `if (!IsVisible) m_RectTransform.localScale = Vector3.zero;` 로 스케일을 0으로 만드는데,
+> 원본은 `Show()`의 트윈이 그것을 1로 되돌리는 구조였다. 그 트윈을 없앴으니
+> **되돌릴 코드가 사라진 것이다.**
+>
+> 실기 증상이 헷갈린다: 로그상 위치는 완벽한데(`눈에서 0.71 m`) 아무 데서도 안 보인다.
+> 위치를 계속 의심하게 되지만 원인은 크기 0이다.
+>
+> | 위치 | 원본 동작 | MR |
+> |---|---|---|
+> | `Awake()` 184행 | 숨은 위젯 스케일 = 0 | **하지 않음** |
+> | `Show()` 250행 | 스케일 → 1 트윈 | 하지 않음 |
+> | `Close()` 297행 | 스케일 → 0 트윈 | 하지 않음 |
+>
+> **MR에서 위젯 가시성은 `CanvasGroup.alpha` 한 겹으로만 관리한다.**
+> 스케일은 씬에 저장된 값 그대로 두는 것이 규칙이다 — 세 곳 중 하나라도 빠뜨리면
+> 부풀거나(1) 사라진다(0).
+
+### 4-40. 표시(`Show`)와 배치를 분리했으면 **최초 표시의 회전**을 따로 챙겨야 한다 ⭐
+
+§4-33 해법으로 `Show()`(표시만) / `Open()`(표시+최초 배치)을 나눴는데, 레거시 경로는
+`Open()`을 부르지 않는다 — `SetActive(true)` → `OnEnable` → `Show()`만 탄다.
+그 결과 **위치는 MR 좌표로 잡히는데 회전은 씬에 저장된 에디터 회전 그대로** 남았다.
+
+실기 증상(2026-08-18): **모든 UI가 180도 돌아서 나온다.** 에디터에서 패널을 배치할 때의
+방향이 사용자가 지금 보는 방향과 무관하니 당연한 결과인데, 증상이 "전부 다"라서
+빌보드 공식이 틀렸다고 의심하기 쉽다.
+
+**빌보드 공식은 죄가 없었다.** `MRFloatingPanel.FaceCameraYAxisOnly`는
+`MRPanelGrabTransformer` / `MRLazyFollowHUD`와 부호가 같다
+(`LookRotation(패널 - 눈)`, §4-20 관례).
+
+> **⚠ 정정 (2026-08-22) — 여기 원래 `MRBalloonWorldFollow`도 "부호가 같다"고 적혀 있었는데
+> 틀렸다.** 그 파일만 `LookRotation(눈 - 패널)`로 **부호가 반대**였고, 그래서 말풍선이
+> 사용자를 등지고 떴다. *"세 곳을 대조해 확인했다"*고 써놨지만 실제로는 대조가 안 된 것이다.
+>
+> 같은 오브젝트에 붙은 `MRPanelGrabTransformer`는 올바른 부호라, **grab하는 순간
+> 말풍선이 180도 홱 도는** 증상이 함께 났다. 2026-08-22에 코드를 고쳤다.
+>
+> **교훈**: *"여러 곳을 대조해 확인했다"*는 **서술 자체는 검증이 아니다.**
+> 문서를 믿지 말고 손댈 때마다 `grep`으로 실제 식을 다시 본다.
+>
+> 올바른 부호를 쓰는 네 곳 (2026-08-22 실측):
+> `MRFloatingPanel.FaceCameraYAxisOnly` · `MRPanelGrabTransformer` ·
+> `MRLazyFollowHUD.FaceEye` · `MRBalloonWorldFollow.ApplyFollow`
+
+**해결**: `OnEnable`에서 저장된 포즈가 없으면(= 최초 표시) **회전만** 사용자 쪽으로 맞춘다.
+위치는 호출자가 정한 값을 쓰고, `_hasBeenPlaced`를 세워 이후 `Open()`이 다시 옮기지 않게 한다.
+
+> **일반화**: 책임을 쪼갤 때는 **쪼갠 조각을 아무도 호출하지 않는 경로**가 생기지 않는지
+> 확인할 것. 여기서는 "배치"가 레거시 경로에서 통째로 빠졌다.
+
+### 4-41. 런타임 생성 UI는 **리스트가 아니라 실제 자식**을 진실의 원천으로 삼는다 ⭐
+
+`MRJarvisCalendarUI.EnsureDayButtons()`가 `dayButtons.Count < 42`일 때만 채웠다.
+리스트는 컴포넌트 인스턴스에 딸려 있고 생성된 자식은 `daysRoot`에 남으므로,
+리스트가 비워진 채 다시 채워지면 **자식만 42개 더 늘어난다.**
+
+실측(2026-08-18): `dayButtons=42` 인데 `daysRoot.childCount=84`.
+7열 그리드에 84칸 → 12행 → **캘린더 높이가 정확히 2배**가 되고 두 달치처럼 보였다.
+
+레이아웃 파라미터(7열 고정, 셀 38px, 패널 288px)는 전부 정상이라 **정적 분석으로는
+절대 안 나온다.** 진단 로그로 실제 자식 수를 찍어서야 잡혔다.
+
+**해결**: 실제 자식에서 컴포넌트를 수집해 리스트를 재구성하고, 42개를 넘으면 파괴한다.
+파괴 전에 `SetParent(null)`로 계층에서 먼저 떼어낼 것 — `Destroy`는 프레임 끝에 실행되므로
+같은 프레임의 다음 갱신이 아직 살아 있는 자식을 다시 센다.
+
+> **진단 팁**: "크기가 이상하다"류는 레이아웃 설정을 아무리 봐도 안 나오는 경우가 많다.
+> `childCount` / `rect.size` / `lossyScale`을 한 줄 로그로 찍는 편이 훨씬 빠르다.
+
+### 4-42. `AddComponent` 폴백이 있는 코드는 **MR 포크를 무력화**한다 ⭐⭐
+
+`UIManager.EnsureTypedComponent<T>()`:
+
+```csharp
+T component = obj.GetComponent<T>();
+if (component == null)
+{
+    component = obj.AddComponent<T>();   // ← 없으면 런타임에 붙인다
+}
+```
+
+`ShowCalendar()`가 원본 `JarvisCalendarUI`를 요구하는데, 씬에는 MR 포크
+`MRJarvisCalendarUI`가 붙어 있다. **별개 클래스라 `GetComponent<JarvisCalendarUI>()`가
+못 찾고**, 그래서 데스크톱 원본이 런타임에 추가되어 **MR 포크와 나란히 돌아간다.**
+
+원본의 데스크톱 가정이 그대로 되살아난다 — §4-31에서 포크를 만든 이유가 통째로 무효가 된 것:
+
+| 원본의 동작 | 관측된 증상 |
+|---|---|
+| `gameObject.name = "Calendar"` (102행) | 이름이 바뀌어 `GameObject.Find("CalendarPicker")` 실패 |
+| `pickerRect.sizeDelta = targetSize` (264행) — `expandedSize`가 0 | rect가 (0,0)으로 붕괴 |
+| 날짜 버튼 42개를 자체 생성 | `daysRoot.childCount = 84` → 7열 그리드 12행 → **캘린더 높이 2배** |
+
+세 증상이 **하나의 원인**에서 나왔는데, 겉보기엔 완전히 다른 문제로 보인다.
+`MRJarvisCalendarUI`만 들여다보면 아무리 파도 안 나온다 — 실제로 세 라운드를 그렇게 썼다.
+
+**해결**: 호출부에 `#if UNITY_ANDROID && !UNITY_EDITOR` 분기를 넣어 **포크 타입을 요구**한다
+(`GetOrCreateTypedManagedUI<MRJarvisCalendarUI>`). 그러면 `GetComponent`가 씬의 포크를 찾아
+`AddComponent`가 아예 일어나지 않는다.
+
+> **일반화 — 포크를 만들 때마다 확인할 것**: MR 포크는 원본의 **서브클래스가 아니므로**
+> `GetComponent<원본>()` / `FindObjectOfType<원본>()` / `RequireComponent(원본)` 어디에도
+> 걸리지 않는다. 원본 타입을 이름으로 찾는 코드가 있으면 포크는 조용히 우회되고,
+> **폴백이 `AddComponent`라면 원본이 되살아나 포크와 동시에 돈다.**
+> 포크를 만들면 `grep`으로 원본 타입명을 전부 훑어 호출부를 함께 처리할 것.
+>
+> 현재 MR 포크는 `MRJarvisCalendarUI` 하나뿐이고, `JarvisTodoListUI`는 포크가 없어 안전하다.
+
+**진단 교훈**: "크기가 이상하다"를 세 라운드 동안 레이아웃 파라미터에서 찾았지만
+(7열 고정 ✅, 셀 38px ✅, 패널 288 ✅, ContentSizeFitter 없음 ✅) 전부 정상이었다.
+**정상인 것만 계속 확인된다면 보고 있는 대상이 틀린 것이다.** 그때는 파라미터를 더 파지 말고
+"이 값을 쓰는 코드가 하나뿐인가"를 물어야 한다.
+
+### 4-43. `Tools → MR → 9`는 6이 설정한 스케일을 **되돌린다** ⭐
+
+도구 9의 내부 순서는 `이동 → 6 → **스케일 복원** → 5 → 8`이다.
+
+```csharp
+// ⚠ Tools 6은 스케일을 자기 레시피 값(0.001)으로 덮어쓴다.
+// 패널 크기는 사용자가 수동으로 맞추기로 했으므로(2026-08-15 결정),
+// 6번 실행 전 값을 기억해뒀다가 여기서 그대로 되돌린다.
+```
+
+즉 **9를 돌리기 직전의 `localScale`이 최종 캔버스 스케일이 된다.**
+1인 채로 돌리면 `1 canvas px = 1 m`가 되어 160px 메뉴가 **160 m**로 뜬다.
+
+실제 사고(2026-08-18): DevionGames 위젯을 옮기면서 §4-3("계층 이동 후 스케일을 1로 리셋")을
+그대로 적용해 1로 맞춘 뒤 9를 돌렸다. §4-3은 **0.001 캔버스 *안으로* 옮길 때** 1000배로
+튀는 것을 되돌리라는 뜻인데, 이번은 반대로 0.75 캔버스에서 **밖으로** 꺼내는 경우라
+해당하지 않았다. 규칙을 조건 확인 없이 적용한 것이다.
+
+**올바른 순서**: 9를 돌리기 **전에** 원하는 최종 스케일(대개 0.001 근처)을 넣어둔다.
+이미 잘못 돌렸다면 6을 단독으로 다시 돌리지 말 것 — 5·8이 따라오지 않아 §4-21이 된다.
+대신 **스케일만 손으로 고치고 런타임 보정 컴포넌트에 맡긴다**:
+
+| 구운 값 | 런타임 보정 |
+|---|---|
+| 잡기 띠 (`GrabFrame`/`Bar_*`) | `MRGrabFrameFitter` (8이 자동 부착, §4-26) |
+| 판정 면 (`HandInteraction`/`BoundsClipper`) | `MRHandInteractionFitter` (수동 부착, §4-35) |
+
+> **일반화**: "스케일을 1로 리셋"은 §4-3의 **특정 상황**(작은 스케일 캔버스 안으로 이동)에만
+> 맞는 처방이다. 계층 이동은 방향에 따라 결과가 정반대다 — 어느 쪽으로 옮기는지 먼저 볼 것.
+
+### 4-44. DevionGames 위젯의 "열림" 신호는 활성화가 아니라 **alpha 상승**이다 ⭐
+
+`UIWidget.Close()`는 **GameObject를 비활성화하지 않는다** — `CanvasGroup.alpha`만 0으로
+트윈한다. 그래서 한 번 열린 위젯은 계속 활성 상태로 남고, 다음 `Show()`의
+`gameObject.SetActive(true)`는 no-op이 되어 **`OnEnable`이 다시 뜨지 않는다.**
+
+§4-34("이미 active면 SetActive가 no-op")와 같은 함정이 위젯 쪽에서 재현된 것이다.
+실기 증상(2026-08-18): 컨텍스트 메뉴가 **첫 열기만** 사용자 정면에 뜨고, 이후로는
+처음 뜬 자리에 계속 남았다. `OnEnable`에 배치를 걸어둔 것이 원인이었다.
+
+**해결**: `MRFloatingPanel`이 `LateUpdate`에서 `CanvasGroup.alpha`의 0 → 양수 상승을
+감시해 그때 배치한다(`placeInFrontOnShow`). 호출부를 모르는 위젯(Tooltip처럼 임의의
+코드가 여는 것)까지 한 번에 커버된다.
+
+> **일반화**: 서드파티 UI에 훅을 걸 때는 **그 UI가 실제로 무엇을 토글하는지** 먼저 볼 것.
+> 활성 상태 / 캔버스 enabled / CanvasGroup alpha / 스케일 — DevionGames는 이 중
+> **alpha**를 쓴다. 엉뚱한 신호에 걸면 "첫 번째만 되고 그다음부터 안 되는" 증상이 나온다.
+
+> **⚠ 정정 (2026-08-19) — "비활성화하지 않는다"는 코드의 성질이 아니라 인스펙터 값이었다.**
+> `UIWidget`에는 `m_DeactivateOnClose`가 있고 **스크립트 기본값은 `true`**다
+> (alpha 트윈 완료 콜백에서 `gameObject.SetActive(false)`). 그런데 이 씬에는 위젯 5개가 전부
+> **`0`으로 저장**돼 있어서 안 꺼졌던 것이다.
+>
+> **그래도 켜지 말 것.** `WidgetUtility.Find`가 `FindObjectsOfType<Canvas>()`(**활성만**)를
+> 훑는데 위젯의 Canvas는 위젯 자신에게 붙어 있다 — 꺼지면 조회가 실패해
+> `Context Menu Sub`(`ContextMenu.cs:18,146`)와 `Tooltip`(`TooltipTrigger.cs:57`)을
+> **다시 열 수 없다.** 인스펙터 직접 참조로 여는 `Context Menu`/`Radial Menu Action`만 안전하다.
+> 대신 `MR_Phase4A_Input_Plan.md` §8-7의 "히트박스 자식만 토글" 방식을 쓴다.
+
+**위젯 인스펙터 설정**: `Place In Front On Show` **켬** + `Show On Enable` **끔**.
+
+> ⚠ **가시성 게이트를 두 겹으로 두지 말 것.** `MRFloatingPanel.Awake()`가
+> `panelCanvas.enabled = false`로 시작하는데, `Show On Enable`까지 끄면 `Show()`가 영영
+> 불리지 않아 **캔버스가 계속 꺼진 채로 남는다.** `UIWidget.Show()`는 alpha와 활성 상태만
+> 건드리고 Canvas 컴포넌트의 `enabled`는 MR 코드만 만지므로, alpha가 1이 돼도 아무것도
+> 렌더링되지 않는다 — 실기에서 "위젯이 사방 어디에도 안 보임"으로 나타났다(2026-08-18).
+>
+> 해결: `placeInFrontOnShow`가 켜진 패널은 `Awake()`에서 캔버스를 끄지 않는다.
+> 위젯의 가시성은 alpha 한 겹으로 충분하다.
+
+### 4-45. 데스크톱 매니저가 **매 프레임** UI 좌표를 덮어쓴다 — `ReviewedKeepTypes`가 최후 방어선 ⭐⭐
+
+실기 증상(2026-08-18): Radial Menu가 열리자마자 사라진다. 몇 번을 고쳐도 재현됐다.
+
+**먼저 "닫힘"과 "멀리 감"을 갈랐다.** `RadialMenu.Close()`에 `[MRRadialClose]` 로그를 심었더니
+**한 번도 찍히지 않았다** — 즉 닫힌 게 아니라 화면 밖으로 **이동**한 것이다. 이 한 줄이
+원인 후보의 절반을 잘라냈다. (그 전까지는 "누가 닫는가"만 쫓느라 두 번의 빌드를 낭비했다.)
+
+**원인**: `MenuTrigger.cs:539 UpdateRadialMenuActionPosition()`
+
+```csharp
+m_RadialMenuAction.GetComponent<RectTransform>().anchoredPosition =
+    new Vector2(characterTransformPos.x,
+                characterTransformPos.y + 200 * SettingManager.Instance.settings.char_size / 100f + 100);
+```
+
+`char_size = 100`이면 `charY + 300`. 이게 `MenuTrigger.Update()`(cs:90)에서 **매 프레임** 불린다.
+MR에서 Radial Menu는 `WorldUI` 밑 **최상위 월드 캔버스(scale 1)**라 300 px가 아니라 **300 m**다.
+§4-36(패널 525 m), §4-38(TODOList 340 m)에 이은 **세 번째** 같은 계열 사고다.
+
+**왜 스트리퍼가 안 껐나**: `MRSceneStripper`에서 `typeof(MenuTrigger)`가
+`ReviewedKeepTypes`(=검토했고 유지하기로 함)에 들어 있었다. 실제로 컴포넌트를 끄는
+`StripSceneManagers()`는 **`DesktopOnlyTypes`만** 본다. 2026-08-18에 두 타입을 옮겼다.
+MR에서 캐릭터 메뉴 소환은 `MRIntentRouter`가 대신한다.
+
+> ⚠ **이 이동만으로는 안 고쳐졌다.** 실기에서 y=300이 그대로였다 — 이유는 §4-46.
+
+> **일반화 ①**: UI가 "사라진다"고 할 때 닫기 경로에 로그를 심어 **안 찍히는 것을 확인**하라.
+> 안 찍히면 그건 이동·스케일·클리핑 문제지 닫기 문제가 아니다. 증상 이름에 끌려가지 말 것.
+>
+> **일반화 ②**: `ReviewedKeepTypes`는 "괜찮다고 판단함"이지 "무해함이 증명됨"이 아니다.
+> 판단 기준을 명시한다 — **`Update`/`LateUpdate`에서 `anchoredPosition`·`position`·`localScale`을
+> 대입하는 컴포넌트는 무조건 `DesktopOnlyTypes`다.** 한 번 잘못 놓으면 매 프레임 덮어쓰기라
+> 어떤 MR 쪽 수정도 이길 수 없다.
+>
+> **일반화 ③**: 픽셀 상수를 트랜스폼에 그대로 대입하는 지점을 **한 번에 다 훑어라.**
+> `rg -n "anchoredPosition\s*=" Assets/Scripts Assets/Devion*` 로 목록을 뽑고,
+> 그 오브젝트가 MR에서 월드 캔버스 밑인지 확인한다. 한 건씩 실기로 잡으면 빌드 한 번씩 든다.
+
+**전수 감사 결과(2026-08-18, 코드 확인됨).** `Update()` 안에서 `anchoredPosition`을 대입하는
+컴포넌트는 아래 9개다. **전부 `ReviewedKeepTypes`에 있다.**
+
+| 컴포넌트 | 대입 위치 | 대상 |
+|---|---|---|
+| `ChatBalloonManager` | `Update():186 → UpdateChatBalloonPosition():307` | 채팅 말풍선 |
+| `AnswerBalloonManager` | `Update():72 → :271` | 답변 말풍선 |
+| `AnswerBalloonSimpleManager` | `Update():57 → :210` | 답변(심플) |
+| `AskBalloonManager` | `Update():79 → :138` | 질문 말풍선 |
+| `PortraitBalloonSimpleManager` | `Update():47, 67 → :134` | 포트레이트 말풍선 |
+| `SubChatBalloonController` | `Update():70 → :104` | 서브 채팅 |
+| `SubAnswerBalloonSimpleController` | `Update():63 → :173` | 서브 답변(심플) |
+| `SubAnswerBalloonManager` | `Update():79 → :248` | 서브 답변 |
+| ~~`MenuTrigger` / `MenuTriggerKAI`~~ | `Update():90 → :539` | Radial Menu — **처리됨** |
+
+> **⚠ 위 서술은 낡았다 — 2026-08-22에 예고된 사고가 실제로 터졌다.**
+>
+> 원래 여기 *"말풍선들은 아직 데스크톱 메인 Canvas 밑이라 지금은 증상이 없다.
+> 위험한 순간은 그 오브젝트를 `WorldUI`(scale 1)로 올리는 때다"*라고 적혀 있었다.
+> **그 뒤 말풍선들은 `MR/WorldUI/Balloons`로 이미 올라왔고**(Phase 3-2),
+> 예고된 대로 `Image_AnswerBalloonSimple`이 잡는 순간 300 m로 날아갔다.
+>
+> **처리 결과 (2026-08-22)** — `GetBalloonAnchoredPosition`을 쓰는 4곳 전부에
+> `#if UNITY_ANDROID || UNITY_EDITOR → return` 가드를 넣어 **대입 자체를 막았다.**
+>
+> | 매니저 | 상태 |
+> |---|---|
+> | `AnswerBalloonManager` | **이미 가드가 있었다** — 다만 매 프레임 `FindFirstObjectByType`라 `#if`로 통일 |
+> | `AnswerBalloonSimpleManager` | 가드 신설 |
+> | `AskBalloonManager` | 가드 신설 |
+> | `SubAnswerBalloonManager` | 가드 신설 (`...ByPosition` 쪽) |
+>
+> **4곳 중 1곳만 고쳐져 있었던 것이 이 사고의 뿌리다.** 상세는 **§4-59**.
+> 나머지 말풍선(`ChatBalloonManager` · `EmotionBalloonManager` · `NoticeBalloonManager` ·
+> `PortraitBalloonSimpleManager` · `SubChatBalloonController` 등)은 `GetBalloonAnchoredPosition`을
+> 쓰지 않지만 **각자 다른 경로로 `anchoredPosition`을 대입한다** — 위 표 참고. 아직 미처리다.
+
+**남은 위험**: 위 표의 나머지 매니저들도 `Update()`에서 `anchoredPosition`을 대입한다.
+그 말풍선을 월드로 올리거나 grab 대상으로 만들 때 같은 사고가 난다.
+
+> **말풍선을 World Space로 올릴 때의 체크리스트 (2026-08-22 개정)**
+> 1. 위 표에서 해당 매니저를 찾는다.
+> 2. **값을 고치지 말고 대입을 막는다** — `#if UNITY_ANDROID || UNITY_EDITOR → return`.
+>    (§4-59: 값만 바꾸면 증상이 "300 m로 날아감"에서 "부모 원점으로 눌림"으로 바뀔 뿐이다.)
+> 3. 배치는 `MRBalloonWorldFollow` **하나만** 담당하게 한다.
+> 4. **형제 호출부를 `grep`으로 전부 찾는다.** 한 곳만 고치면 나머지가 나중에 터진다.
+>
+> `OperatorMenuTrigger`도 같은 `+300` 코드를 갖고 있지만 **현재 씬에 없다**(guid 미참조).
+> 나중에 들어오면 같이 처리할 것.
+
+### 4-46. 런타임 `AddComponent`는 **Awake 1회 스트리핑을 그냥 통과한다** ⭐⭐⭐
+
+§4-45의 타입 이동 후에도 라디얼 메뉴의 y는 **여전히 300**이었다. 목록은 맞았는데
+**스트리퍼가 그 컴포넌트를 볼 기회가 없었다.**
+
+```
+MRSceneStripper.Awake()        실행 순서 -10000 → 씬 전수 순회 1회 → MenuTrigger 비활성화 ✔
+KAIManager.Start()             실행 순서 0(기본) → SweepMenuTriggers()
+                                 └ go.AddComponent<MenuTriggerKAI>()   ← 방금 태어남. enabled=true
+                                 └ Destroy(trigger)                    (원본 MenuTrigger 제거)
+```
+
+새로 붙은 `MenuTriggerKAI`는 1차 패스가 끝난 **뒤에** 생겼으므로 한 번도 검사되지 않는다.
+그리고 `MenuTriggerKAI.cs:412`에는 `MenuTrigger.cs:539`와 **글자 그대로 같은** `+300` 코드가 있다.
+기존 안전망(`SafetySweepCharacterComponents`)은 `CharacterDesktopTypes`만 훑어서 이걸 못 잡았다.
+
+**보강 (`MRSceneStripper`)**
+
+| 시점 | 무엇 | 실측 결과 |
+|---|---|---|
+| `Awake()` | 1차 전수 패스 | 86개 (씬에 직렬화된 것) — `MenuTriggerKAI`는 **0개** |
+| 첫 프레임 `LateUpdate()` | 2차 전수 패스 | **0개** ← 예상과 달랐다 |
+| 캐릭터 교체 감지 시 | 전수 패스 | — |
+| 안전망 (`DesktopOnlyTypes`로 확장) | 주기 스윕 | **`MenuTriggerKAI` 6개 전부 여기서 잡힘** |
+
+**"`LateUpdate`는 모든 `Start()` 뒤에 돈다"는 추론이 틀렸다** — 정확히는 *그 프레임에
+활성이던 컴포넌트의* `Start()` 뒤다. `KAIManager.Start()`는 첫 프레임보다 **늦게** 돌았고
+(게임오브젝트가 나중에 켜지는 구조), 그래서 2차 패스도 빈손이었다.
+`GameManager`처럼 씬에 원래 있던 오브젝트조차 그랬다.
+
+**최종 보강**: 기동 직후 `earlyWindowSeconds`(20초) 동안 안전망 주기를
+`earlySweepInterval`(0.25초)로 촘촘하게 돌리고, 그 뒤 `safetySweepInterval`(5초)로 되돌린다.
+"언제 도는지 모르는 초기화"를 상대로 실행 순서를 추론하는 대신 **짧은 주기로 덮는** 쪽을 택했다.
+
+`Disable()`은 컴포넌트를 지우지 않고 `enabled=false`로만 두므로, `KAIManager`의
+`GetComponent<MenuTriggerKAI>() == null` 검사에 걸려 **다시 붙지 않는다.**
+
+> **일반화 ①**: "타입 목록"식 스트리핑은 **언제 스캔하는가**가 목록만큼 중요하다.
+> `Awake` 1회 스캔은 *씬에 저장된 것*만 커버한다. 런타임에 컴포넌트를 만드는 코드
+> (`AddComponent`, 프리팹 Instantiate, 캐릭터 스폰)가 있으면 **반드시 늦은 패스가 필요하다.**
+>
+> **일반화 ②**: `[DefaultExecutionOrder(-10000)]`은 "가장 먼저"를 보장할 뿐
+> "가장 나중까지 유효"를 보장하지 않는다. 오히려 **먼저 돌수록 나중에 생긴 것을 놓친다.**
+> 먼저 돌아야 하는 일(비활성화)과 늦게 확인해야 하는 일(누락 감사)을 분리할 것.
+>
+> **일반화 ②-a**: Unity 생명주기 순서로 "이때면 다 끝났다"를 **추론하지 말 것.**
+> 오브젝트가 나중에 켜지면 그 컴포넌트의 `Awake`/`Start`도 나중에 돈다. 확실한 시점이
+> 없으면 **한 번의 늦은 패스가 아니라 짧은 주기의 반복 패스**로 덮어라.
+> (그리고 그 패스가 실제로 몇 개를 잡았는지 **로그로 세라** — 이 사고는 "2차 패스 0개"라는
+> 숫자 한 줄이 없었으면 잘못된 원인을 확정할 뻔했다.)
+>
+> **일반화 ③**: 데스크톱 코드가 `Xxx` / `XxxKAI`처럼 **쌍으로 존재**하면 한쪽만 목록에 넣는
+> 실수가 난다. `rg "class \w+KAI"` 로 짝을 확인하고, 문제 코드는 **양쪽 파일을 같이** 볼 것
+> (`MenuTrigger.cs:539` ↔ `MenuTriggerKAI.cs:412` — 동일한 `+300`).
+
+### 4-47. 잡기 영역과 판정 면은 **같은 영역 계산을 공유해야** 한다 ⭐
+
+실측(2026-08-18): 라디얼 메뉴가 정상 위치에 뜬 뒤 — **버튼은 눌리는데 잡기 판이 뻗어나온
+5개 항목을 다 안 감싼다.** 딱 절반만 되는 비대칭이었다.
+
+원인은 두 피터가 **다른 영역 정의**를 쓰고 있었기 때문이다.
+
+| | 영역 정의 | 결과 |
+|---|---|---|
+| `MRHandInteractionFitter` | 패널 `rect` **∪ 자식들의 실제 경계** | 항목까지 덮음 → 포크 정상 |
+| `MRGrabFrameFitter` (수정 전) | 패널 `rect` **만** | 가운데만 덮음 → 잡기 부족 |
+
+`RadialMenu`는 항목을 **원형으로 뻗어서** 배치하므로 자식들이 자기 `rect` 밖에 있다.
+(씬 저장값이 `0 × 0`인 것과 같은 이유 — §4-35.)
+
+**수정**: `MRGrabFrameFitter`에 `ComputeContentBounds()`를 이식하고 `refitInterval`(0.25s)
+폴링을 추가했다. `OnEnable` 한 번으로는 안 된다 — 항목은 **연 뒤에** 생기기 때문이다.
+자기 자신(`GrabFrame`)과 판정 면(`HandInteraction`)은 계산에서 제외한다.
+
+> **일반화**: 같은 패널에 대해 "이 영역이 어디까지인가"를 계산하는 코드가 **둘 이상**이면
+> 반드시 어긋난다. 증상은 "A는 되는데 B만 안 되는" 비대칭으로 나타난다 —
+> 그런 비대칭을 보면 **두 경로가 같은 값을 보고 있는지부터** 확인할 것.
+> (지금은 계산이 복붙으로 두 벌이다. 세 번째 소비자가 생기면 공용 헬퍼로 뽑을 것.)
+### 4-48. 프리팹·씬을 파싱해 콜라이더 크기를 읽을 때 두 번 틀린다 ⭐
+
+2026-08-19에 같은 캡슐을 **두 번 연속 잘못 읽었다.** 둘 다 "컴포넌트 블록만 보고 결론"이 원인이다.
+
+**① 트랜스폼 스케일을 곱하지 않았다.**
+
+```
+CapsuleCollider  m_Radius: 0.5  m_Height: 1        ← 이것만 읽으면 "반경 0.5 m, 높이 1 m"
+Collider(자식)   localScale (0.5, 1.66, 0.5)
+Aico(루트)       localScale 120   × 픽셀 공간 래퍼 1/120 = 월드 1
+```
+
+실제는 **반경 0.25 m, 높이 1.66 m**다. Unity의 캡슐 스케일 규칙은
+**반경 = `m_Radius` × max(|scale.x|, |scale.z|), 높이 = `m_Height` × scale.y**(direction Y).
+이 프로젝트는 §4-1 때문에 스케일이 120과 1/120으로 겹겹이 걸려 있어 특히 위험하다.
+
+**② `m_LocalPosition`을 위치로 믿었다 — 그 오브젝트는 RectTransform이었다.**
+
+`m_LocalPosition: {x:0, y:0, z:0}`을 보고 "캡슐 중심이 캐릭터 루트 원점"이라고 단정했고,
+거기서 "VRM 루트가 발밑이니 캡슐이 허리까지만 올라온다"는 **틀린 진단**을 만들어냈다.
+`Collider`는 **RectTransform(type 224)**이라 실제 위치는 `m_AnchoredPosition`이 결정한다.
+실측하니 캡슐은 발끝(0.00)부터 머리(1.66)까지 몸 전체를 덮고 있었다.
+
+3D 콜라이더에 RectTransform이 붙어 있는 것 자체가 비정상적인 구성(데스크톱 UI 시절의 잔재)이라
+더 놓치기 쉽다. **YAML에서 트랜스폼을 볼 때 `--- !u!4`(Transform)인지 `!u!224`(RectTransform)인지
+먼저 확인할 것.**
+
+> **일반화**: 정적 파싱으로 얻은 치수는 **런타임 `bounds` 한 줄보다 약하다.**
+> `Collider.bounds` / `Renderer.bounds`를 로그로 찍으면 스케일·앵커·피벗이 전부 반영된
+> 최종 값이 나온다. 프리팹 YAML로 치수를 추론하는 것은 로그를 뽑을 수 없을 때의 차선책이고,
+> **그 추론 위에 설계를 얹기 전에 반드시 로그로 확인할 것.**
+> (이번에는 확인 절차를 넣어둔 덕에 잘못된 진단이 코드 수정으로 이어지기 전에 걸렸다.)
+
+
+### 4-49. `CanvasGroup.blocksRaycasts`는 **물리 콜라이더를 막지 못한다** ⭐
+
+실기 증상(2026-08-19): 컨텍스트 메뉴·라디얼 메뉴가 **사라진 뒤에도 그 자리가 레이를 가로챈다.**
+
+`UIWidget.Close()`는 `m_CanvasGroup.blocksRaycasts = false`를 세팅한다. 얼핏 "입력이 막혔다"로
+읽히지만 그것은 **uGUI 그래픽 레이캐스트만** 막는다. MR에서 UI에 붙어 있는 것은 그게 전부가 아니다.
+
+| 무엇 | `CanvasGroup`이 막나 |
+|---|---|
+| uGUI `Graphic` 레이캐스트 (버튼·이미지) | ✅ |
+| `GrabPlate`의 `BoxCollider` (물리) | ❌ |
+| `HandInteraction`의 `BoundsClipper`/`PlaneSurface` (ISDK) | ❌ |
+| `RayInteractable` / `HandGrabInteractable` | ❌ |
+
+즉 **투명해진 패널이 통째로 유령 콜라이더가 된다**(§4-32는 조각 몇 개였지만 이쪽은 패널 전체다).
+증상이 "안 보이는데 뭔가 막는다"라서 원인을 UI 쪽에서 찾게 되는데, 실제 원인은 물리·ISDK 계층이다.
+
+> **일반화**: MR로 옮긴 UI의 "숨김"은 **적어도 세 계층**이다 —
+> 렌더링(alpha/Canvas.enabled), uGUI 입력(`blocksRaycasts`), **물리·ISDK 판정(콜라이더/판정 면)**.
+> 서드파티 위젯의 `Close()`는 앞의 둘까지만 안다. 세 번째는 MR 코드가 따로 꺼야 한다.
+> `MRFloatingPanel.hideInteractionWhenTransparent`가 alpha를 따라 그 자식들을 토글한다.
+>
+> **되살릴 때 주의**: "일부러 꺼둔 것"과 "닫혀서 꺼진 것"을 구분해야 한다. `Tooltip`은
+> 조준을 방해하지 않으려고 판정 면을 **영구히** 꺼둔 상태다(4-A 설계서 §8-2).
+> 토글 대상은 **첫 적용 시점에 활성이던 자식만**으로 한정한다.
+
+
+### 4-50. `FindFirstObjectByType` 폴백은 대상을 **비활성으로 저장하는 순간** 조용히 사라진다 ⭐
+
+"런타임에 스스로 찾으니 인스펙터 배선은 선택 사항"이라는 판단은 **대상이 항상 활성일 때만**
+성립한다. `FindFirstObjectByType` / `FindObjectsByType`는 기본적으로 **비활성 오브젝트를
+반환하지 않는다** (`FindObjectsInactive.Include`를 명시해야 포함된다).
+
+4-A의 실제 사례: 시스템 메뉴 패널을 시작 시 유령 히트박스(§4-49) 때문에 GameObject 비활성으로
+저장하기로 했는데, `MRIntentRouter.ResolveRefs()`가 바로 이 API로 `MRSystemMenuController`를
+찾고 있었다. 인스펙터를 비워두면 **메뉴가 영영 안 열린다.** 그런데 증상은 컴파일 에러도
+NRE도 아니고 `"MRSystemMenuController가 씬에 없습니다"` 경고 한 줄이라, 씬에 멀쩡히
+있는 오브젝트를 놓고 "없다"는 로그를 읽게 된다.
+
+> **일반화**: 자동 탐색 폴백은 **편의 장치이지 보증이 아니다.** 어떤 오브젝트를 비활성으로
+> 저장하기로 결정했다면, 그 오브젝트를 가리키는 **모든 폴백 탐색을 같이 점검**하고
+> 인스펙터 참조로 승격시킬 것. 반대로 폴백에 의존할 생각이면 **비활성 저장을 포기**해야 한다.
+> 둘 중 하나만 골라야 하는데, 서로 다른 절에서 따로 결정되기 때문에 어긋나기 쉽다.
+>
+> 씬을 만드는 Editor 도구라면 **폴백 배선에 성공했을 때만 비활성으로 저장**하도록 짜면
+> 이 조합을 코드로 강제할 수 있다 (`MRSystemMenuBuilder`가 그렇게 한다).
+
+### 4-51. 널 가드가 있는 참조일수록 **배선 누락이 실기까지 살아남는다** ⭐
+
+`?.`과 `if (X != null)`은 크래시를 막아주는 대신 **부재를 무증상으로 만든다.**
+예외도, 로그도, 붉은 줄도 없이 **그냥 아무 일이 안 일어난다.**
+
+4-A 실사례 — 시스템 메뉴를 만들고 인스펙터 참조가 **15/16**으로 찼다.
+"기본값이라 괜찮겠지"로 넘길 뻔했는데, 그 한 칸이 가리키던 것은:
+
+```csharp
+WireButton(rescanButton, () => spatialAnchorEditor?.LaunchSceneCapture());   // 버튼 4개
+if (MRJukebox.Instance != null) MRJukebox.Instance.Volume = v;               // 볼륨 슬라이더
+```
+
+`MRSpatialAnchorEditor`와 `MRJukebox`가 **작업 씬에 아예 없었다**(둘 다 `MRSampleScene`에만
+있고, 프리팹에도 런타임 생성 코드에도 없다). 즉 **10개 컨트롤 중 5개가 조용히 죽어 있었다.**
+실기에서 만났다면 원인을 방금 만든 패널에서 찾았을 것이다 — 실제 원인은 씬 구성이다.
+
+> **체크 규칙 세 개**
+> 1. **`n/N`이 안 차면 반드시 하나씩 이유를 댈 것.** "기본값이니 괜찮다"는 이유가 아니다.
+> 2. **상위 문서가 "내용물이 다른 씬에 있다"고 적어뒀다면 그것은 작업 항목이다.**
+>    Port Plan §7이 그렇게 써뒀는데 어느 Phase에도 배정되지 않아 8일 넘게 방치됐다.
+>    (§4-17의 "번복 전파 누락"과 같은 계열 — 이번엔 번복이 아니라 **미배정**이다.)
+> 3. **없는 기능은 회색 처리하지 말고 아예 그리지 않는다.** 대신 **건너뛴 것을 로그에 남긴다.**
+>    조용한 축소는 "다 만들어졌다"로 읽힌다. 씬을 만드는 Editor 도구라면 대상 컴포넌트
+>    존재 여부로 구역을 조건부 생성하면 된다 — 나중에 컴포넌트가 들어왔을 때
+>    **재실행만으로 되살아난다**(`MRSystemMenuBuilder`가 그렇게 한다).
+
+### 4-52. 플래그 하나에 두 의미를 담으면 **반드시** 재발한다 ⭐⭐
+
+`MRFloatingPanel.placeInFrontOnShow`가 두 가지를 겸하고 있었다:
+
+```csharp
+// ① 배치: alpha가 오르면 사용자 정면으로 옮긴다
+// ② 위젯 모드: Awake에서 캔버스를 끄지 않는다
+if (panelCanvas != null && !placeInFrontOnShow) panelCanvas.enabled = false;
+```
+
+서브 컨텍스트 메뉴는 `ShowNextTo()`가 월드 좌표를 직접 잡아주므로 ①이 필요 없다.
+그래서 껐더니 ②까지 같이 꺼져 **캔버스가 죽고 메뉴가 영영 보이지 않았다**(2026-08-19 실기).
+증상은 "메뉴를 불러도 안 보임"인데 원인은 배치 플래그다 — 이름만 봐서는 연결이 안 된다.
+
+**고친 방법**: 위젯 여부를 `GetComponent<UIWidget>() != null`로 **따로** 판정한다.
+씬 재작업 없이 5개 위젯 전부에 적용되고, `placeInFrontOnShow`는 배치만 담당하게 된다.
+
+> **이건 재발이다.** 4-A 설계서 §8-4(b)에서 `holdFired`(탭 소비)와 `holdIsDrag`(드래그 중)를
+> 분리하며 *"하나의 플래그에 두 가지 의미를 담으면 나중에 붙는 소비자가 그중 원하지 않는
+> 쪽까지 받는다"*고 일반화해 놨는데, **하루 만에 다른 파일에서 똑같이 당했다.**
+>
+> **점검 규칙**: `if (!flag)` 안에 flag 이름과 무관한 일이 들어 있으면 의미가 둘이다.
+> 플래그를 끄기 전에 **그 플래그를 읽는 모든 곳**을 먼저 grep할 것.
+> 특히 남이 만든 플래그를 "필요 없어 보여서" 끌 때가 위험하다.
+
+### 4-53. MR 포크는 **성질이 아니라 호출부마다** 걸어야 한다 ⭐⭐
+
+`UIWidget.Show()`의 스케일 복원 트윈은 MR에서 제거했다(월드 패널 0.001을 `Vector3.one`으로
+트윈하면 1000배로 부푼다, §4-30/§4-39). 그러면 **"스케일을 0으로 만드는 코드"도 전부 같이
+막아야 한다** — 되돌릴 코드가 사라졌기 때문이다.
+
+`UIWidget.OnEnable`은 `#if UNITY_ANDROID`로 가드해 뒀는데, **`ContextMenu.ShowNextTo()`의
+같은 한 줄은 놓쳤다**:
+
+```csharp
+m_CanvasGroup.alpha = 0f;
+m_RectTransform.localScale = Vector3.zero;   // ← 가드 없음
+base.Show ();
+```
+
+결과: 서브메뉴가 **뜨긴 하는데 크기가 0**이라 안 보였다. Chat / Mode를 눌러도 아무 일이
+없는 것처럼 보였고, 8일 넘게 "서브메뉴는 원래 안 되나 보다"로 방치돼 있었다.
+
+> **일반화**: 서드파티에 포크를 넣을 때 *"이 클래스는 이제 이렇게 동작한다"*로 생각하면
+> 안 된다. 포크는 **줄 단위로만 걸린다.** 어떤 동작(스케일 복원)을 제거했다면
+> **그 동작에 의존하던 모든 호출부**를 grep해서 같이 처리할 것:
+>
+> ```bash
+> grep -rn "localScale = Vector3.zero" "Assets/Devion Games"
+> ```
+>
+> 제거한 동작의 **역함수를 호출하는 쪽**이 검색 키워드다.
+
+### 4-54. hover 의미론은 MR로 옮길 수 없다 — 진동 루프가 된다 ⭐
+
+DevionGames `ContextMenu`는 서브메뉴를 `onEnter`(hover)와 `onTrigger`(click) **양쪽**에
+걸어둔다. MR에서 hover 쪽을 살려두면:
+
+```
+레이가 항목에 진입 → onEnter → 서브메뉴 열림 → 서브메뉴 판정 면이 레이를 가로챔
+→ 부모 항목에 onExit → 서브메뉴 닫힘 → 레이가 되돌아옴 → onEnter → …
+```
+
+실기 2026-08-19: 하위 메뉴가 있는 항목을 겨누면 **조준점이 0.5초 주기로 튀어** 항목을
+고를 수 없었다. 데스크톱은 커서가 서브메뉴 위로 "이동"하면 루프가 끊기지만, MR의 레이는
+부모 항목과 서브메뉴 사이를 **연속적으로 지날 수 없다.**
+
+§4-13("`PointableCanvasModule`에는 전역 마우스 좌표가 없다")과 같은 뿌리다.
+**MR에서는 hover 기반 진입점을 전부 클릭으로 바꾼다.**
+
+> 곁가지로 하나 더: 독립 월드 캔버스끼리 상대 배치를 할 때
+> **오프셋을 자기 부모의 회전으로 변환하면 안 된다.** 데스크톱은 두 위젯이 같은 캔버스
+> 안이라 부모 회전 = 대상 평면이었지만, MR은 위젯마다 독립 캔버스라 회전이 제각각이다.
+> `ShowNextTo`가 그래서 서브메뉴를 **뒤로 꺾어** 놓고 있었다 —
+> **대상(부모 항목)의 회전에 맞춘 뒤 그 평면에서 밀 것.**
+
+### 4-55. 씬 GUID 카운트 0은 "없다"가 아니다 — 프리팹 인스턴스의 내용물은 씬 파일에 없다 ⭐⭐
+
+§4-14가 확립한 절차("GUID로 씬을 파서 인스턴스 수를 센다")에는 **조건이 하나 빠져 있었다.**
+그 절차는 **씬에 직렬화된 컴포넌트**만 센다. 프리팹 인스턴스(`--- !u!1001`)로 들어온
+오브젝트의 컴포넌트는 **프리팹 자산 파일 안에 있고 씬 파일에는 존재하지 않는다.**
+
+**실제 사례 (2026-08-21, Phase 4-C 착수 실측)** — `SampleSceneKAI-MR.unity`를 GUID로 세니:
+
+| 타입 | 씬 카운트 | 진실 |
+|---|---|---|
+| `Hand` / `HandRef` / `OVRHand` / `HandVisual` / `SyntheticHand` | **전부 0** | 프리팹 안에 존재 |
+| `RayInteractor` / `PokeInteractor` / `HandGrabInteractor` | **전부 0** | 〃 |
+
+그대로 보고했으면 **"이 씬에는 핸드 트래킹이 하나도 없다"**는 오진이 됐다.
+실제로는 `[BuildingBlock] OVRInteractionComprehensive`가 프리팹 인스턴스
+(`m_SourcePrefab` guid `0a7d2469f24041c4284c66706f84c45e` =
+`com.meta.xr.sdk.interaction.ovr/Runtime/Prefabs/OVRInteractionComprehensive.prefab`)로
+들어 있고, 프리팹 실측 결과 `OVRHand`×2 · `Hand`×4 · `HandRef`×4 · `HandVisual`×4 ·
+`SyntheticHand`×2 · `HandSkeletonOVR`×1 · `OVRCameraRigRef`×1이 전부 있었다.
+
+**계층만 봐도 구분이 안 된다.** 자식이 하나도 없는 `[BuildingBlock] ...` 루트가 두 종류다:
+
+- `[BuildingBlock] Real Hands` → 진짜 **마커**다 (MeshRenderer + `EnableUnpremultipliedAlpha`뿐)
+- `[BuildingBlock] OVRInteractionComprehensive` → **프리팹 인스턴스**다
+
+> **보강된 절차** — GUID 카운트가 0으로 나오면 결론 내기 전에:
+>
+> 1. 씬의 `--- !u!1001` 블록에서 `m_SourcePrefab` guid 목록을 뽑는다
+>    (SampleSceneKAI-MR은 2026-08-21 기준 **6개**).
+> 2. 그 프리팹 파일을 찾아 **같은 GUID를 다시 센다.**
+>    경로 역추적: `grep -rl "<prefab guid>" <패키지 경로> --include="*.meta"`
+> 3. 그래도 0이면 그때 "없다".
+>
+> **§4-14의 판정 규칙("KAI-MR만 0 = 이관 대상 / 세 씬 모두 0 = 원본 없음")은
+> 이 2단계를 거친 뒤에 적용한다.** 안 거치면 이관할 필요가 없는 것을 이관 대상으로 올린다.
+
+**곁가지 — 패키지 캐시 전체를 `find`/`grep -r`로 훑으면 타임아웃에 걸린다** (§4-10의 재현).
+2026-08-21에 45초 타임아웃을 세 번 먹었다. **패키지 서브폴더 단위로 쪼갤 것** —
+`com.meta.xr.sdk.core@.../Scripts` 하나는 약 6초(440개 meta)로 끝난다.
+`Assets` 루트 전체도 마찬가지로 쪼개야 한다.
+
+### 4-56. Meta Project Setup Tool은 **대상 컴포넌트가 씬에 있어야** 검사를 시작한다 ⭐
+
+설정 검사 도구가 "문제 없음"이라고 해서 설정이 맞다는 뜻이 아니다.
+**검사 자체가 조건부로 꺼져 있을 수 있다.**
+
+`PassthroughCameraAccessProjectSetup.cs`(mrutilitykit/Editor)의 Required 태스크:
+
+```csharp
+if (Object.FindAnyObjectByType<PassthroughCameraAccess>(FindObjectsInactive.Include) == null)
+{
+    return true;   // ← 컴포넌트가 없으면 "통과"로 처리한다
+}
+return config.isPassthroughCameraAccessEnabled && ... && HasPermissionInAndroidManifest();
+```
+
+즉 `isPassthroughCameraAccessEnabled: 0`이고 매니페스트에 권한이 없어도, 씬에
+`PassthroughCameraAccess`가 없으면 Project Setup Tool은 **아무 경고도 띄우지 않는다.**
+
+> **순서**: **컴포넌트를 먼저 붙이고 → 설정 툴을 연다.** 반대로 하면 "설정 다 됐네"로 읽힌다.
+> §4-51("널 가드가 부재를 무증상으로 만든다")과 같은 계열이다 —
+> 이번엔 널 가드가 아니라 **검사 도구의 조기 반환**이 부재를 무증상으로 만든다.
+>
+> **일반화**: 서드파티 설정 검사기를 신뢰하기 전에 **그 검사기의 발동 조건**을 읽을 것.
+> "경고가 없다"와 "검사했고 통과했다"는 다른 사실이다.
+
+### 4-57. OVRManager 인스펙터의 절반은 `[ Quest | Editor + Link ]` 토글로 숨겨진다 ⭐
+
+**증상 (2026-08-21)**: 문서가 시키는 체크박스가 **인스펙터에 아예 없다.**
+스크롤해도, 폴드아웃을 다 펴도 없다. 이름을 잘못 안내한 줄 알고 SDK 소스를 뒤지게 된다.
+
+**원인**: `OVRManagerEditor`가 인스펙터 맨 위에 자체 툴바를 그린다.
+
+```csharp
+// OVRManagerEditor.cs:242
+GUILayout.Toolbar((int)_activeTargetPlatform, new[] { "Quest", "Editor + Link" });
+```
+
+그리고 여러 섹션이 이 값으로 **통째로 return** 한다:
+
+| 메서드 | 줄 | 숨겨지는 것 |
+|---|---|---|
+| `DrawProjectConfigSection` | cs:256 | Quest Features(프로젝트 설정 탭) |
+| `DrawPermissionRequestsSection` | cs:859 | **Permission Requests On Startup** |
+
+```csharp
+if (_activeTargetPlatform != TargetPlatform.Quest) return;
+```
+
+**빌드 타겟이 아니다.** `EditorPrefs`에 저장되는 **인스펙터 표시 모드**이고,
+빌드 타겟을 Android로 바꿔도 이 토글이 `Editor + Link`면 여전히 안 보인다.
+
+**이 프로젝트가 특히 잘 걸린다.** §3의 분리 정책에 따라 평소 개발을 Quest Link로 하므로
+이 토글을 `Editor + Link`에 두게 되고, 그 상태가 EditorPrefs에 남는다.
+
+> **대처**: 토글을 `Quest`로 잠깐 바꾸면 섹션이 나타난다. 값을 고친 뒤 `Editor + Link`로
+> 되돌려도 **씬/에셋에 저장된 값은 유지된다** — 토글은 표시 여부만 바꾼다.
+>
+> **일반화**: 서드파티 커스텀 에디터에서 "문서에 있는 항목이 인스펙터에 없다"면
+> **인스펙터 자체가 조건부로 섹션을 감추고 있는지** 먼저 볼 것.
+> Unity 기본 인스펙터는 필드를 감추지 않으므로 이 가능성을 잘 떠올리지 못한다.
+> 디버그 인스펙터(Inspector 우상단 ⋮ → Debug)로 전환하면 직렬화 필드를 전부 볼 수 있고,
+> 그것과 커스텀 인스펙터의 차이가 곧 "숨겨진 것"이다.
+> (§4-56과 짝이다 — 저쪽은 **검사기**가 조용했고, 이쪽은 **인스펙터**가 조용하다.)
+
+### 4-58. "파이프라인이 돈다"와 "데이터가 진짜다"는 다른 사실이다 ⭐⭐
+
+**2026-08-21에 실제로 잘못된 결론을 문서 두 곳에 확정으로 적었다가 되돌렸다.**
+§7-1 B("정적 파싱 치수를 검증 전에 설계 근거로 쓰지 말 것")의 런타임 판이다.
+
+Passthrough Camera Access를 Quest Link에서 켰더니 넷이 전부 정상이었다:
+
+| 지표 | 값 | 무엇을 증명하나 |
+|---|---|---|
+| `IsPlaying` | True (기동 0.0s) | 세션이 열렸다 |
+| `IsUpdatedThisFrame` | True | 갱신 플래그가 선다 |
+| `Timestamp` 신선도 | 16ms | **타임스탬프가 전진한다** |
+| 좌표 변환 왕복 오차 | 0.0000 | 변환 API가 자기 일관적이다 |
+
+여기서 **"Link에서 카메라가 동작한다"**고 결론 냈다. 틀렸다.
+텍스처를 실제로 덤프해보니 **세로 컬러바**(값이 전부 0 아니면 255, 세 행이 완전 동일)였다.
+실제 풍경은 한 픽셀도 없었다.
+
+**넷 다 배관이 돈다는 증거였지 물이 진짜라는 증거가 아니었다.**
+특히 **왕복 검증이 위험했다** — `뷰포트 → 월드 → 뷰포트`는 순수 수학이라
+**텍스처가 비어 있어도 0.0000이 나온다.** 검증처럼 생겼지만 내용을 전혀 안 본다.
+
+> **규칙: 외부에서 들어오는 데이터는 "흐르는가"와 "무엇이 흐르는가"를 따로 검증한다.**
+>
+> 상태 플래그·타임스탬프·자기 일관성 검사는 **전자만** 답한다. 후자는 **값을 직접 봐야** 한다.
+> 카메라면 픽셀, 오디오면 샘플 진폭, 트래킹이면 좌표 — 몇 개라도 **숫자로 찍거나 파일로 덤프**한다.
+>
+> **패턴 감별법** (진단 도구에 넣어둘 것):
+> - 전부 같은 값 → 데이터 없음
+> - **값이 0 아니면 255 / 행마다 동일 / 경계가 칼같음 → 합성 테스트 패턴**
+> - 행마다 조금씩 밀림 → stride·포맷 오해석
+> - 값이 지저분하고 행마다 다름 → 진짜 데이터일 가능성
+>
+> `MRPassthroughCameraProbe.dumpTextureOnce`가 이 감별을 로그 3줄 + PNG로 해준다.
+> 같은 계열 문제를 만나면 **먼저 덤프부터** 뜬다.
+>
+> **곁가지**: 이번엔 사용자가 화면을 보고 "컬러바 같다"고 말해준 덕에 빨리 잡혔다.
+> 내가 로그만 보고 있었으면 계속 "동작한다"고 믿었을 것이다.
+> **눈으로 본 사람의 한 마디가 지표 넷보다 강할 때가 있다.**
+
+### 4-59. 매 프레임 덮어쓰기는 **값이 아니라 대입을 막아야** 한다 ⭐⭐⭐
+
+§4-45가 *"매 프레임 덮어쓰기라 어떤 MR 쪽 수정도 이길 수 없다"*고 이미 적어뒀는데,
+2026-08-22에 그 문장을 **"값을 바꾸자"로 잘못 읽어** 네 라운드를 태웠다. 경위를 남긴다.
+
+**증상**: `Image_AnswerBalloonSimple`을 레이로 옮기면 Y가 300으로 튀고 다시는 안 돌아온다.
+
+**첫 수정 (틀림)**: `UIPositionManager.GetBalloonAnchoredPosition`의 MR 분기에서
+`Vector2.zero`를 반환하게 했다. `charY + 200*(char_size/100) + 100` = +300을 0으로 바꾼 것이다.
+
+**결과**: 증상이 **고쳐진 게 아니라 바뀌었다.** "300 m로 날아감" → "부모 원점(바닥)으로 눌림".
+매니저는 여전히 매 프레임 `anchoredPosition`을 대입하고 있었고, 값만 달라졌을 뿐이다.
+
+> **규칙: 매 프레임 대입하는 코드를 상대할 때는 그 대입이 *무엇을 쓰는지*가 아니라
+> *쓰는지 여부*를 바꾼다.** 값을 바꾸는 수정은 증상의 모양만 바꾼다.
+
+#### 왜 싸움이 눈에 안 보였나 — `Update` vs `LateUpdate` 순서
+
+`AnswerBalloonSimpleManager.Update()`가 `anchoredPosition`을 쓰고,
+`MRBalloonWorldFollow.LateUpdate()`가 `transform.position`을 쓴다.
+Unity는 **모든 `Update` → 모든 `LateUpdate` → 렌더** 순서로 돌므로
+**매 프레임 마지막 쓰기는 항상 MR 쪽**이다. 그래서 **화면은 멀쩡해 보인다.**
+
+싸움은 처음부터 있었고, **MR 쪽이 쓰기를 멈추는 순간에만 드러난다** — 여기서는
+grab으로 위치 소유권이 사용자에게 넘어갔을 때였다.
+
+> **일반화**: "평소엔 멀쩡한데 특정 상황에서만 위치가 튄다"면 **그 상황에서 무엇이
+> 쓰기를 멈췄는지** 찾아라. 원인은 그 상황이 아니라 **원래부터 있던 경쟁**이다.
+
+#### 하면 안 되는 대응 — 경쟁자를 하나 더 늘리기
+
+중간에 "양보 중에도 사용자 포즈를 매 프레임 복원"하는 코드를 넣었다가 **발작이 심해졌다.**
+상대가 끌고 가고 내가 되돌리는 진동이 된 것이다. **내가 세 번째 경쟁자가 됐다.**
+
+> **트랜스폼에 쓰는 주체를 늘리는 방향은 언제나 틀렸다.** 줄여야 한다.
+> 최종 해법도 그것이었다 — 매니저 4종의 대입을 막아 **쓰기 주체를 하나로** 만들었다.
+
+#### 진단 도구가 두 번 눈을 가렸다
+
+같은 사건에서 진단을 두 번 잘못 만들었다. 둘 다 재발하기 쉬운 형태다.
+
+| 잘못 | 왜 못 잡나 | 고친 방법 |
+|---|---|---|
+| **프레임 간 "변화량"만 측정** | 상대가 매 프레임 **같은 상수**를 쓰면 변화량이 0이다. `외부덮어쓴양 0.000 / 정상`으로 찍혔다 | 값 **원본**을 같이 찍는다 (`anchoredPosition` 자체) |
+| **내가 쓴 *뒤에* 값을 읽음** | 내 값이 찍혀 상대 값이 영영 안 보인다 | **쓰기 전에** 읽어 `posAtEntry` / `anchoredAtEntry`로 남긴다 |
+
+**결정적이었던 한 줄**: 진입 시점 값 + **z 보존 여부**를 같이 찍은 것.
+`anchoredPosition`은 z를 건드리지 않으므로, **z만 그대로이고 x/y가 바뀌었으면 상대는
+`anchoredPosition`(또는 `localPosition.xy`)을 쓴 것**이고, z까지 바뀌었으면 월드 `position`을
+통째로 쓴 것이다. 이 지문 하나로 범인이 갈렸다.
+
+```
+진입 world (0.000, 0.000, -0.117) | anchored (0.000, 0.000)   ← 상대가 쓴 값
+종료 world (-0.107, 1.283, -0.118)                            ← 내가 쓴 값
+```
+
+#### 그리고 — 같은 수정이 4곳 중 1곳에만 있었다
+
+`GetBalloonAnchoredPosition` 호출부는 4곳인데 `AnswerBalloonManager`에만 이미
+MR 가드가 들어 있었다. 누군가 예전에 정확히 이 문제를 잡았지만 **형제 호출부로 전파하지
+않았다.** 그래서 8일 뒤 다른 말풍선에서 같은 사고가 났다(§4-17 계열).
+
+> **공용 헬퍼를 쓰는 코드를 고칠 때는 반드시 호출부를 전부 `grep`한다.**
+> ```bash
+> grep -rn "GetBalloonAnchoredPosition" Assets/Scripts --include="*.cs"
+> ```
+> 그리고 **고친 곳과 안 고친 곳을 문서에 표로 남긴다** — 다음 사람이 세어볼 수 있게.
+
+---
+
+## 5. Phase 현황
+
+| Phase | 내용 | 상태 | 읽을 문서 (템플릿에 추가) |
+|---|---|---|---|
+| 1 | 빌드 통과 · 성능 확보 | ✅ 완료 | `SampleSceneKAI_MR_Phase1_Checklist.md` |
+| 2 | 바닥 인식 · 3D 낙하 · 방 배회 | ⬜ 대기 | `SampleSceneKAI_MR_Port_Plan.md` |
+| 3-1 | 캐릭터 월드 배치 (픽셀 공간 래퍼) | ✅ 완료 | `SampleSceneKAI_MR_Phase1_Checklist.md` |
+| 3-2 | 캔버스 월드 스페이스 변환 + 손 입력 | ✅ 사실상 완료 (3-2-D만 Phase 4로 이월) | `MR_Phase3-2_Canvas_Plan.md` |
+| 4-A | 코어 입력 — 조준(시선/레이) + 탭·더블탭·홀드 드래그 + **3-2-D 검증 이월분** + §4-33 | 🟢 **코드 완료, 실기 검증만 남음** (2026-08-19). 진리표 8칸·위젯 이관·§4-33·시스템 메뉴 재설계·드래그 어댑터·주크박스 전부 끝. 남은 것은 §6/§7 체크리스트 | `MR_Phase4A_Input_Plan.md`, **`MR_Phase4A_SystemMenu_Design.md`** |
+| 4-B | 손목 보기 제스처 → ~~손목 패널~~ + `MRHologramPortrait` | 🟡 **종료 (2026-08-21)**. **손목 시계 패널은 유저 요청으로 기획 제외.** 홀로그램 초상·VRM 쉐이더 수정만 남기고 Phase 종료 | `MR_Phase4A_Handoff.md` §7, `MR_Feature_Inventory.md` §4-B |
+| 4-C | 손 프레임 이미지 입력 (Passthrough Camera Access) | 🟢 **진행 중 (2026-08-21)**. PCA 활성화·검증 완료, 셔터 설계 확정. 다음은 `MRHandFrameGesture` 구현 | **`MR_Phase4C_Handoff.md`**(인계·자립 문서), `MR_HandFrame_ImageInput_Plan.md`(설계서) |
+| 5 | StreamingAssets 이관 · 음성 대화 | ⬜ 대기 | `MR_StreamingAssets_Migration_Plan.md` |
+
+### Phase 1 — 완료
+
+`PlayerLoop` 36.65ms → **15.23ms**. 원인 4종을 프로파일러로 특정해 제거.
+Win32 P/Invoke 9개 파일 가드 처리. Android 빌드 통과.
+
+### Phase 2 — 바닥과 물리
+
+MRUK로 바닥면을 잡아 캐릭터·사물이 떨어지지 않게 한다.
+데스크톱은 작업표시줄을 인식해 바닥을 만들었다. 그 자리를 MRUK FLOOR 앵커가 대신한다.
+
+핵심 API: `GetFloorAnchor`, `Raycast`, `IsPositionInRoom`, `GenerateRandomPositionOnSurface`
+
+만들 것: `MRFloorPlacement`, 3D 낙하 전환, FLOOR 상대 좌표 저장(방 재스캔 후에도 위치 유지), 자율 배회
+
+### Phase 3-2 — 진행 중
+
+#### 2026-08-15 세션 요약 — 씬 적용·실기 검증 대부분 완료
+
+이 세션에서 실제로 끝난 것:
+
+- **계층 구조 확정**: 모든 월드 UI를 `MR > WorldUI` 아래로 꺼내고 그룹핑
+  (`Balloons` / `Panels` / `Apps` / `Tools` / `_Unused`). 중첩 캔버스 금지(§4-18).
+  공용 부모였던 `ChatBalloonCanvas`는 삭제.
+- **패널 이동(grab)을 ISDK 정식 방식으로 전환** — §4-22 ~ §4-27. 자체 구현
+  `MRPinchDraggable`은 폐기. 근접 grab + 직선 레이 grab 모두 동작하며, 이동 감도는
+  `MRRayDistanceMovementProvider`(각도 1:1, 거리 비율 증폭)로 확정.
+- **`Tools → MR → 9`** 원스톱 전환 도구 추가 — 남은 패널을 이걸로 일괄 처리.
+- **말풍선 7종 + 패널 다수 전환 완료**. `Image_NoticeBalloon`은 캐릭터 추종이 아니라
+  메타 알림식 지연 추종(`MRLazyFollowHUD`)으로 확정.
+- **성능**: 실기에서 70fps 아래로 내려가지 않음(간헐적 하락은 있음). 목표 유지 중.
+
+남은 것 — **둘 다 Phase 4로 이월** (2026-08-15 결정):
+
+- **3-2-D DevionGames 위젯 검증**: 트리거가 캐릭터 컨텍스트 메뉴라 Phase 4에서 트리거를
+  만들면서 함께 검증한다. 지금 하면 버릴 가짜 트리거가 필요하고, 배선 후 위젯의 부모·위치가
+  바뀌어 결과도 무효가 된다.
+- **레거시 열기 경로 연결**(§4-33) — `MRFloatingPanel.OnEnable() → Open()` 자동화 여부를
+  소환 트리거 설계와 함께 결정.
+
+또한 `Tooltip`/`Context Menu`/`Radial Menu` 계열은 아직 메인 `Canvas` 아래에 남아 있다.
+이 캔버스를 MR에서 어떻게 취급할지가 미정이다 — `MR_Phase3-2_Canvas_Plan.md` §3-2-D의
+"열린 질문" 참고.
+
+**확정된 월드 스페이스 레시피** (실기 검증 완료, 72fps 유지):
+
+```
+Canvas        renderMode = World Space
+              Scale      = 0.001        (1 canvas px = 1 mm)
+              size       = 원본 패널의 픽셀 크기 그대로
+CanvasScaler  Dynamic Pixels Per Unit = 3
+자식 UI       Scale = 1                 (드래그 후 반드시 리셋)
+```
+
+폰트 12가 1m 거리에서 선명하게 읽힌다.
+
+**손 입력**: `Tools → MR → 5. 월드 UI에 손 상호작용 추가`로 자동 조립된다.
+캔버스를 여러 개 선택해도 한 번에 처리된다.
+
+**2026-08-09 세션 — 코드 작성 완료, 씬 적용·실기 검증은 아직**
+
+아래는 전부 **코드/Editor 도구까지만** 완료됐다. Unity 에디터에서 실행하고 Quest로
+검증하는 단계가 남아 있다 — "완료"가 아니라 "다음 에디터 세션에서 실행할 준비 끝"이다.
+
+- `Tools → MR → 0. Root260616 프리팹 완전 언팩` 추가 (`MRSceneSetup.cs`). 기존 삭제 목록(1번)은
+  이미 Portrait를 올바르게 제외하고 있어 손대지 않았다 — §4-15 참고.
+- **캐릭터 부착 말풍선**: 8개 파일을 각각 포크하는 대신 `MRBalloonWorldFollow` 컴포넌트
+  하나로 통일했다(LateUpdate에서 캐릭터 월드 위치 + 오프셋으로 덮어쓴다). 원본 매니저
+  파일은 무수정 — 데스크톱 회귀 위험 0. `Tools → MR → 7. 선택 오브젝트를 캐릭터 부착
+  말풍선으로 변환`으로 캔버스 레시피 적용 + 컴포넌트 부착까지 자동화.
+- **플로팅 패널**: `MRFloatingPanel`(공통 베이스 — 소환·드래그·빌보드) +
+  `Tools → MR → 6. 선택 오브젝트를 플로팅 패널로 변환`. `Tab Window_Settings` 등 4대 패널에
+  아직 실제로 실행하지 않았다.
+- **DevionGames 5개 파일**: `ContextMenu`/`RadialMenu`/`Tooltip`/`UICursor`/`FloatingText`
+  전부 `#if UNITY_ANDROID` 분기로 수정 완료. 데스크톱 경로는 원본 그대로 유지.
+  "메뉴 밖 클릭 시 닫기"는 `MRPointerBridge`(별도 asmdef — §4-12)로 대체.
+- **메뉴 분리**: `MRCharacterContextMenu`(캐릭터 메뉴 내용) / `MRSystemMenuController`
+  (시스템 메뉴 내용, `MRFloatingPanel` 필요) 작성 완료. **트리거(제스처 판정)는 Phase 4 몫이라
+  아직 아무것도 호출하지 않는다** — Show()/Open()을 외부에서 불러야 뜬다.
+- 씬에서 실제로 확인할 것: 언팩 실행 → 삭제 재확인 → 말풍선 8개·패널 4개에 도구 실행 →
+  `PlayerLoop` 13.89ms 이하 재검증 → 손 상호작용(Tools 5) 부착 → Quest에서 클릭/드래그 확인.
+
+### Phase 4 — 제스처
+
+**Phase 4는 4-A / 4-B / 4-C로 나눠 각각 별도 대화로 진행한다** (2026-08-18 결정).
+한 번에 다루기에는 범위가 너무 넓다 — 코어 입력만으로도 판정기·조준 공급자·드래그 어댑터에
+이월분 2건이 붙는다.
+
+합의된 상호작용:
+
+| 동작 | 제스처 | 범위 |
+|---|---|---|
+| 음성 입력 시작 | 캐릭터를 보며 **탭** | 4-A |
+| 메뉴 열기 | 캐릭터를 보며 **탭 두 번** | 4-A |
+| 캐릭터 이동 | 캐릭터를 보며 **탭 홀드** 후 끌기 (스타워즈 포스처럼 원격) | 4-A |
+| 시스템 메뉴 | 빈 공간을 보며 손바닥 위로 | 4-A |
+| ~~원격 대화~~ | ~~손목 보기 → 손목 패널 + 음성 자동 시작~~ | **4-B — 제외 확정 (2026-08-21)** |
+| 이미지 입력 | 양손 사각 프레임 | 4-C |
+
+> **⚠ "손목 시계 패널"도 범위에서 빠졌다 (2026-08-21, 유저 요청).**
+> 4-B는 **홀로그램 초상(`MRHologramPortrait`)까지만** 하고 종료 처리했다.
+> 손목 보기 제스처 판정과 손목 패널 UI는 만들지 않는다.
+> 출처: `MR_Phase4A_Handoff.md` §7. §4-17에 걸리지 않도록 이 표와 위 Phase 현황표에 함께 반영했다.
+> **⚠ 미확인**: `MRHologramPortrait`(guid `417d91b1…`)와 `MRWristSummoner`(guid `da0b7059…`)는
+> **`SampleSceneKAI-MR.unity` 직접 참조가 0**이다(2026-08-21 실측). 프리팹 안에 있는지는
+> 확인하지 않았다(§4-55). 4-B를 마무리로 선언하기 전에 씬 배치 여부를 실측할 것.
+
+> **⚠ "등 잡기(목덜미 그랩)"는 범위에서 빠졌다 — 이 표에 넣지 말 것.**
+> 예전 판에는 `| 직접 잡기 | 등 쪽을 grab (고양이 목덜미처럼). 앞에서 잡는 것은 금지 |` 행이
+> 있었으나, `SampleSceneKAI_MR_Port_Plan.md` §3-5에서 **1차 범위 제외**로 뒤집혔다.
+> 사유: 판정 부피가 작은데(캡슐 상위 18~35%) 스킨십 4종과 같은 근접 공간에서 경쟁해
+> 오작동 위험이 크고, §3-4 레이 드래그가 이동을 이미 커버한다.
+> **번복 전파가 8일간 누락돼 있었다** — 2026-08-18에 발견해 이 표와 위 Phase 현황표에서 제거.
+> 판정 근거는 이 문서의 "만들 것" 목록에 잡기 컴포넌트가 없고, Port Plan의 §2-1 진리표와
+> §10 검증 체크리스트에도 grab 항목이 전무하다는 것 (§4-17의 실제 재발 사례).
+> 향후 되살릴 경우의 조건은 Port Plan §3-5에 남겨두었다.
+
+만들 것 (4-A): `MRIntentRouter`, `MRGazeProvider`, `MRRayProvider`, `MRRayDragAdapter`
+만들 것 (4-B): ~~손목시계 제스처 판정, 손목 패널~~ (제외), `MRHologramPortrait`(3D 홀로그램 초상)
+만들 것 (4-C): `PassthroughCameraAccess` 배선, 손 프레임 제스처 판정(`MRHandFrameGesture`),
+월드 프레임 시각 피드백, 크롭·워프, 기존 이미지 입력 경로 연결
+
+### Phase 5 — 데이터와 음성
+
+StreamingAssets 이관이 **선행 조건**이다.
+실제 복사 대상은 약 720KB (Config 60K + prompt 658K). `Sound/`는 비어 있고
+Whisper 141MB는 whisper.unity 플러그인이 처리한다.
+§4-11의 대소문자 버그를 여기서 함께 고친다.
+
+---
+
+## 6. 도구와 검증 루프
+
+### 만들어둔 도구
+
+| 도구 | 위치 | 용도 |
+|---|---|---|
+| `MRSceneStripper` | `Scripts/MR/` | 런타임에 데스크톱 컴포넌트를 타입 기준으로 비활성화. 미분류 컴포넌트는 경고 |
+| `MRSceneSetup` | `Scripts/MR/Editor/` | `Tools → MR → 0~4`. 프리팹 언팩(0, 신규), 데스크톱 오브젝트 삭제, 필수 활성화, 상태 리포트, 깨진 참조 정리 |
+| `MRWorldUIInteraction` | `Scripts/MR/Editor/` | `Tools → MR → 5`. 월드 캔버스에 손 상호작용 조립 |
+| `MRFloatingPanelSetup` | `Scripts/MR/Editor/` | `Tools → MR → 6` (신규). 선택한 패널에 확정 캔버스 레시피 적용 + `MRFloatingPanel` 부착 |
+| `MRBalloonWorldFollowSetup` | `Scripts/MR/Editor/` | `Tools → MR → 7` (신규). 선택한 말풍선에 확정 캔버스 레시피 적용 + `MRBalloonWorldFollow` 부착 |
+| `MRCharacterWorldRoot` | `Scripts/MR/` | 캐릭터를 픽셀 공간 래퍼로 월드에 배치. `DiagnoseVisibility()` 내장. `SetSizeMultiplier()` (신규, 시스템 메뉴 크기 슬라이더용) |
+| `MRFloatingPanel` | `Scripts/MR/` | (신규) 공간 고정 패널 공통 베이스 — 소환·핀치 드래그·Y축 빌보드. `MRCharacterMenu` 패턴을 캐릭터 무관하게 일반화 |
+| `MRBalloonWorldFollow` | `Scripts/MR/` | (신규) 캐릭터 부착 말풍선 8종 공통 — LateUpdate에서 캐릭터 월드 위치를 따라가도록 덮어씀. 원본 매니저 8개 파일 무수정. `continuousFollow=false`면 소환 시점 1회만 배치 |
+| `MRPanelGrabSetup` | `Scripts/MR/Editor/` | (신규) `Tools → MR → 8`. 패널에 ISDK 잡기 조립 — Rigidbody/Grabbable/테두리 바 4개/RayInteractable (§4-22) |
+| `MRPanelGrabTransformer` | `Scripts/MR/` | (신규) 잡는 동안의 회전·스무딩. 카메라 빌보드 + 지수 스무딩, 놓으면 그 자세로 고정 |
+| `MRGrabFrameFitter` | `Scripts/MR/` | (신규·`[ExecuteAlways]`) GrabFrame 스케일·콜라이더 크기를 현재 패널 기준으로 자동 재계산 (§4-26) |
+| `MRRayDistanceMovementProvider` | `Scripts/MR/` | (신규) 레이 잡기 이동 — 각도는 레이와 1:1, 거리는 (카메라~패널)/(카메라~손) 배율 (§4-24) |
+| `MRPinchDraggable` | `Scripts/MR/` | (구버전·폐기) 손 관절로 grab을 직접 판정하던 자체 구현. §4-22대로 ISDK 방식으로 대체됨 — 패널에 남아 있으면 제거할 것 |
+| `MRWorldUIDebugToggle` | `Scripts/MR/Debug/` | (신규·임시) 왼손 메뉴 제스처(`OVRInput.Button.Start`, §4-6)로 WorldUI 전체를 켜고 끔. 패널을 부채꼴로 흩어 배치. Phase 4에서 정상 소환 경로가 생기면 제거 |
+| `MRPanelFullConvert` | `Scripts/MR/Editor/` | (신규) `Tools → MR → 9`. 패널 하나를 끝까지 전환 — WorldUI로 이동 → 6 → 스케일 복원 → 5 → 8 |
+| `MRLazyFollowHUD` | `Scripts/MR/` | (신규) 메타 알림식 지연 추종 HUD. 데드존 밖으로 벗어나야 부드럽게 따라오고 안으로 들어오면 멈춤. `Image_NoticeBalloon`용 |
+| `MRJarvisCalendarUI` | `Scripts/MR/` | (신규) `JarvisCalendarUI`의 MR 포크 — 껍데기 부모 없이 `CalendarPicker` 자체에 붙는다 (§4-31). **`UIManager.ShowCalendar()`가 MR에서 이 타입을 요구하게 해야 한다** (§4-42) |
+| `MRHandInteractionFitter` | `Scripts/MR/` | (신규·`[ExecuteAlways]`) `HandInteraction` 판정 면을 현재 rect 기준으로 런타임 재계산 (§4-35). 크기가 런타임에 정해지는 위젯용 |
+| `MRLegacyOpenDebugTrigger` | `Scripts/MR/Debug/` | (신규·임시) 비주력 손 palm-up 핀치로 `UIManager`의 정식 열기 경로를 순환 호출. **말단 API를 직접 부르지 않는 것이 핵심** (§4-37). Phase 4-A 완료 시 삭제 |
+| `MRTextInputGuard` | `Scripts/MR/` | (신규) `TMP_InputField`의 `raycastTarget`을 꺼서 시스템 키보드 활성화를 원천 차단 (§4-16 프레임 비용 회피). Phase 5에서 `AllowInteraction(true)`로 해제 |
+| `MRPokeDebugProbe` | `Scripts/MR/Debug/` | (신규·임시) `PointableCanvasModule`의 정적 이벤트 전부를 로그로 출력. 포크가 캔버스/버튼 중 어디까지 도달하는지 진단용. 원인 파악 후 정리 대상 |
+| `MRPointerBridge` | `Scripts/MR/Bridge/` (별도 asmdef) | (신규) ISDK `WhenSelected` 이벤트를 DevionGames 위젯에 중계 — "메뉴 밖 클릭 시 닫기"용 |
+| `MRCharacterContextMenu` / `MRSystemMenuController` | `Scripts/MR/` | (신규) 메뉴 2분할 — 내용만 확정, 트리거는 Phase 4 |
+| ~~`MRSystemMenuBuilder`~~ | — | **폐기 (2026-08-19)**. 시스템 메뉴가 ContextMenu로 바뀌어 생성할 패널이 없어졌다 (`MR_Phase4A_SystemMenu_Design.md`) |
+
+**새 컴포넌트를 씬에 추가했으면 `MRSceneStripper`의 목록을 갱신한다.**
+미분류 컴포넌트는 경고를 띄우게 되어 있으니 로그를 확인할 것.
+
+### 검증 루프
+
+**1순위: Quest Link + 에디터 Play 모드** (2026-08-18부터 가능).
+MR 동작 분기가 에디터에서도 실행되므로(§3 분리 정책), 대부분의 검증은 빌드 없이 끝난다.
+Console에 로그가 바로 뜨고, 인스펙터로 런타임 값을 직접 볼 수 있으며, 브레이크포인트도 걸린다.
+
+빌드가 여전히 필요한 경우:
+- Android 네이티브 경로(`AndroidJavaClass` 등)를 타는 기능
+- 성능 측정 (에디터 오버헤드 때문에 수치가 의미 없음)
+- **Android 런타임 권한 흐름** (팝업·거부 처리) — 에디터에서는 항상 승인으로 나온다
+- **Horizon OS 버전 게이트** — `vros.os.VrosBuild` 조회는 에디터에서 아예 안 탄다
+
+> **Passthrough Camera Access — "기기 전용"도 아니고 "Link에서 된다"도 아니다 (2026-08-21 실측).**
+> 이 항목은 하루에 두 번 고쳤다. 최종 상태는 이렇다.
+>
+> `PassthroughCameraAccess.cs`(SDK 201)에는 **에디터 전용 경로가 있고**
+> (`Update()`가 `MRUKNativeFuncs.CameraAcquireLatestCpuImage`로 CPU 이미지를 받는다),
+> `IsSupported`도 에디터에서는 `Meta_Link_Quest_3` / `Meta_Link_Quest_3S` / `None`을 통과시킨다.
+> Quest Link + Play에서 **API는 전부 정상 동작한다** — `IsPlaying` 즉시 참, 해상도 협상 성공,
+> Intrinsics 진짜 값, 좌표 변환 왕복 오차 0.0000.
+>
+> **그런데 텍스처 내용은 실제 풍경이 아니라 세로 컬러바(합성 신호)다.** 픽셀 덤프로 확인했다.
+> 상세와 그림은 `MR_HandFrame_ImageInput_Plan.md` **§11-5**.
+>
+> | 4-C에서 무엇을 어디서 | |
+> |---|---|
+> | 제스처 판정 · 좌표 투영 · **크롭 영역 검증** · UX | **Link + Play** (컬러바가 오히려 좋은 크롭 타깃이다) |
+> | 실제 풍경 화질 · 권한 팝업 · HzOS 버전 게이트 | **APK 한 번** |
+>
+> **Link 경유의 버전 요구는 v74가 아니라 v85 이상**이다 (`Play()` 실패 메시지:
+> *"Requires 'Meta Horizon Link' v85+ or 'Meta XR Simulator' v85+, and Quest 3/3S on HzOS v85+"*).
+> `IsSupported`는 이 버전을 검사하지 않는다.
+>
+> **교훈 둘**:
+> 1. "기기 전용 API"라는 분류를 **문서에서 물려받지 말 것.** SDK 소스에 `#if UNITY_EDITOR`
+>    경로가 있는지 먼저 grep한다.
+> 2. **에디터에서 돈다고 에디터 데이터가 진짜인 것은 아니다** — §4-58.
+
+```bash
+# 실기 로그 (PowerShell / cmd 어디서든, adb가 PATH에 있어야 함)
+adb logcat -c && adb logcat -v time -s Unity:V
+```
+
+> **PowerShell `Tee-Object` 주의**: 저장 파일이 UTF-16LE라 grep이 그냥은 안 먹는다(§4-16).
+> `iconv -f UTF-16LE -t UTF-8`로 변환한 뒤 검색할 것.
+>
+> **로그를 뜰 때는 앱을 완전히 종료했다 켤 것.** 실행 중간부터 캡처하면 시작 시점에만
+> 찍히는 진단 로그(`MRHandFit` 등)가 통째로 빠져 "로그가 없다 = 코드가 안 돈다"로 오독하게 된다
+> (2026-08-18 실제로 겪음).
+
+성능 측정 시에는 **OVR Metrics와 PIP를 끈다** (각각 3.6ms를 먹는다).
+
+| 지표 | 기준 |
+|---|---|
+| `PlayerLoop` | **13.89ms 이하** (72Hz 예산) |
+| 캔버스 비용 | 1ms 이하 |
+| `Batches` | 기준선 113 |
+
+> 동적 해상도는 정상 동작 중이다. Eye Buffer W/H는 **할당 크기**이고
+> `renderViewportScale`이 프레임마다 조절한다. 최대값으로 보인다고 문제가 아니다.
+
+---
+
+## 7. 작업 방식에 대한 요청
+
+새 대화에서 나(Claude)에게 기대하는 것:
+
+- **한국어**로, 간결하게. 불필요한 설명 없이.
+- 브레인스토밍이 필요한 주제는 답을 내놓기 전에 **같이 논의**할 것.
+- 구현 전에 **설계 문서를 먼저** 쓸 것.
+- 판단이 뒤집히면 **문서를 고치고, 이미 실행한 변경을 되돌릴 것**.
+  (Portrait 삭제 사고가 이것 때문에 발생했다)
+- Phase 범위를 벗어나지 말 것. 다음 Phase의 작업이 눈에 보여도 손대지 않는다.
+- 씬을 분석하기 전에 **저장 여부를 확인**할 것.
+- 로그나 실측으로 확인한 것만 "확인됨"이라고 말할 것. 추측은 **"추측인데"로 시작**하고,
+  **추측으로 코드를 고치지 말 것 — 먼저 계측한다.**
+  같은 증상에 두 번 연속 실패하면 멈추고 접근을 다시 세운다.
+
+---
+
+### 7-1. 새 대화 기본 수칙 (2026-08-19 추가)
+
+아래 여섯 개는 **실제로 시간을 태운 것들**이다. 각 항목의 괄호가 그 사고다.
+
+**A. "이걸 해줘"를 만들기 전에 씬을 먼저 실측한다.**
+직전 대화의 요약과 Plan 문서는 **낡을 수 있다.** 작업 지시를 쓰기 전에 씬을 파싱해
+**이미 된 것과 안 된 것을 가른다.**
+(2026-08-19: 입력 컴포넌트 3개 부착을 안내했으나 이미 붙어 있었고, Tooltip 씬 작업 6단계를
+안내했으나 이미 전부 돼 있었다. 두 번 다 헛수고였다.)
+
+**B. 정적 파싱으로 읽은 치수는 런타임 로그로 확인하기 전에 설계 근거로 쓰지 않는다.**
+프리팹·씬 YAML에서 읽은 크기·위치는 **트랜스폼 스케일, 앵커, 피벗이 반영되지 않은 날값**이다.
+`Collider.bounds` / `Renderer.bounds`를 한 줄 찍으면 최종 값이 나온다.
+(2026-08-19: 같은 캡슐을 두 번 오독했다. 두 번째는 "캡슐이 허리까지만 온다 → 캡슐을 키워야
+한다"는 **그럴듯한 오진**까지 만들어냈다. 상세는 §4-48.)
+
+**C. 진단 로그에는 "지금 값"과 "제안 값"을 함께 찍는다.**
+Play 한 번으로 **원인 확인과 수정안 검증이 동시에** 끝난다. 고치고 다시 재는 왕복이 사라진다.
+```
+[MRGaze] pivot각 34.1도 (임계 12도) | 경계중심각 8.3도, 각반경 9.7도 → 확장판정 통과
+```
+(2026-08-19: 조준 판정과 캡슐 커버리지 두 건에서 각각 한 라운드씩 아꼈다.)
+
+**D. 경로가 둘 이상인 기능은 로그 태그에 어느 경로인지 넣는다.**
+`[MRIntent] 탭(캐릭터)`이 아니라 `[MRIntent/시선] 탭(캐릭터)`.
+(2026-08-19: 시선 채널과 손 레이 채널을 구분하려고 **콜스택의 `Update()` 줄 번호**를 세야 했다.)
+
+**E. 선택지를 물을 때는 각 옵션이 무슨 뜻이고 무엇이 달라지는지 먼저 설명한다.**
+용어만 던지지 말고 **숫자와 결과**로 쓴다 — "반경 0.4 m 고정"이 아니라
+"1 m에서 22°, 4 m에서 6°에 해당한다".
+(2026-08-19: 조준 방식과 링 처리 두 질문 다 이해되지 않아 다시 물어야 했다.)
+
+**F. 마무리에 결정이 코드·씬·문서 세 곳 모두에 반영됐는지 확인한다.**
+§4-13은 "결정을 코드에 전파", §4-17은 "문서에 전파"인데 실제로 가장 잘 새는 곳은 **씬**이다.
+셋을 한 번에 훑는다.
+
+| 어디 | 확인할 것 |
+|---|---|
+| 코드 | 결정과 반대 방향의 코드가 남아 있지 않은가 (§4-13) |
+| 씬 | 컴포넌트 부착·인스펙터 값·활성 상태가 결정대로인가 |
+| 문서 | 관련 Plan 문서를 **grep해서 전부** 고쳤는가. 새 함정은 §4에 추가했는가 (§4-17, §2) |

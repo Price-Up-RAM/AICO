@@ -159,6 +159,9 @@ public class CharManager : MonoBehaviour
         if (charList.Count == 0)
         {
             Debug.LogError("Character list is empty.");
+            // 진단(Phase 5): 이 조기 리턴이면 SettingCharManager.LoadSettingChar가 아예 실행되지 않는다.
+            // 그 경우 voiceId는 항상 빈 값이 되어 TTS ref_id가 누락된다.
+            Debug.Log("[SettingChar/load] 미실행 - charList.Count=0 조기리턴 (CharManager.InitCharacter) | 결과: voiceId 항상 빈 값 → ref_id 누락");
             return;
         }
 
@@ -1197,6 +1200,9 @@ public class CharManager : MonoBehaviour
 
         // InventorySystem은 독립 패키지이므로 캐릭터 DB 태그 판정을 앱 계층에서 주입한다.
         InventorySystemManager.Instance.equipPermissionResolver = CharacterFeatureTags.IsEquipAllowed;
+        // A0 진단 — origin 임시 소켓 주입 전에 정식 소켓 저작 현황을 찍는다 (Kickoff Guide §7-1 B/C)
+        MRInventoryDiagnostics.ReportSocketState(charObj);
+
         InventorySystemManager.Instance.SetActiveOwner(charcode, charObj);
     }
     public void setEmotionFaceController(GameObject charObj)

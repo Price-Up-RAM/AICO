@@ -61,9 +61,17 @@ public class RadialMenuController : MonoBehaviour
             case "dance":
                 return () => AnimationManager.Instance.Dance();
             case "goLeft":
+#if UNITY_ANDROID || UNITY_EDITOR
+                return () => FindObjectOfType<MRWalkAdapter>()?.GoLeft();
+#else
                 return () => PhysicsManager.Instance.SetWalkLeftState();
+#endif
             case "goRight":
+#if UNITY_ANDROID || UNITY_EDITOR
+                return () => FindObjectOfType<MRWalkAdapter>()?.GoRight();
+#else
                 return () => PhysicsManager.Instance.SetWalkRightState();
+#endif
             case "hide":
                 return () => AnimationManager.Instance.Hide();
             case "idle":

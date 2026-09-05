@@ -1,6 +1,10 @@
+using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
-
+using UnityEngine.Networking;
+using Random = UnityEngine.Random;
 [System.Serializable]
 public class JukeboxTrack
 {
@@ -78,6 +82,13 @@ public class MRJukebox : MonoBehaviour
 
     private void Start()
     {
+        // 외부 곡(StreamingAssets/bgm, 다운로드 폴더)을 여기서 직접 로드한다.
+        // 원래는 JukeboxView.LoadCustom()이 유일한 로더였는데, JukeboxView GameObject가
+        // 씬에 비활성으로 저장돼 있어 Start()가 돌지 않는다. 그래서 UI를 한 번도 안 열면
+        // 음성 명령에서 씬 playlist(4곡)만 보였다 (2026-08-25 실측: 보유=4곡).
+        // JukeboxView도 HasTrack()으로 중복을 거르므로 나중에 UI를 열어도 곡이 겹치지 않는다.
+        StartCoroutine(LoadExternalTracks());
+
         if (playlist == null || playlist.Count == 0)
         {
             Debug.LogWarning("[MRJukebox] 재생 목록(playlist)이 비어있습니다.");
@@ -368,6 +379,100 @@ public class MRJukebox : MonoBehaviour
     {
         if (_audioSource != null) _audioSource.Stop();
         _isPaused = false;
+    }
+
+    // ==========================================
+    // 외부 곡 로딩 (Phase 5)
+    // ==========================================
+
+    /// StreamingAssets/bgm 과 다운로드 폴더의 음원을 playlist에 추가한다.
+    private IEnumerator LoadExternalTracks()
+    {
+        int before = playlist.Count;
+
+        yield return LoadExternalDir(Path.Combine(Application.streamingAssetsPath, JukeboxCatalog.CustomFolder), JukeboxCatalog.CustomTag);
+        yield return LoadExternalDir(JukeboxCatalog.DownloadDir, JukeboxCatalog.DownloadTag);
+
+        Debug.Log($"[MRJukebox] 외부 곡 로딩 완료: {before}곡 → {playlist.Count}곡");
+    }
+
+    private IEnumerator LoadExternalDir(string dir, string tag)
+    {
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+        {
+            Debug.Log($"[MRJukebox] 외부 폴더 없음 - 건너뜀: {dir}");
+            yield break;
+        }
+
+        string[] files = Directory.GetFiles(dir);
+        for (int i = 0; i < files.Length; i++)
+        {
+            string full = files[i];
+            string trackName = Path.GetFileNameWithoutExtension(full);
+            if (HasExternalTrack(trackName, tag))
+            {
+                continue;
+            }
+            yield return LoadExternalFile(full, tag);
+        }
+    }
+
+    // 같은 이름 + 같은 태그면 이미 등록된 것으로 본다 (JukeboxView.HasTrack과 같은 규칙).
+    private bool HasExternalTrack(string trackName, string tag)
+    {
+        for (int i = 0; i < playlist.Count; i++)
+        {
+            if (playlist[i].trackName == trackName
+                && playlist[i].tags != null
+                && playlist[i].tags.Contains(tag))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private IEnumerator LoadExternalFile(string full, string tag)
+    {
+        string ext = Path.GetExtension(full).ToLowerInvariant();
+        AudioType type;
+        if (ext == ".wav")
+        {
+            type = AudioType.WAV;
+        }
+        else if (ext == ".mp3")
+        {
+            type = AudioType.MPEG;
+        }
+        else if (ext == ".ogg")
+        {
+            type = AudioType.OGGVORBIS;
+        }
+        else
+        {
+            yield break;
+        }
+
+        string url = new Uri(full).AbsoluteUri;
+        using (UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip(url, type))
+        {
+            yield return req.SendWebRequest();
+
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning($"[MRJukebox] 외부 곡 로드 실패: {full} ({req.error})");
+                yield break;
+            }
+
+            AudioClip clip = DownloadHandlerAudioClip.GetContent(req);
+            if (clip == null)
+            {
+                Debug.LogWarning($"[MRJukebox] 외부 곡 클립이 비어 있다: {full}");
+                yield break;
+            }
+
+            AddTrack(clip, Path.GetFileNameWithoutExtension(full), tag);
+        }
     }
 
     /// 런타임에 트랙 추가(custom: StreamingAssets에서 로드한 클립 등). 추가된 인덱스 반환.

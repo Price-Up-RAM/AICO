@@ -25,8 +25,14 @@ public class UIManager : MonoBehaviour
     [SerializeField] public GameObject calendar; // Calendar
     [SerializeField] public GameObject aiStatus; // AIStatusView
     [SerializeField] public GameObject jukebox; // JukeboxView
-    [SerializeField] public GameObject inventoryPanel; // InventorySystem 메인 패널 (프리팹 에셋 할당 시 canvasUI 아래 인스턴스화)
-    [SerializeField] public GameObject inventoryPanelChar; // InventorySystem 캐릭터 패널 (프리팹 에셋 할당 시 canvasUI 아래 인스턴스화)
+    // 인벤토리 창은 1개다 (2026-08-26 결정).
+    //
+    // 원래 구조는 상점 / 메인(공용) 인벤토리 / 캐릭터 인벤토리 3단이었다. 공용 창고는
+    // 캐릭터가 여럿일 때 아이템을 옮겨 담으려고 있던 것인데, 이 프로젝트는 캐릭터 1명(AICO)으로
+    // 확정돼 껍데기만 남았다 — 카탈로그 32엔트리 중 isMainOnly가 하나도 없어서
+    // 공용에만 있어야 할 아이템도 없다. 그래서 창을 캐릭터 것 하나로 줄였다.
+    // 이 패널의 InventoryView는 UIManager가 InventorySection.Char로 고정한다.
+    [SerializeField] public GameObject inventoryPanel; // InventorySystem 인벤토리 패널 (캐릭터 스토어를 표시)
     [SerializeField] public AlarmMiniView alarmMiniPrefab; // AlarmMini prefab
 
     [SerializeField] public GameObject debugBalloon2; // VL, Web 등 정보 보여주기
@@ -39,7 +45,6 @@ public class UIManager : MonoBehaviour
 
     // 인벤토리 패널 상태 플래그 (최초 표시 위치 지정 / 캐릭터 섹션 지정 1회 / 미할당 경고 1회)
     private bool inventoryPositionInitialized;
-    private bool inventoryCharPositionInitialized;
     private bool inventoryCharSectionConfigured;
     private bool inventoryMissingWarned;
 
@@ -80,7 +85,6 @@ public class UIManager : MonoBehaviour
         jukebox = ResolveManagedUI(jukebox, "JukeboxView");
         characterDetail = ResolveManagedUI(characterDetail, "CharacterDetail");
         inventoryPanel = ResolveManagedUI(inventoryPanel, "InventoryPanel");
-        inventoryPanelChar = ResolveManagedUI(inventoryPanelChar, "InventoryPanelChar");
 
         // UIWidget 패널은 Awake 실행 순서와 무관하게 동일한 닫힘 상태(inactive+alpha0)로 강제 리셋
         // — SetActive(false) 후 Close() 방식은 위젯 Awake 선행 여부에 따라 초기 alpha가 0/1로 갈라져,
@@ -105,7 +109,6 @@ public class UIManager : MonoBehaviour
         SetInitialInactive(jukebox);
         // InventoryView는 CanvasGroup으로 표시를 제어하므로 SetActive 대신 Hide로 초기 숨김
         HideInventoryViewIfPresent(inventoryPanel);
-        HideInventoryViewIfPresent(inventoryPanelChar);
         debugBalloon2.SetActive(false);
 
         // UIWidget 존재하면 Close (ForceResetWidget 미적용 패널만 — guideLine/situation은 시작 시 활성 유지가 기존 의도)
@@ -749,82 +752,57 @@ public class UIManager : MonoBehaviour
     public void ShowInventory()
     {
         inventoryPanel = ResolveManagedUI(inventoryPanel, "InventoryPanel");
-        inventoryPanelChar = ResolveManagedUI(inventoryPanelChar, "InventoryPanelChar");
 
-        if ((inventoryPanel == null || inventoryPanelChar == null) && inventoryMissingWarned == false)
+        if (inventoryPanel == null)
         {
-            Debug.LogWarning("[UIManager] Inventory 패널 프리팹이 할당되지 않았습니다. inventoryPanel/inventoryPanelChar를 확인하세요.");
-            inventoryMissingWarned = true;
+            if (inventoryMissingWarned == false)
+            {
+                Debug.LogWarning("[UIManager] Inventory 패널이 배선되지 않았습니다. inventoryPanel을 확인하세요. " +
+                                 "(MR: Tools → MR → 인벤토리 패널 배치)");
+                inventoryMissingWarned = true;
+            }
+            return;
         }
 
-        if (inventoryPanel != null)
+        if (inventoryPositionInitialized == false && UIPositionManager.Instance != null)
         {
-            if (inventoryPositionInitialized == false && UIPositionManager.Instance != null)
-            {
-                RepositionSimpleUI(inventoryPanel, "inventory");
-                inventoryPositionInitialized = true;
-            }
-
-            if (inventoryPanel.activeSelf == false)
-            {
-                inventoryPanel.SetActive(true);
-            }
-
-            InventoryView mainView = inventoryPanel.GetComponent<InventoryView>();
-            if (mainView != null)
-            {
-                mainView.Show();
-            }
+            RepositionSimpleUI(inventoryPanel, "inventory");
+            inventoryPositionInitialized = true;
         }
 
-        if (inventoryPanelChar != null)
+        InventoryView view = inventoryPanel.GetComponent<InventoryView>();
+
+        // 섹션 지정은 SetActive(true)보다 먼저 — 활성화 시 OnEnable→Rebuild가
+        // 프리팹 기본값(Main)으로 그려버리는 최초 오픈 버그를 막는다 (최초 1회만 지정).
+        // 창이 하나뿐이므로 항상 캐릭터 스토어를 본다.
+        if (view != null && inventoryCharSectionConfigured == false)
         {
-            if (inventoryCharPositionInitialized == false && UIPositionManager.Instance != null)
-            {
-                RepositionSimpleUI(inventoryPanelChar, "inventoryChar");
-                inventoryCharPositionInitialized = true;
-            }
+            view.ConfigureSection(InventorySection.Char);
+            inventoryCharSectionConfigured = true;
+        }
 
-            InventoryView charView = inventoryPanelChar.GetComponent<InventoryView>();
+        if (inventoryPanel.activeSelf == false)
+        {
+            inventoryPanel.SetActive(true);
+        }
 
-            // 섹션 지정은 SetActive(true)보다 먼저 — 활성화 시 OnEnable→Rebuild가
-            // 프리팹 기본값(Main)으로 그려버리는 최초 오픈 버그 방지 (캐릭터 창은 최초 1회만 지정)
-            if (charView != null && inventoryCharSectionConfigured == false)
-            {
-                charView.ConfigureSection(InventorySection.Char);
-                inventoryCharSectionConfigured = true;
-            }
-
-            if (inventoryPanelChar.activeSelf == false)
-            {
-                inventoryPanelChar.SetActive(true);
-            }
-
-            if (charView != null)
-            {
-                charView.Show();
-            }
+        if (view != null)
+        {
+            view.Show();
         }
     }
 
     public void CloseInventory()
     {
-        if (inventoryPanel != null)
+        if (inventoryPanel == null)
         {
-            InventoryView mainView = inventoryPanel.GetComponent<InventoryView>();
-            if (mainView != null)
-            {
-                mainView.Hide();
-            }
+            return;
         }
 
-        if (inventoryPanelChar != null)
+        InventoryView view = inventoryPanel.GetComponent<InventoryView>();
+        if (view != null)
         {
-            InventoryView charView = inventoryPanelChar.GetComponent<InventoryView>();
-            if (charView != null)
-            {
-                charView.Hide();
-            }
+            view.Hide();
         }
     }
 
@@ -833,8 +811,8 @@ public class UIManager : MonoBehaviour
         bool isVisible = false;
         if (inventoryPanel != null)
         {
-            InventoryView mainView = inventoryPanel.GetComponent<InventoryView>();
-            if (mainView != null && mainView.IsVisible == true)
+            InventoryView view = inventoryPanel.GetComponent<InventoryView>();
+            if (view != null && view.IsVisible == true)
             {
                 isVisible = true;
             }

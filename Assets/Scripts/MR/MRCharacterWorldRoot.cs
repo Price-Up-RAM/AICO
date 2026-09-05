@@ -201,8 +201,11 @@ public class MRCharacterWorldRoot : MonoBehaviour
         }
     }
 
-    private MRWristSummoner _wristSummoner;
-    private MRHologramPortrait _hologramPortrait;
+    [Header("Hologram & Summoner")]
+    [Tooltip("수동으로 배치한 Hologram Portrait (없으면 자동 생성)")]
+    [SerializeField] private MRHologramPortrait _hologramPortrait;
+    [Tooltip("수동으로 배치한 Wrist Summoner (없으면 자동 생성)")]
+    [SerializeField] private MRWristSummoner _wristSummoner;
 
     private void UpdateHologram(GameObject target)
     {
@@ -212,13 +215,24 @@ public class MRCharacterWorldRoot : MonoBehaviour
             holoObj.transform.SetParent(this.transform);
             _hologramPortrait = holoObj.AddComponent<MRHologramPortrait>();
             CurrentHologram = holoObj;
+            holoObj.SetActive(false);
+        }
+        else
+        {
+            CurrentHologram = _hologramPortrait.gameObject;
+        }
 
+        if (_wristSummoner == null)
+        {
             GameObject summonerObj = new GameObject("MRWristSummoner");
             summonerObj.transform.SetParent(this.transform);
             _wristSummoner = summonerObj.AddComponent<MRWristSummoner>();
             _wristSummoner.hologramPortrait = _hologramPortrait;
-            
-            holoObj.SetActive(false);
+        }
+        else if (_wristSummoner.hologramPortrait == null)
+        {
+            // 수동으로 할당했지만 hologramPortrait 연결이 비어있는 경우 보완
+            _wristSummoner.hologramPortrait = _hologramPortrait;
         }
 
         _hologramPortrait.SetCharacter(target);

@@ -158,6 +158,8 @@ public class TTSManager : MonoBehaviour
             lastConsumedSeqWasSub = isSubSeq;
             ttsSession.stateBySeq[seq] = "played";
             Debug.Log($"[TTS_Flow] 4.TTS수락 seq={seq} → 재생큐 추가");
+            // '큐에 넣었다'와 '실제로 소리가 난다'는 다른 사실이다 (Kickoff Guide 4-58).
+            // 재생 단계 실측은 VoiceManager.AddToQueue의 [Voice/재생] 로그를 볼 것.
             ttsSession.nextSeqToPlay++;
 
             // 다음 seq의 타임아웃 카운트 시작 (이 시점부터 2초)
@@ -771,17 +773,32 @@ public class TTSManager : MonoBehaviour
 
         GameObject currentCharacter = CharManager.Instance != null ? CharManager.Instance.GetCurrentCharacter() : null;
         CharAttributes attributes = currentCharacter != null ? currentCharacter.GetComponent<CharAttributes>() : null;
+        string diagCharcode = "(CharAttributes없음)";
         if (attributes != null)
         {
+            diagCharcode = attributes.charcode;
             string refId = GetSavedVoiceId(attributes.charcode);
             if (!string.IsNullOrEmpty(refId))
             {
+                // 진단(Phase 5)
+                Debug.Log($"[TTS/refid] charcode='{diagCharcode}' nickname='{nickname}' | ref_id='{refId}' (charcode 조회 성공)");
                 return refId;
             }
 
         }
 
-        return GetSavedVoiceId(nickname);
+        // 진단(Phase 5): 지금 값과 제안 값을 한 줄에 (Kickoff Guide 7-1 C).
+        // ref_id는 옵셔널 필드라 비면 키 자체가 사라지고 경고가 안 남는다 - 그래서 여기서 명시적으로 찍는다.
+        string fallbackId = GetSavedVoiceId(nickname);
+        if (string.IsNullOrEmpty(fallbackId))
+        {
+            Debug.Log($"[TTS/refid] charcode='{diagCharcode}' nickname='{nickname}' | voiceId 빈 값 → ref_id 누락 | 직전 [SettingChar/*] 로그에서 원인 확인");
+        }
+        else
+        {
+            Debug.Log($"[TTS/refid] charcode='{diagCharcode}' nickname='{nickname}' | ref_id='{fallbackId}' (nickname 폴백 성공)");
+        }
+        return fallbackId;
     }
 
     private string GetSavedVoiceId(string characterId)

@@ -193,19 +193,70 @@ public class MemoryManager : MonoBehaviour
     }
 
     // 대화 내용 초기화 및 안내
+    //
+    // 2026-08-26 실기 logcat 실측: 여기서 NullReferenceException이 나서
+    // 호출부(MRCharacterContextMenu 새 대화)의 뒷줄인 ShowChatBalloon()까지 도달하지 못했다.
+    // 범인은 UIChatHistoryManager 다. MR 씬에서 MR/WorldUI/Panels/ChatHistory 가 비활성이라
+    // Awake가 돌지 않아 Instance가 null이다. 클래스가 있다와 씬에 살아있다는 다른 사실이다 (Kickoff Guide 4-64).
+    // 데스크톱 씬은 넷 다 살아 있으므로 동작이 바뀌지 않는다.
     public void ResetConversationMemoryAndGuide(string targetNickname = null)
     {
         // Operator 모드일 경우 (targetNickname이 들어가도 상관없도록 기본 GetFileName이 핸들링함)
-        if (ChatModeManager.Instance.IsAroplaMode())
+        // ChatModeManager가 없으면 Aropla 판정을 건너뛴다 (기본 파일 경로 사용).
+        if (ChatModeManager.Instance != null && ChatModeManager.Instance.IsAroplaMode())
         {
             targetNickname = "aropla";
         }
 
+        // 실제 초기화는 매니저와 무관하므로 먼저 확실히 끝낸다.
         ResetConversationMemory(targetNickname);
-        AnswerBalloonSimpleManager.Instance.ShowAnswerBalloonSimpleInf();
-        AnswerBalloonSimpleManager.Instance.ModifyAnswerBalloonSimpleText("Memory Erased");
-        UIChatHistoryManager.Instance.ClearChatHistory();
-        GlobalTimeVariableManager.Instance.smallTalkTimer = 0f;
+
+        // 아래는 전부 안내 UI라서 없으면 건너뛰어도 초기화 자체는 성립한다.
+        bool hasBalloon = AnswerBalloonSimpleManager.Instance != null;
+        bool hasHistory = UIChatHistoryManager.Instance != null;
+        bool hasTimer = GlobalTimeVariableManager.Instance != null;
+
+        if (hasBalloon)
+        {
+            AnswerBalloonSimpleManager.Instance.ShowAnswerBalloonSimpleInf();
+            AnswerBalloonSimpleManager.Instance.ModifyAnswerBalloonSimpleText("Memory Erased");
+        }
+        if (hasHistory)
+        {
+            UIChatHistoryManager.Instance.ClearChatHistory();
+        }
+        if (hasTimer)
+        {
+            GlobalTimeVariableManager.Instance.smallTalkTimer = 0f;
+        }
+
+        // 어느 경로로 지나갔는지 한 줄로 남긴다 (7-1 C, D).
+        string targetText = targetNickname;
+        if (targetNickname == null)
+        {
+            targetText = "기본";
+        }
+
+        string balloonText = "없음(건너뜀)";
+        if (hasBalloon)
+        {
+            balloonText = "있음";
+        }
+
+        string historyText = "없음(건너뜀) - MR 씬 ChatHistory 비활성";
+        if (hasHistory)
+        {
+            historyText = "있음";
+        }
+
+        string timerText = "없음(건너뜀)";
+        if (hasTimer)
+        {
+            timerText = "있음";
+        }
+
+        Debug.Log($"[Memory/새대화] 초기화 완료 | target='{targetText}' | AnswerBalloonSimple={balloonText}" +
+                  $" | UIChatHistory={historyText} | GlobalTimeVariable={timerText}");
     }
 
     // 최대 길이만큼의 대화 가져오기

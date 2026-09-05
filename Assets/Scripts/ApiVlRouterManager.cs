@@ -40,6 +40,9 @@ public class ApiVlRouterManager : MonoBehaviour
     private string currentQuery = "";  // 현재 Router 요청 원문
     private string currentChatIdx = "-1";  // 현재 대화 번호
     private string currentIntentImage = "off";  // 이번 run의 이미지 전송 모드 (off/auto/force)
+    private string currentSttLang = "";  // STT가 감지한 입력 언어. 비어 있으면 설정값을 쓴다
+    private float routerStartTime = 0f;  // 요청 시작 시각. 구간 경과 계측용 (7-1 C)
+    private string routerActionChannel = "?";  // 액션이 어느 경로로 왔는지 (툴콜/envelope/planner) — 각 진입점이 직접 세팅한다
     private Action<JObject> currentOnEvent = null;  // 이벤트 콜백
     private Action<bool, string> currentOnComplete = null;  // 완료 콜백
     private AIChatSession routerConversationSession = null;  // Router conversation 세션
@@ -59,13 +62,18 @@ public class ApiVlRouterManager : MonoBehaviour
     #region Router Run
 
     // VL Router Run 스트리밍 실행 (/router/job/run)
+    // sttLang: STT가 자동 감지한 입력 언어. 빈 문자열이면 SettingManager의 ai_language_in을 그대로 쓴다.
+    // (데스크톱 SendBtn 경로는 인자를 넘기지 않으므로 기존 동작 그대로다)
     public void ExecuteVlRouterRun(
         string query,
         Action<JObject> onEvent = null,
         Action<bool, string> onComplete = null,
-        int maxRetry = 5
+        int maxRetry = 5,
+        string sttLang = ""
     )
     {
+        routerStartTime = Time.realtimeSinceStartup;
+        currentSttLang = sttLang;
         currentOnEvent = onEvent;
         currentOnComplete = onComplete;
         isCanceled = false;
@@ -109,7 +117,7 @@ public class ApiVlRouterManager : MonoBehaviour
         {
             string balloonImageInfo = ChatBalloonManager.Instance.GetUseImageInfo();
             Debug.Log($"[VlRouterRun] Image Info - ChatBalloon (IsChatting=true): intent_image={balloonImageInfo}");
-            return balloonImageInfo;
+            return ApplyMRImageGuard(balloonImageInfo);
         }
 
         int aiUseImageIdx = SettingManager.Instance.settings.ai_use_image_idx;
@@ -123,6 +131,26 @@ public class ApiVlRouterManager : MonoBehaviour
             intentImage = "force";
         }
         Debug.Log($"[VlRouterRun] Image Info - Direct call (IsChatting=false): ai_use_image_idx={aiUseImageIdx}, intent_image={intentImage}");
+        return ApplyMRImageGuard(intentImage);
+    }
+
+    // MR에서 공급 가능한 이미지가 없는데 intent_image가 켜져 있으면 요청 자체가 죽는다
+    // (ExecuteRouterRunCoroutine에서 캡처 실패 시 yield break).
+    // Phase 4-C의 MRHandFrameGesture가 손 프레임을 주입해 뒀으면 IsScreenshotAreaSet()이 true가 되어
+    // 이 가드를 통과하고, 그 PNG가 그대로 라우터의 image 필드로 나간다.
+    private string ApplyMRImageGuard(string intentImage)
+    {
+#if UNITY_ANDROID || UNITY_EDITOR
+        if (intentImage == "off")
+        {
+            return intentImage;
+        }
+        if (ScreenshotManager.Instance == null || !ScreenshotManager.Instance.IsScreenshotAreaSet())
+        {
+            Debug.Log($"[VlRouterRun/MR] intent_image={intentImage} → off 강등 (주입된 손 프레임 없음). 이미지 없이 대화만 진행한다");
+            return "off";
+        }
+#endif
         return intentImage;
     }
 
@@ -228,6 +256,11 @@ public class ApiVlRouterManager : MonoBehaviour
 
         string unityFunctionsList = ApiAgentFunctionManager.Instance.GetFunctionsList();
         string unityFunctionsDetailList = ApiAgentFunctionManager.Instance.GetFunctionsDetailList();
+
+        // 계측: 서버로 '실제로' 나가는 함수 목록. 필터가 반영됐는지, 서버가 이걸 쓰는지 대조용.
+        // 목록을 만들었다는 것과 그 목록이 전송된다는 것은 다른 사실이다 (Kickoff Guide 4-58).
+        Debug.Log($"[AgentFunc/전송] unity_functions_list ({unityFunctionsList.Length}자) = {unityFunctionsList}");
+        Debug.Log($"[AgentFunc/전송] unity_functions_detail_list ({unityFunctionsDetailList.Length}자)");
         Dictionary<string, string> routerContextFields = BuildRouterContextFields();
 
         var eventQueue = new System.Collections.Concurrent.ConcurrentQueue<JObject>();
@@ -505,6 +538,7 @@ public class ApiVlRouterManager : MonoBehaviour
 
         Debug.Log($"[VlRouterRun] done data: {data.ToString()}");
 
+        routerActionChannel = "툴콜";
         if (ApiVlRouterResponseManager.Instance.TryHandleRouterToolCall(eventData, data, offsetX, offsetY, TryProcessReplyListFromRouterData, ExecuteRouterFunction))
         {
             return;
@@ -554,6 +588,10 @@ public class ApiVlRouterManager : MonoBehaviour
         }
 
         Debug.Log($"[VlRouterRun] act data: {data.ToString()}");
+
+        // 액션은 스킬/툴콜 경로와 planner 경로 두 갈래로 들어오는데 종착점은 ExecuteRouterFunction 하나다.
+        // 로그에 어느 경로인지 남기지 않으면 콜스택을 세야 갈린다 (Kickoff Guide 7-1 D).
+        routerActionChannel = "툴콜";
         if (ApiVlRouterResponseManager.Instance.TryHandleRouterToolCall(eventData, data, offsetX, offsetY, TryProcessReplyListFromRouterData, ExecuteRouterFunction))
         {
             return;
@@ -575,6 +613,8 @@ public class ApiVlRouterManager : MonoBehaviour
         {
             parameterLog = parameters.ToString();
         }
+        // 진입점이 자기 태그를 정한다 — 호출부(act/done)가 어디든 항상 맞는다 (Kickoff Guide 7-1 D)
+        routerActionChannel = "envelope";
         Debug.Log($"[VlRouterRun] unity envelope function={functionName}, parameters={parameterLog}");
         ExecuteRouterFunction(functionName, parameters, offsetX, offsetY);
         return true;
@@ -646,6 +686,7 @@ public class ApiVlRouterManager : MonoBehaviour
     // Planner action 처리
     private bool TryHandlePlannerAction(JObject data, int offsetX, int offsetY)
     {
+        routerActionChannel = "planner";
         string action = data["action"]?.Value<string>() ?? "";
         string functionName = data["function_name"]?.Value<string>() ?? "";
 
@@ -695,9 +736,31 @@ public class ApiVlRouterManager : MonoBehaviour
         return false;
     }
 
+    // MR에서 실행 불가능한 라우터 액션.
+    // 주의: 이 switch의 case는 ApiAgentFunctionManager의 함수 레지스트리와 별개다 —
+    // planner 액션은 unity_functions_list를 거치지 않고 이름으로 직접 들어오므로
+    // 레지스트리 필터(StripMRUnsupportedFunctions)로는 막히지 않는다.
+    private static readonly string[] MRBlockedRouterFunctions =
+    {
+        // ScreenshotManager 데스크톱 캡처 + ClipboardManager(Win32) 의존
+        "capture_screenshot", "function_request_screenshot", "screenshot",
+        // ExecutorMouseAction — 데스크톱 커서 클릭. MR에는 클릭할 화면이 없다
+        "click", "function_request_click", "REQUEST_CLICK"
+    };
+
     // Router function 실행
     private void ExecuteRouterFunction(string functionName, JObject parameters, int offsetX, int offsetY)
     {
+        Debug.Log($"[VlRouterRun/{routerActionChannel}] 액션 실행: {functionName}");
+
+#if UNITY_ANDROID || UNITY_EDITOR
+        if (Array.IndexOf(MRBlockedRouterFunctions, functionName) >= 0)
+        {
+            Debug.LogWarning($"[VlRouterRun/{routerActionChannel}] '{functionName}'는 MR 미지원이라 실행하지 않는다 (데스크톱 화면·마우스·클립보드 의존)");
+            return;
+        }
+#endif
+
         switch (functionName)
         {
             case "character_dance":
@@ -830,9 +893,24 @@ public class ApiVlRouterManager : MonoBehaviour
             ["origin"] = currentQuery,
             ["text"] = currentQuery
         };
+        // ai_info가 없으면 APIManager.PrepareConversationReplyUiFromRouter가 NRE를 낸다.
+        // try/catch 안이라 동작에는 지장이 없지만 catch가 스택 전체를 찍어 로그를 오염시킨다
+        // (2026-08-25 실측: 한 세션에 21건). 빈 값으로 채워 조용히 통과시킨다.
+        conversationEvent["ai_info"] = new JObject
+        {
+            ["server_type"] = "",
+            ["model"] = "",
+            ["prompt"] = "",
+            ["lang_used"] = "",
+            ["translator"] = "",
+            ["time"] = "",
+            ["emotion"] = ""
+        };
 
         BeginRouterConversationIfNeeded();
-        Debug.Log("[VlRouterRun] data.reply_list 표시 - /conversation_stream 재호출 없음");
+        // 구간 계측: 발화 → 대사 도착까지 몇 초 걸렸는지, 대사가 몇 개로 쪼개져 왔는지 (7-1 C)
+        // conversation_stream은 문장마다 스트리밍했지만 라우터는 done에서 전문을 한 번에 준다.
+        Debug.Log($"[VlRouterRun/계측] 대사 도착 {Time.realtimeSinceStartup - routerStartTime:F2}s | reply 개수={((JArray)replyList).Count} | chatIdx={currentChatIdx}");
         APIManager.Instance.ProcessConversationStreamEventFromRouter(conversationEvent, routerConversationSession);
         return true;
     }
@@ -973,16 +1051,30 @@ public class ApiVlRouterManager : MonoBehaviour
             }
             WriteFormField(writer, boundary, "is_canceled", isCanceledText);
             WriteFormField(writer, boundary, "ai_language", SettingManager.Instance.settings.ai_language ?? "");
-            WriteFormField(writer, boundary, "ai_language_in", SettingManager.Instance.settings.ai_language_in ?? "");
+            // STT가 감지한 입력 언어가 있으면 설정값 대신 그것을 보낸다.
+            // conversation_stream 경로와 같은 규칙이다 (APIManager.cs의 ai_lang_in 처리).
+            string languageIn = SettingManager.Instance.settings.ai_language_in ?? "";
+            if (!string.IsNullOrEmpty(currentSttLang))
+            {
+                languageIn = currentSttLang;
+            }
+            WriteFormField(writer, boundary, "ai_language_in", languageIn);
             WriteFormField(writer, boundary, "ai_language_out", SettingManager.Instance.settings.ai_language_out ?? "");
-            WriteFormField(writer, boundary, "unity_functions_list", unityFunctionsList ?? "");
-            WriteFormField(writer, boundary, "unity_functions_detail_list", unityFunctionsDetailList ?? "");
+            // 계측: 폼 필드에 실제로 실린 길이. 위 [AgentFunc/전송] 값과 일치해야 한다.
+            // 0이면 목록은 만들어졌는데 전송 직전에 사라졌다는 뜻이다.
+            string fieldList = unityFunctionsList ?? "";
+            string fieldDetail = unityFunctionsDetailList ?? "";
+            Debug.Log($"[AgentFunc/전송] 폼 필드 적재: list={fieldList.Length}자 detail={fieldDetail.Length}자");
+            WriteFormField(writer, boundary, "unity_functions_list", fieldList);
+            WriteFormField(writer, boundary, "unity_functions_detail_list", fieldDetail);
 
             foreach (KeyValuePair<string, string> field in routerContextFields)
             {
                 WriteFormField(writer, boundary, field.Key, field.Value ?? "");
             }
 
+            long beforeImage = memStream.Length;
+            bool imageWritten = false;
             if (imageBytes != null && imageBytes.Length > 0)
             {
                 writer.WriteLine($"--{boundary}");
@@ -992,7 +1084,24 @@ public class ApiVlRouterManager : MonoBehaviour
                 writer.Flush();
                 memStream.Write(imageBytes, 0, imageBytes.Length);
                 writer.WriteLine();
+                imageWritten = true;
             }
+            writer.Flush();
+
+            // 요청 본문에 image 파트가 실제로 들어갔는지 계측한다.
+            int imageLen = 0;
+            if (imageBytes != null)
+            {
+                imageLen = imageBytes.Length;
+            }
+            string imageState = "없음";
+            if (imageWritten)
+            {
+                imageState = "기록됨";
+            }
+            Debug.Log($"[VlRouterRun/계측] image 파트 {imageState} | imageBytes={imageLen}바이트 | " +
+                      $"본문 {beforeImage}바이트 → {memStream.Length}바이트 | " +
+                      $"intent_image={currentIntentImage}");
 
             writer.WriteLine($"--{boundary}--");
             writer.Flush();

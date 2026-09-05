@@ -104,9 +104,40 @@ public class KAIManager : MonoBehaviour
     {
         if (storePanelInstance == null)
         {
+            // ① 씬에 이미 놓여 있으면 그것을 쓴다 (2026-08-26 추가).
+            //
+            // 아래 프리팹 인스턴스화 경로는 CanvasManager.canvasUI(메인 Canvas) 아래에 만드는데,
+            // MR에서 그 캔버스는 월드 1920 m라 월드 스페이스 패널을 그 안에 넣으면 깨진다
+            // (Kickoff Guide §4-18 / §4-36). UIManager.ResolveManagedUI가 다른 패널들에
+            // 쓰는 "씬 오브젝트 우선" 규약을 여기에도 적용한다.
+            // 씬 배치는 Tools → MR → 상점 패널 배치 가 한다.
+            storePanelInstance = FindSceneStorePanel();
+            if (storePanelInstance != null)
+            {
+                storeView = storePanelInstance.GetComponentInChildren<StoreView>(true);
+
+                // 씬에 배치된 패널은 시작 시 비활성으로 저장돼 있다(다른 패널 9개와 같은 규약).
+                // StoreView.Show()는 CanvasGroup 알파만 올리므로, SetActive(true)를 같이 해주지 않으면
+                // "알파는 1인데 오브젝트가 꺼져 있어 안 보이는" 상태가 된다 (§4-44의 반대 실수).
+                if (storePanelInstance.activeSelf == false)
+                {
+                    storePanelInstance.SetActive(true);
+                }
+
+                Debug.Log($"[KAIManager] 씬의 StorePanel을 사용합니다: {storePanelInstance.name}");
+
+                if (storeView != null)
+                {
+                    storeView.Show();
+                }
+                return;
+            }
+
+            // ② 씬에 없으면 기존 프리팹 경로 (데스크톱 KAI 씬용)
             if (storePanelPrefab == null)
             {
-                Debug.LogWarning("[KAIManager] storePanelPrefab이 비어 있어 Store를 열 수 없습니다. (KAISceneBuilder 재실행 필요)");
+                Debug.LogWarning("[KAIManager] 씬에 StorePanel이 없고 storePanelPrefab도 비어 있어 Store를 열 수 없습니다. " +
+                                 "(MR: Tools → MR → 상점 패널 배치 / 데스크톱: KAISceneBuilder 재실행)");
                 return;
             }
 
@@ -118,6 +149,8 @@ public class KAIManager : MonoBehaviour
             storePanelInstance = Instantiate(storePanelPrefab, parent);
             storePanelInstance.name = "StorePanel";
             storeView = storePanelInstance.GetComponentInChildren<StoreView>(true);
+            Debug.LogWarning("[KAIManager] 씬에 StorePanel이 없어 프리팹을 메인 Canvas 아래 생성했습니다 — " +
+                             "MR이라면 §4-18로 깨집니다. Tools → MR → 상점 패널 배치 를 실행하세요.");
             if (storeView != null)
             {
                 storeView.Show();   // 첫 오픈은 표시 확정 (Toggle이면 베이크된 alpha에 따라 곧바로 닫힐 수 있다)
@@ -125,10 +158,67 @@ public class KAIManager : MonoBehaviour
             return;
         }
 
+        // 두 번째 이후: 껐다 켜기. 알파만 올리면 비활성 오브젝트에서 안 보인다.
+        if (storePanelInstance != null && storePanelInstance.activeSelf == false)
+        {
+            storePanelInstance.SetActive(true);
+        }
+
         if (storeView != null)
         {
             storeView.Toggle();
         }
+    }
+
+    // 토글이 아니라 확정 열기. 메뉴에서 인벤토리와 함께 소환할 때 쓴다 —
+    // Toggle이면 이미 열려 있을 때 닫혀버려 "둘 다 열기"가 성립하지 않는다.
+    public static void OpenStore()
+    {
+        if (instance == null)
+        {
+            instance = FindAnyObjectByType<KAIManager>();
+        }
+        if (instance == null)
+        {
+            Debug.LogWarning("[KAIManager] KAIManager가 없어 Store를 열 수 없습니다.");
+            return;
+        }
+
+        instance.OpenStoreInternal();
+    }
+
+    private void OpenStoreInternal()
+    {
+        if (storeView != null && storeView.IsVisible)
+        {
+            return;
+        }
+
+        ToggleStoreInternal();
+    }
+
+    // 씬에 실재하는 StorePanel 찾기 (비활성 포함).
+    // 프리팹 에셋이 아니라 씬 오브젝트만 받는다 — scene.IsValid()가 그 판정이다.
+    private GameObject FindSceneStorePanel()
+    {
+        StoreView[] views = Resources.FindObjectsOfTypeAll<StoreView>();
+        for (int i = 0; i < views.Length; i++)
+        {
+            StoreView view = views[i];
+            if (view == null || view.gameObject == null)
+            {
+                continue;
+            }
+
+            if (view.gameObject.scene.IsValid() == false)
+            {
+                continue;
+            }
+
+            return view.gameObject;
+        }
+
+        return null;
     }
 
     // 현재 캐릭터가 AICO가 아니면 AICO로 교체 (초기 스폰·AI 의도(change_model) 등 모든 경로를 커버)

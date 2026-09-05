@@ -16,8 +16,8 @@ using UnityEngine.UI;
 /// 페이징: 그리드는 페이지당 6장(3x2) 고정, 하단 [ &lt; n / m &gt; ] 페이지바로 이동 (InventoryView 방식).
 ///
 /// 재화 루프
-///  - 구매: 카드 클릭 → StoreConfirmView(Buy 모드, 수량/최종금액 확인 팝업) → 확인 시 Spend(골드) → AddToMain(key, 수량).
-///          AddToMain 실패 시 전액 환불. 장착물 탭 구매 성공 시 MissionList.Report("AF0005", 수량).
+///  - 구매: 카드 클릭 → StoreConfirmView(Buy 모드, 수량/최종금액 확인 팝업) → 확인 시 Spend(골드) → AddToChar(활성 charcode, key, 수량).
+///          지급 실패 시 전액 환불. (2026-08-26: 공용 보관함 창을 없애 캐릭터 소지품으로 바꿨다 — ActiveStore/ActiveOwnerId 참고) 장착물 탭 구매 성공 시 MissionList.Report("AF0005", 수량).
 ///  - 판매: StoreSellZone(IDropHandler)이 드롭 검증 후 RequestSell 호출 → StoreConfirmView(Sell 모드,
 ///          수량 선택) → 확인 시 ExecuteSale(스택 차감 + Earn(골드)) → NotifySold.
 ///  - 골드 표시: CurrencyManager.CurrencyChanged 구독. 보유 수: InventoryEvents.OnStoreChanged 구독.
@@ -178,10 +178,44 @@ public class StoreView : MonoBehaviour
         }
     }
 
-    // MAIN 스토어 변경 → 보유 수 갱신 (구매/판매/이동 모두)
+    // ── 상점이 물건을 넣고 빼는 보관함 ────────────────────────────
+    //
+    // 2026-08-26까지는 공용(MAIN) 보관함이었다. 원래 구조가 상점 / 공용 / 캐릭터 3단이었고
+    // 상점은 공용에 넣고, 사용자가 공용에서 캐릭터로 옮기는 흐름이었다.
+    // 캐릭터 1명(AICO)으로 확정되면서 공용 창을 걷어냈으므로 상점도 **캐릭터 소지품**을 쓴다.
+    // 그대로 두면 산 물건이 어느 창에도 안 보인다.
+    //
+    // 보관함을 참조하는 지점이 다섯 곳이라 여기 하나로 모은다 — 흩어두면 다음에 또 샌다.
+    //
+    // static인 이유: 호출부 중 OwnedCount(key)가 static 메서드다.
+    // 인스턴스 상태를 쓰지 않으므로 static으로 두는 게 맞고, 나중에 인스턴스 필드가
+    // 필요해지면 OwnedCount 쪽부터 함께 손봐야 한다.
+    private static InvStore ActiveStore(InventorySystemManager manager)
+    {
+        if (manager == null)
+        {
+            return null;
+        }
+
+        return manager.GetActiveCharStore();
+    }
+
+    // 위 보관함의 ownerId (활성 charcode). 활성 캐릭터가 없으면 null.
+    private static string ActiveOwnerId(InventorySystemManager manager)
+    {
+        if (manager == null)
+        {
+            return null;
+        }
+
+        return manager.ActiveCharcode;
+    }
+
+    // 보관함 변경 → 보유 수 갱신 (구매/판매/이동 모두)
     private void HandleStoreChanged(string ownerId)
     {
-        if (ownerId == InventorySystemManager.MainOwnerId)
+        string active = ActiveOwnerId(InventorySystemManager.Instance);
+        if (string.IsNullOrEmpty(active) == false && ownerId == active)
         {
             RebuildGrid();
         }
@@ -400,7 +434,7 @@ public class StoreView : MonoBehaviour
         confirmView.Open(StoreConfirmMode.Buy, entry.key, displayName, icon, entry.ResolvePrice(meta), Mathf.Min(99, room), qty => ExecutePurchase(captured, qty));
     }
 
-    // 결제 실행: Spend(골드 총액) → AddToMain(key, 수량). 지급 실패 시 전액 환불.
+    // 결제 실행: Spend(골드 총액) → AddToChar(활성 charcode, key, 수량). 지급 실패 시 전액 환불.
     private void ExecutePurchase(StoreEntry entry, int quantity)
     {
         if (entry == null || quantity < 1 || Application.isPlaying == false)
@@ -420,7 +454,7 @@ public class StoreView : MonoBehaviour
             return;
         }
 
-        // AddToMain은 최대 스택 초과분을 조용히 버리고도 true를 반환한다 — 결제 전에 수용량을 선검증
+        // AddToChar는 최대 스택 초과분을 조용히 버리고도 true를 반환한다 — 결제 전에 수용량을 선검증
         ItemEntry meta = ResolveMeta(entry.key);
         if (meta == null || meta.isBuyable == false)
         {
@@ -445,15 +479,28 @@ public class StoreView : MonoBehaviour
         }
 
         InventorySystemManager manager = InventorySystemManager.Instance;
-        if (manager == null || manager.AddToMain(entry.key, quantity) == false)
+        string ownerId = ActiveOwnerId(manager);
+
+        if (string.IsNullOrEmpty(ownerId))
         {
-            // 지급 실패 → 전액 환불 (AddToMain이 카탈로그 검증/최대 스택에서 거부할 수 있다)
+            // 활성 캐릭터가 없으면 넣을 곳이 없다. 결제 전에 막는다 (결제 후 환불보다 낫다)
+            wallet.Refund(CurrencyManager.GoldKey, total);
+            ShowToast("아이템을 받을 캐릭터가 없습니다");
+            Debug.LogWarning("[Store][StoreView] ActiveCharcode가 비어 있어 지급 불가 — 전액 환불");
+            return;
+        }
+
+        if (manager.AddToChar(ownerId, entry.key, quantity) == false)
+        {
+            // 지급 실패 → 전액 환불 (AddToChar가 카탈로그 검증/최대 스택에서 거부할 수 있다)
             // 실패한 결제의 되돌림이라 Refund — earned/spent 누적을 펌핑하지 않는다
             wallet.Refund(CurrencyManager.GoldKey, total);
             ShowToast("아이템 지급에 실패해 환불되었습니다");
-            Debug.LogWarning($"[Store][StoreView] AddToMain 실패로 환불: {entry.key} x{quantity} ({total} G)");
+            Debug.LogWarning($"[Store][StoreView] AddToChar 실패로 환불: {entry.key} x{quantity} ({total} G) owner={ownerId}");
             return;
         }
+
+        Debug.Log($"[Store][StoreView] 구매 지급 {entry.key} x{quantity} → {ownerId} 소지품 (-{total} G)");
 
         ShowToast(string.Format(TranslateUi("{0} x{1} 구매 -{2:N0} G"),
             ResolveDisplayName(entry, ResolveMeta(entry.key)), quantity, total));
@@ -540,8 +587,8 @@ public class StoreView : MonoBehaviour
             return;
         }
 
-        // 모달이 떠 있는 동안 스토어가 바뀌었을 수 있으므로 슬롯을 다시 확인한다
-        InvStore store = manager.GetMainStore();
+        // 모달이 떠 있는 동안 보관함이 바뀌었을 수 있으므로 슬롯을 다시 확인한다
+        InvStore store = ActiveStore(manager);
         InvItemStack stack = store != null ? store.FindBySlot(slotIndex) : null;
         if (stack == null || stack.key != key)
         {
@@ -560,7 +607,7 @@ public class StoreView : MonoBehaviour
         }
 
         manager.SaveStore(store);
-        InventoryEvents.OnStoreChanged?.Invoke(InventorySystemManager.MainOwnerId);
+        InventoryEvents.OnStoreChanged?.Invoke(ActiveOwnerId(manager));
 
         int total = GetSellTotal(key, quantity);
         if (total > 0)
@@ -1014,7 +1061,7 @@ public class StoreView : MonoBehaviour
             return 0;
         }
 
-        InvStore store = manager.GetMainStore();
+        InvStore store = ActiveStore(manager);
         return store != null ? store.CountOf(key) : 0;
     }
 

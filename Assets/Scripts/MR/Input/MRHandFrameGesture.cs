@@ -675,6 +675,16 @@ public class MRHandFrameGesture : MonoBehaviour
         if (sm != null) {
             sm.InjectMRScreenshot(pngBytes);
             Debug.Log($"[MRHandFrame] 캡처 및 주입 완료! {cropW}x{cropH} ({pngBytes.Length} bytes). 테스트용 파일 저장됨: {debugPath}");
+
+            // 찍었으면 곧바로 말풍선을 열고 '첨부됨' 상태로 만든다.
+            // 주입만 해 두면 사용자는 사진이 붙었는지 알 수 없고,
+            // 말풍선의 이미지 모드가 off면 라우터 가드가 다시 off로 강등해 버린다.
+            ChatBalloonManager balloon = ChatBalloonManager.Instance;
+            if (balloon == null) {
+                Debug.LogWarning("[MRHandFrame] ChatBalloonManager를 찾지 못했다. 사진은 주입됐지만 말풍선에 표시되지 않는다.");
+            } else {
+                balloon.OnMRScreenshotCaptured(cropW, cropH, pngBytes.Length);
+            }
         }
 #endif
         yield return null;

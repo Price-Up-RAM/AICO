@@ -349,10 +349,46 @@ public class ScreenshotManager : MonoBehaviour
     }
     
     // MR 포팅: 제스처 프레임에서 캡처한 이미지를 주입
+    //
+    // 2026-08-26 변경: 예전에는 한 번 전송하면 곧바로 null로 지웠다(소비).
+    // 그래서 "이게 뭐야?" 다음에 "그럼 저건?"으로 이어 물으면 두 번째부터 사진이 빠졌다.
+    // 이제는 명시적으로 ClearMRScreenshot()을 부를 때까지 유지한다.
+    // 지우는 주체는 ChatBalloonManager다 (이미지 버튼을 눌러 off로 내릴 때).
     private byte[] mrInjectedBytes = null;
+
+    public bool HasMRScreenshot
+    {
+        get { return mrInjectedBytes != null && mrInjectedBytes.Length > 0; }
+    }
+
     public void InjectMRScreenshot(byte[] bytes)
     {
+        int before = 0;
+        if (mrInjectedBytes != null) before = mrInjectedBytes.Length;
+        int after = 0;
+        if (bytes != null) after = bytes.Length;
+
         mrInjectedBytes = bytes;
+        Debug.Log($"[Screenshot/MR] 이미지 주입 | 현재값={before}바이트 → 새값={after}바이트");
+    }
+
+    // 첨부 해제. 이걸 부르기 전까지는 몇 번을 물어도 같은 사진이 붙는다.
+    public void ClearMRScreenshot()
+    {
+        int before = 0;
+        if (mrInjectedBytes != null) before = mrInjectedBytes.Length;
+        mrInjectedBytes = null;
+        Debug.Log($"[Screenshot/MR] 이미지 첨부 해제 | 현재값={before}바이트 → 새값=0바이트");
+    }
+
+    // MR 주입 이미지를 텍스처로 미리보기 (우클릭 미리보기 경로가 파일을 읽는 것과 별개)
+    public bool ShowMRScreenshotImage()
+    {
+        if (!HasMRScreenshot) return false;
+        Texture2D texture = new Texture2D(2, 2);
+        texture.LoadImage(mrInjectedBytes);
+        ShowImageTexture(texture, "MRScreenshotImage");
+        return true;
     }
 
     // Unity 창을 캡처에서 제외/포함 설정
@@ -748,8 +784,9 @@ public class ScreenshotManager : MonoBehaviour
 #if UNITY_ANDROID || UNITY_EDITOR
         if (mrInjectedBytes != null)
         {
+            // 지우지 않는다. ClearMRScreenshot()이 부를 때까지 같은 사진을 계속 쓴다.
             byte[] bytes = mrInjectedBytes;
-            mrInjectedBytes = null; // 소비
+            Debug.Log($"[Screenshot/MR] 주입 이미지 사용(유지) | {bytes.Length}바이트");
             callback?.Invoke(bytes);
             yield break;
         }
@@ -795,8 +832,9 @@ public class ScreenshotManager : MonoBehaviour
 #if UNITY_ANDROID || UNITY_EDITOR
         if (mrInjectedBytes != null)
         {
+            // 지우지 않는다 (위와 같은 이유).
             byte[] bytes = mrInjectedBytes;
-            mrInjectedBytes = null; // 소비
+            Debug.Log($"[Screenshot/MR] 주입 이미지 사용(유지, 영역정보 없음) | {bytes.Length}바이트");
             callback?.Invoke(bytes, 0, 0, 0, 0); // MR은 영역 정보 없음
             yield break;
         }

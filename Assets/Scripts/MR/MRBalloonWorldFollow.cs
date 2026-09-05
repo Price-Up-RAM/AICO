@@ -94,6 +94,9 @@ public class MRBalloonWorldFollow : MonoBehaviour
     [Tooltip("홀로그램 모드일 때 위 오프셋들에 곱할 비율.")]
     [SerializeField] private float hologramOffsetScale = 0.3f;
 
+    [Tooltip("캐릭터가 가려지지 않도록 항상 옆으로 비켜나는 오프셋(m). 0이면 비켜나지 않는다.")]
+    [SerializeField] private float sideOffset = 0.45f;
+
     [Header("빌보드")]
     [Tooltip("Y축만 회전해 사용자를 향하게 한다. 완전 빌보드(모든 축)는 어지러워서 쓰지 않는다 " +
              "(MR_Phase3-2_Canvas_Plan.md §3-2-B step 4 확정 사항).")]
@@ -385,6 +388,17 @@ public class MRBalloonWorldFollow : MonoBehaviour
         // ---- 수평 위치: 캐릭터 위치에서 사용자 쪽으로 당긴다 ("캐릭터 앞") ----
         Vector3 offset = worldOffset * offsetMul;
         Vector3 newPos = targetPos + new Vector3(offset.x, 0f, offset.z);
+
+        // 말풍선이 캐릭터를 가리지 않도록 눈 기준 오른쪽으로 항상 비켜난다.
+        if (sideOffset != 0f && eye != null)
+        {
+            Vector3 sideDir = Vector3.Cross(Vector3.up, eye.position - targetPos);
+            sideDir.y = 0f;
+            if (sideDir.sqrMagnitude > 0.0001f)
+            {
+                newPos += sideDir.normalized * (sideOffset * offsetMul);
+            }
+        }
 
         if (eye != null)
         {

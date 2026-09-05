@@ -50,6 +50,75 @@ public class MRTextInputGuard : MonoBehaviour
 
     private readonly Dictionary<Graphic, bool> _originalRaycastTarget = new Dictionary<Graphic, bool>();
 
+    // 계측(Phase 5): 키보드 입력이 막히는 지점을 가른다.
+    // blockTextInput이 꺼져 있어도 다른 이유로 포커스가 안 잡힐 수 있다 —
+    // '차단이 꺼져 있다'와 '입력이 된다'는 다른 사실이다 (Kickoff Guide 4-58).
+    private TMP_InputField _diagLastFocused;
+
+    private void Start()
+    {
+        TMP_InputField[] fields = targetFields;
+        if (fields == null || fields.Length == 0)
+        {
+            fields = GetComponentsInChildren<TMP_InputField>(true);
+        }
+
+        Debug.Log($"[MRInput/진단] blockTextInput={blockTextInput} | 대상 InputField {fields.Length}개 | 오브젝트='{gameObject.name}'");
+
+        for (int i = 0; i < fields.Length; i++)
+        {
+            TMP_InputField f = fields[i];
+            if (f == null)
+            {
+                continue;
+            }
+
+            Graphic g = f.GetComponent<Graphic>();
+            string raycast = "(Graphic없음)";
+            if (g != null)
+            {
+                raycast = g.raycastTarget.ToString();
+            }
+
+            Debug.Log($"[MRInput/진단] '{f.gameObject.name}' interactable={f.interactable} readOnly={f.readOnly} raycastTarget={raycast} 활성={f.gameObject.activeInHierarchy} shouldHideSoftKeyboard={f.shouldHideSoftKeyboard} 부모활성={f.transform.parent != null && f.transform.parent.gameObject.activeInHierarchy}");
+        }
+    }
+
+    private void Update()
+    {
+        // 포커스가 잡히는 순간만 찍는다 (매 프레임 찍으면 로그가 묻힌다).
+        TMP_InputField focused = null;
+        TMP_InputField[] fields = targetFields;
+        if (fields == null || fields.Length == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < fields.Length; i++)
+        {
+            if (fields[i] != null && fields[i].isFocused)
+            {
+                focused = fields[i];
+                break;
+            }
+        }
+
+        if (focused == _diagLastFocused)
+        {
+            return;
+        }
+
+        _diagLastFocused = focused;
+        if (focused != null)
+        {
+            Debug.Log($"[MRInput/진단] 포커스 획득: '{focused.gameObject.name}' text='{focused.text}'");
+        }
+        else
+        {
+            Debug.Log("[MRInput/진단] 포커스 해제");
+        }
+    }
+
     private void Awake()
     {
         if (!blockTextInput) return;

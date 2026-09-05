@@ -239,6 +239,11 @@ public class InventorySlotView : MonoBehaviour, IPointerClickHandler, IBeginDrag
         go.layer = 5;
         go.transform.SetParent(canvas.rootCanvas.transform, false);
 
+        // 부모 캔버스의 LayoutGroup에 편입되지 않게 한다.
+        // InventoryPanel 루트에 VerticalLayoutGroup이 있고, MR 전환(Tools 6)으로 패널 자체가
+        // 루트 캔버스가 되면서 런타임 생성 UI가 그 레이아웃 안으로 떨어진다 (§4-18 계열의 후속 함정).
+        go.AddComponent<LayoutElement>().ignoreLayout = true;
+
         Image img = go.AddComponent<Image>();
         img.raycastTarget = false;
 

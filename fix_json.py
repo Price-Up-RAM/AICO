@@ -5,7 +5,7 @@ path = os.path.expandvars(r'%USERPROFILE%\AppData\LocalLow\DefaultCompany\AICO\c
 if os.path.exists(path):
     with open(path, 'r', encoding='utf-8') as f:
         data = json.load(f)
-    data['server_id'] = 'arona654'
+    data['server_id'] = 'arona655'
     data['server_type_idx'] = 10
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)

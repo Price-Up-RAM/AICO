@@ -49,7 +49,18 @@ public class MRCharacterContextMenu : MonoBehaviour
         contextMenu.AddSubMenuItem(LanguageData.Translate("Chat", targetLang), new List<(string, UnityAction)>
         {
             (LanguageData.Translate("New Chat", targetLang), delegate {
-                MemoryManager.Instance.ResetConversationMemoryAndGuide();
+                // 메모리 초기화가 실패해도 말풍선은 떠야 한다.
+                // 2026-08-26 실기: ResetConversationMemoryAndGuide의 NRE가 아래 줄을 통째로 막았다.
+                // MemoryManager 쪽에도 가드를 넣었지만 다른 매니저가 또 비어도 같은 사고가 나므로
+                // 호출부에서도 끊어 둔다 (Kickoff Guide 4-58).
+                try
+                {
+                    MemoryManager.Instance.ResetConversationMemoryAndGuide();
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogError($"[MRCtxMenu/새대화] 메모리 초기화 실패, 말풍선은 계속 연다: {e.GetType().Name} {e.Message}");
+                }
                 ChatBalloonManager.Instance.ShowChatBalloon();
                 MRCharacterContextMenu contextMenuInstance = FindFirstObjectByType<MRCharacterContextMenu>();
                 if (contextMenuInstance != null) contextMenuInstance.CloseAll();

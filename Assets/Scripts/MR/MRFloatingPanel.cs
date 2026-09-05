@@ -29,8 +29,16 @@ public class MRFloatingPanel : MonoBehaviour
     [Header("소환")]
     [Tooltip("열릴 때 사용자 정면 이 거리(m)에 소환한다.")]
     [SerializeField] private float spawnDistance = 0.6f;
+
+    [Tooltip("소환 시 좌우로 밀어 둘 거리(미터). +면 오른쪽, -면 왼쪽. 패널 두 장을 나란히 띄울 때 쓴다 (인벤토리 -0.24 / 상점 +0.24). 소환 시점에만 적용되며, 이후 사용자가 잡아 옮기면 그 자리에 남는다 (4-27).")]
+    [SerializeField] private float spawnLateralOffset = 0f;
     [Tooltip("소환 높이 보정(m). 눈높이 대비 오프셋.")]
     [SerializeField] private float spawnHeightOffset = -0.1f;
+
+    [Tooltip("InFrontOfUser로 소환할 때 고개 위아래 각도를 무시하고 항상 눈높이 정면에 둔다.\n" +
+             "끄면(기본) 시선 벡터를 그대로 따라가므로, 고개를 든 채 열면 머리 위에 뜬다.\n" +
+             "손 프레임 촬영 직후처럼 '고개가 어디를 보고 있을지 모르는' 상황에서 켤 것.")]
+    [SerializeField] private bool spawnLevelWithEye = false;
 
     [Header("레거시 열기 경로")]
     [Tooltip("OnEnable 시 자동으로 표시할지. 레거시 UIManager가 SetActive(true)로 여는 패널은 켜둔다. " +
@@ -142,7 +150,29 @@ public class MRFloatingPanel : MonoBehaviour
         // 계산하는 위젯(ContextMenuSub는 ShowNextTo가 월드 좌표를 잡는다)에서 정면 배치를
         // 끄면 **캔버스까지 같이 꺼져 영영 안 보이는** 사고가 났다(2026-08-19 실기).
         // 두 가지는 다른 사실이므로 UIWidget 유무로 따로 판정한다.
-        if (panelCanvas != null && !IsAlphaManagedWidget) panelCanvas.enabled = false;
+        //
+        // 그리고 **이 컴포넌트가 비활성이면 아예 끄지 않는다.**
+        //
+        // Unity는 컴포넌트가 disabled여도 Awake를 호출한다(GameObject만 활성이면).
+        // 반면 캔버스를 다시 켜주는 쪽(OnEnable / Show)은 disabled면 돌지 않는다.
+        // 그래서 체크를 해제하면 '끄는 절반'만 살아남아 캔버스가 죽은 채 남는다.
+        // 2026-08-26 실측: TalkMenuImage가 MRLazyFollowHUD로 갈아타며 이 컴포넌트를 꺼뒀는데,
+        // Play만 누르면 캔버스가 꺼져 아무것도 안 보였다.
+        // 비활성화는 '아무 일도 안 함'이 아니라 '파괴만 하고 복구는 안 함'이 될 수 있다.
+        if (panelCanvas == null || IsAlphaManagedWidget)
+        {
+            return;
+        }
+
+        if (!enabled)
+        {
+            Debug.LogWarning($"[MRFloatingPanel] {name}: 컴포넌트가 비활성이라 캔버스를 끄지 않는다. " +
+                             $"(캔버스 현재값 enabled={panelCanvas.enabled} → 그대로 둠) " +
+                             "배치를 다른 컴포넌트가 맡았다면 이 컴포넌트는 체크 해제가 아니라 **제거**할 것.");
+            return;
+        }
+
+        panelCanvas.enabled = false;
     }
 
     /// <summary>비활성화 직전의 월드 포즈를 기억한다.
@@ -343,9 +373,69 @@ public class MRFloatingPanel : MonoBehaviour
         // 예전에는 Open()이 여기서 그냥 return해버려서 패널이 영영 안 보였다 (§4-29).
         if (eye == null || panelRoot == null) return;
 
-        Vector3 spawnPos = eye.position + eye.forward * spawnDistance;
-        spawnPos.y += spawnHeightOffset;
+        // 기본 경로: 시선 벡터를 그대로 쓴다. 고개를 든 만큼 위로, 숙인 만큼 아래로 뜬다.
+        if (!spawnLevelWithEye)
+        {
+            Vector3 tilted = eye.position + eye.forward * spawnDistance;
+            tilted.y += spawnHeightOffset;
+            tilted += LateralShift(eye);
+            PlaceAt(tilted);
+            return;
+        }
+
+        // 수평 경로: 고개 각도를 버리고 항상 눈높이 정면에 둔다.
+        //
+        // 2026-08-26 실측: 손 프레임으로 사진을 찍으면 그 직후 말풍선이 열리는데,
+        // 그때는 손(=피사체)을 보고 있어서 고개가 위나 아래로 꺾여 있다.
+        // 벽 위쪽을 찍으면 머리 위에, 책상을 찍으면 배 앞에, 옆을 보면 뒤통수 쪽에 떴다.
+        // 바로 아래 PlaceNearCharacter는 이미 눈높이를 절대값으로 쓰고 있다 —
+        // PlaceInFront에만 그 처리가 빠져 있었다.
+        Vector3 flat = eye.forward;
+        flat.y = 0f;
+
+        // 정수리나 발끝을 정면으로 볼 때는 forward가 거의 수직이라 수평 성분이 사라진다.
+        // 그때는 머리 기울기(up)의 반대쪽을 정면으로 삼는다.
+        if (flat.sqrMagnitude < 0.0001f)
+        {
+            flat = eye.up * -1f;
+            flat.y = 0f;
+        }
+
+        // 그래도 못 구하면 월드 정면으로 떨어뜨린다. 위치를 못 잡아 패널이 원점에 남는 것보다 낫다.
+        if (flat.sqrMagnitude < 0.0001f)
+        {
+            flat = Vector3.forward;
+        }
+
+        flat.Normalize();
+
+        Vector3 spawnPos = eye.position + flat * spawnDistance;
+        spawnPos.y = eye.position.y + spawnHeightOffset;
+        spawnPos += LateralShift(eye);
+
+        Debug.Log($"[MRFloatingPanel] {name} 수평 소환 | 시선 forward.y={eye.forward.y:F3} (무시) | " +
+                  $"눈높이={eye.position.y:F3} → 패널 Y={spawnPos.y:F3} | 거리={spawnDistance:F2}m");
         PlaceAt(spawnPos);
+    }
+
+    // 소환 시 좌우 오프셋. 눈의 right를 수평면에 투영해 쓴다 —
+    // eye.right를 그대로 쓰면 고개를 기울였을 때 패널이 대각선으로 밀린다.
+    private Vector3 LateralShift(Transform eye)
+    {
+        if (Mathf.Abs(spawnLateralOffset) < 0.0001f)
+        {
+            return Vector3.zero;
+        }
+
+        Vector3 right = eye.right;
+        right.y = 0f;
+
+        if (right.sqrMagnitude < 0.0001f)
+        {
+            return Vector3.zero;
+        }
+
+        return right.normalized * spawnLateralOffset;
     }
 
     /// <summary>사용자 눈높이를 유지하되, 캐릭터 앞(캐릭터와 사용자 사이)에 배치한다.</summary>
